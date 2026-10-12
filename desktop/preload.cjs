@@ -1,0 +1,29 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+// Única ponte entre a interface e o processo principal.
+contextBridge.exposeInMainWorld('multterm', {
+  load: () => ipcRenderer.invoke('sessions:load'),
+  save: (sessions) => ipcRenderer.invoke('sessions:save', sessions),
+  chooseFile: () => ipcRenderer.invoke('sessions:choose-file'),
+  importSessions: () => ipcRenderer.invoke('sessions:import'),
+  connect: (session) => ipcRenderer.invoke('session:connect', session),
+
+  termOpen: (id, session, cols, rows) => ipcRenderer.invoke('term:open', id, session, cols, rows),
+  termInput: (id, data) => ipcRenderer.send('term:input', id, data),
+  termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
+  termClose: (id) => ipcRenderer.send('term:close', id),
+  onTermData: (cb) => ipcRenderer.on('term:data', (_e, id, data) => cb(id, data)),
+  onTermExit: (cb) => ipcRenderer.on('term:exit', (_e, id, code) => cb(id, code)),
+
+  clipboardRead: () => ipcRenderer.invoke('clipboard:read'),
+  clipboardWrite: (text) => ipcRenderer.send('clipboard:write', text),
+
+  appInfo: () => ipcRenderer.invoke('app:info'),
+  openRepo: (path) => ipcRenderer.send('app:open-repo', path),
+  showSessionsFile: () => ipcRenderer.send('app:show-sessions-file'),
+  updateStatus: () => ipcRenderer.invoke('update:status'),
+  checkUpdates: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  installUpdate: () => ipcRenderer.send('update:install'),
+  onUpdateStatus: (cb) => ipcRenderer.on('update:status', (_e, status) => cb(status)),
+});

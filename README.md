@@ -1,0 +1,115 @@
+# MultTerm
+
+Gerenciador de sessões SSH/RDP com terminal em abas.
+As sessões ficam num arquivo YAML legível e versionável, **sem limite de quantidade**.
+
+## Funcionalidades
+
+- Árvore de sessões com pastas e busca; criar, editar e excluir sessões
+- **Terminal SSH embutido em abas** (xterm.js + node-pty), usando o OpenSSH do sistema
+- Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
+- RDP pelo cliente do sistema (`mstsc` no Windows)
+- Importação de sessões de outro arquivo YAML (mescla, mantendo as existentes)
+- Tela de ajuda e atualização automática pelas releases do GitHub
+
+## Instalação
+
+Baixe o instalador `MultTerm-setup-<versão>.exe` na página de
+[releases](https://github.com/acacio90/MultTerm/releases) e execute. A instalação é por
+usuário (não pede administrador). O instalador não é assinado: o SmartScreen avisa na
+primeira execução (*Mais informações → Executar assim mesmo*).
+
+O próprio app verifica novas versões ao abrir e em **Ajuda → Buscar atualizações**.
+
+## Sessões
+
+```yaml
+version: 1
+sessions:
+  - name: web-01
+    folder: Servidores/Produção
+    type: ssh            # ssh (padrão) ou rdp
+    host: web-01.example.org
+    user: deploy
+    identityFile: ~/.ssh/id_ed25519
+  - name: ad-01
+    folder: Servidores/Infraestrutura
+    type: rdp
+    host: 10.0.0.9       # porta omitida = padrão (22 ssh / 3389 rdp)
+```
+
+A gravação é determinística (ordenada por pasta e nome, campos em ordem fixa) para gerar
+diffs limpos. No app, o arquivo padrão fica em `%APPDATA%\MultTerm\sessions.yaml`; use
+**Abrir arquivo…** para apontar para um arquivo versionado (a escolha é lembrada) ou defina
+a variável `MULTTERM_SESSIONS`.
+
+## Uso
+
+- **Duplo clique** numa sessão abre uma aba de terminal (SSH) ou o cliente RDP.
+- Selecionar texto copia; botão direito cola (ou Ctrl+Shift+C / Ctrl+Shift+V).
+- Botão do meio do mouse fecha a aba; quando a sessão termina, **R** reconecta.
+- Chave `.ppk` (PuTTY): o app usa a versão OpenSSH com o mesmo nome ao lado, se existir.
+- **Janela externa** abre a sessão no Windows Terminal.
+- **F1** ou o botão **Ajuda** abre a tela de ajuda.
+
+### Login sem senha (agente SSH)
+
+1. PowerShell como administrador:
+   `Set-Service ssh-agent -StartupType Automatic; Start-Service ssh-agent`
+2. KeePassXC → Configurações → Agente SSH: habilitar e marcar
+   *Usar OpenSSH para Windows em vez do Pageant*.
+3. Na entrada da chave (senha da chave no campo *Senha*), aba *Agente SSH*: escolher a chave
+   privada (anexo ou arquivo) e marcar *Adicionar ao agente quando o banco for aberto* e
+   *Remover quando for fechado*.
+
+## Desenvolvimento
+
+Requer Node.js 22.18+.
+
+```sh
+npm install
+npm start            # compila e abre o app
+npm test
+npm run typecheck
+npm run multterm -- list
+npm run multterm -- import outro.yaml --dry-run
+```
+
+### Commits
+
+As mensagens seguem o [Conventional Commits](https://www.conventionalcommits.org/pt-br/):
+`tipo(escopo opcional): descrição`, com tipo em `feat`, `fix`, `docs`, `style`,
+`refactor`, `perf`, `test`, `build`, `ci`, `chore` ou `revert` (`!` após o tipo/escopo
+indica mudança incompatível). O `npm install` instala um hook `commit-msg` que recusa
+mensagens fora do padrão.
+
+```text
+feat(terminal): reconecta a sessão com a tecla R
+fix(sessions): rejeita host iniciado por "-"
+docs: explica a configuração do agente SSH
+```
+
+### Gerar e publicar uma versão
+
+1. Suba a `version` no `package.json`.
+2. `npm run dist` gera `release/MultTerm-setup-<versão>.exe` localmente.
+3. `npm run release` gera e publica o instalador e o `latest.yml` numa release (rascunho)
+   do GitHub; requer `GH_TOKEN` (ex.: `$env:GH_TOKEN = gh auth token`). Publique o rascunho
+   no GitHub para os apps instalados encontrarem a atualização.
+
+### Grafo de código (code-review-graph)
+
+O projeto usa o [code-review-graph](https://github.com/tirth8205/code-review-graph) (MCP + hooks)
+para manter um grafo do código atualizado:
+
+```sh
+uv tool install code-review-graph==2.3.9
+code-review-graph build     # indexa só arquivos conhecidos pelo git (git add -N em arquivos novos)
+```
+
+O grafo é atualizado pelo hook `pre-commit` do git; o banco local fica em
+`.code-review-graph/` (ignorado).
+
+## Licença
+
+[GPL-3.0](LICENSE)

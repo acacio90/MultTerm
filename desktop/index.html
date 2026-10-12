@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <!-- 'unsafe-inline' em style-src: o xterm.js injeta <style> para o tema do terminal -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:">
+  <title>MultTerm</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="toolbar">
+    <button id="btn-new" type="button">+ Nova sessão</button>
+    <button id="btn-import" type="button">Importar sessões…</button>
+    <button id="btn-file" type="button">Abrir arquivo…</button>
+    <button id="btn-reload" type="button">Recarregar</button>
+    <span class="spacer"></span>
+    <button id="btn-help" type="button" title="Ajuda (F1)">Ajuda <span id="update-badge" class="badge-dot" hidden title="Atualização disponível"></span></button>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <input id="search" type="search" placeholder="Buscar sessão, host ou pasta" autocomplete="off">
+      <ul id="tree" class="tree" role="tree" aria-label="Sessões"></ul>
+    </aside>
+
+    <section class="workspace">
+      <nav id="tabs" class="tabs" role="tablist">
+        <button id="tab-editor" class="tab active" type="button" role="tab">Sessão</button>
+      </nav>
+
+      <div id="panel-editor" class="panel detail">
+        <p id="empty" class="empty">Selecione uma sessão na árvore ou crie uma nova.<br>Duplo clique conecta numa aba.</p>
+
+        <form id="form" hidden>
+          <h2 id="form-title">Sessão</h2>
+          <div class="grid">
+            <label>Nome <input name="name" required></label>
+            <label>Pasta <input name="folder" list="folders" placeholder="Servidores/Infraestrutura"></label>
+            <label>Tipo
+              <select name="type">
+                <option value="ssh">SSH</option>
+                <option value="rdp">RDP</option>
+              </select>
+            </label>
+            <label>Host <input name="host" required></label>
+            <label>Porta <input name="port" type="number" min="1" max="65535"></label>
+            <label>Usuário <input name="user"></label>
+            <label class="ssh-only wide">Chave privada <input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"></label>
+            <label class="wide">Tags <input name="tags" placeholder="separadas por vírgula"></label>
+          </div>
+          <datalist id="folders"></datalist>
+          <div class="actions">
+            <button type="submit" class="primary">Salvar</button>
+            <button id="btn-connect" type="button">Conectar</button>
+            <button id="btn-external" type="button" class="ssh-only" title="Abrir no Windows Terminal">Janela externa</button>
+            <button id="btn-delete" type="button" class="danger">Excluir</button>
+          </div>
+        </form>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+      </div>
+
+      <div id="terminals" class="terminals"></div>
+    </section>
+  </main>
+
+  <dialog id="help" aria-labelledby="help-title">
+    <header class="help-head">
+      <h2 id="help-title">MultTerm</h2>
+      <button id="help-close" type="button" title="Fechar (Esc)">×</button>
+    </header>
+    <div class="help-body">
+      <section>
+        <h3>Atualizações</h3>
+        <p>Versão instalada: <strong id="help-version"></strong></p>
+        <p id="update-text" class="update-text"></p>
+        <progress id="update-progress" max="100" value="0" hidden></progress>
+        <div class="actions">
+          <button id="btn-check" type="button">Buscar atualizações</button>
+          <button id="btn-download" type="button" class="primary" hidden>Baixar atualização</button>
+          <button id="btn-install" type="button" class="primary" hidden>Reiniciar e instalar</button>
+          <button id="btn-releases" type="button">Ver versões no GitHub</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Uso</h3>
+        <ul>
+          <li><strong>Duplo clique</strong> numa sessão: abre uma aba de terminal (SSH) ou o cliente RDP.</li>
+          <li>Selecionar texto copia; <strong>botão direito</strong> cola (ou Ctrl+Shift+C / Ctrl+Shift+V).</li>
+          <li><strong>Botão do meio</strong> fecha a aba; sessão encerrada: <strong>R</strong> reconecta.</li>
+          <li><strong>Janela externa</strong> abre a sessão no Windows Terminal.</li>
+          <li><strong>F1</strong> abre esta ajuda.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3>Login sem senha</h3>
+        <p>Agente SSH: <strong id="help-agent"></strong></p>
+        <p class="muted">Com a chave no agente (KeePassXC no modo OpenSSH ou <code>ssh-add</code>), as conexões não pedem senha.
+          Com o agente vazio, o ssh pede a senha da chave na aba.</p>
+      </section>
+
+      <section>
+        <h3>Arquivos e sistema</h3>
+        <dl class="info">
+          <dt>Sessões</dt><dd><code id="help-sessions"></code> <button id="btn-show-sessions" type="button" class="link">mostrar na pasta</button></dd>
+          <dt>SSH</dt><dd><code id="help-ssh"></code></dd>
+          <dt>Plataforma</dt><dd id="help-platform"></dd>
+          <dt>Componentes</dt><dd id="help-runtime"></dd>
+        </dl>
+        <p><button id="btn-repo" type="button" class="link">Projeto no GitHub</button> ·
+          <button id="btn-issues" type="button" class="link">Relatar um problema</button></p>
+      </section>
+    </div>
+  </dialog>
+
+  <footer class="statusbar">
+    <span id="status-count"></span>
+    <span id="status-path" class="path"></span>
+  </footer>
+
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

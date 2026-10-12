@@ -1,0 +1,79 @@
+{
+  "name": "multterm",
+  "productName": "MultTerm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gerenciador de sessões SSH/RDP com terminal em abas",
+  "author": "acacio90",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "main": "dist/desktop/main.js",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "multterm": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "npm run build && node scripts/start.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc",
+    "dist": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "multterm": "node src/cli.ts",
+    "release": "npm run build && electron-builder --win nsis --x64 --publish always",
+    "prepare": "node scripts/install-hooks.mjs"
+  },
+  "build": {
+    "appId": "io.github.acacio90.multterm",
+    "productName": "MultTerm",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "desktop/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "${productName}-setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "acacio90",
+        "repo": "MultTerm",
+        "releaseType": "draft"
+      }
+    ]
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron-updater": "^6.8.9",
+    "node-pty": "^1.1.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.9.3"
+  }
+}
