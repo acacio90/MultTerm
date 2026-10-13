@@ -24,6 +24,8 @@ export async function ensureSelfSignedPfx(path: string, passphrase: string | und
   await mkdir(dirname(path), { recursive: true });
   const script = [
     "$ErrorActionPreference = 'Stop'",
+    // O drive Cert: só existe com o módulo de segurança carregado (o carregamento automático falha às vezes).
+    'Import-Module Microsoft.PowerShell.Security, PKI',
     "$c = New-SelfSignedCertificate -Subject 'CN=MultTerm' -FriendlyName 'MultTerm (servidores locais)' -CertStoreLocation 'Cert:\\CurrentUser\\My' -KeyExportPolicy Exportable -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddYears(5)",
     'try {',
     `  Export-PfxCertificate -Cert $c -FilePath '${path.replace(/'/g, "''")}' -Password (ConvertTo-SecureString '${pass}' -AsPlainText -Force) | Out-Null`,
