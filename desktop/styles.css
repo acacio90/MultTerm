@@ -237,3 +237,72 @@ dialog#help::backdrop { background: rgb(0 0 0 / 45%); }
 .info dd { margin: 0; }
 button.link { padding: 0; border: none; background: none; color: var(--accent); cursor: pointer; }
 button.link:hover { text-decoration: underline; }
+
+/* ---------- ferramentas ---------- */
+
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+.menu[hidden] { display: none; }
+.menu button { border: none; text-align: left; background: transparent; }
+.menu button:hover { background: var(--bg); }
+.menu hr { width: 100%; border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+dialog#diag-dialog {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+dialog#diag-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.small-dialog { display: flex; flex-direction: column; gap: 10px; width: 360px; padding: 16px; }
+.small-dialog h2 { margin: 0; font-size: 16px; }
+.small-dialog label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); }
+.small-dialog label[hidden] { display: none; }
+
+.tool-panel { flex: 1; min-width: 0; overflow: auto; background: var(--bg); }
+.tool-panel[hidden] { display: none; }
+.tool-body { padding: 16px 24px; }
+.tool-body h2 { margin: 0 0 12px; font-size: 16px; }
+.tool-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+.tool-form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); min-width: 160px; }
+.tool-form label.check { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.tool-form label.check input { width: auto; }
+.tool-form .actions { margin-top: 0; }
+.tool-body .muted { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.tool-status { margin: 10px 0 6px; }
+.tool-status:empty { display: none; }
+.tool-body progress { width: 100%; }
+.tool-body progress[hidden] { display: none; }
+
+table.results { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+table.results th, table.results td { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+table.results th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; }
+table.results .state-open { color: #22a35a; font-weight: 600; }
+table.results .state-closed { color: var(--muted); }
+table.results .state-filtered { color: #c58a00; }
+.row-actions { display: inline-flex; gap: 10px; }
+pre.dns-result {
+  margin: 6px 0 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+pre.dns-result:empty { display: none; }

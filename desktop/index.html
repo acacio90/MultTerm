@@ -14,6 +14,18 @@
     <button id="btn-import" type="button">Importar sessões…</button>
     <button id="btn-file" type="button">Abrir arquivo…</button>
     <button id="btn-reload" type="button">Recarregar</button>
+    <div class="menu-wrap">
+      <button id="btn-tools" type="button" aria-haspopup="menu" aria-expanded="false">Ferramentas ▾</button>
+      <div id="tools-menu" class="menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-tool="ping">Ping…</button>
+        <button type="button" role="menuitem" data-tool="traceroute">Traceroute…</button>
+        <button type="button" role="menuitem" data-tool="dns">Consulta DNS</button>
+        <hr>
+        <button type="button" role="menuitem" data-tool="portscan">Scanner de portas</button>
+        <button type="button" role="menuitem" data-tool="netscan">Scanner de rede</button>
+        <button type="button" role="menuitem" data-tool="localports">Portas abertas locais</button>
+      </div>
+    </div>
     <span class="spacer"></span>
     <button id="btn-help" type="button" title="Ajuda (F1)">Ajuda <span id="update-badge" class="badge-dot" hidden title="Atualização disponível"></span></button>
   </header>
@@ -64,6 +76,18 @@
       <div id="terminals" class="terminals"></div>
     </section>
   </main>
+
+  <dialog id="diag-dialog" aria-labelledby="diag-title">
+    <form id="diag-form" method="dialog" class="small-dialog">
+      <h2 id="diag-title">Ping</h2>
+      <label>Host ou IP <input name="host" required autocomplete="off"></label>
+      <label id="diag-count-label">Pacotes <input name="count" type="number" min="1" max="10000" placeholder="vazio = contínuo (Ctrl+C para parar)"></label>
+      <div class="actions">
+        <button type="submit" class="primary" value="run">Executar</button>
+        <button type="button" id="diag-cancel">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="help" aria-labelledby="help-title">
     <header class="help-head">

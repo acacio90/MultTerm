@@ -45,6 +45,14 @@ function optionalString(obj: Record<string, unknown>, key: string, where: string
   return value;
 }
 
+/**
+ * Host seguro para passar a comandos (ssh, ping, tracert…): não pode virar opção
+ * (ex.: "-oProxyCommand=...") nem conter espaços ou caracteres de controle.
+ */
+export function isSafeHost(host: string): boolean {
+  return host.length > 0 && host.length <= 253 && !host.startsWith('-') && !/[\s\x00-\x1f]/.test(host);
+}
+
 function checkUser(user: string | undefined, where: string): string | undefined {
   if (user !== undefined && (user.startsWith('-') || /[\x00-\x1f@]/.test(user))) {
     throw new SessionError(`${where}: "user" inválido (${user})`);
@@ -66,8 +74,7 @@ export function validateSession(raw: unknown, where: string): Session {
 
   const host = optionalString(obj, 'host', where)?.trim();
   if (!host) throw new SessionError(`${where}: "host" é obrigatório`);
-  // Evita que host/usuário virem opções do ssh (ex.: "-oProxyCommand=...").
-  if (host.startsWith('-') || /\s/.test(host)) throw new SessionError(`${where}: "host" inválido (${host})`);
+  if (!isSafeHost(host)) throw new SessionError(`${where}: "host" inválido (${host})`);
 
   const type = obj.type ?? 'ssh';
   if (!SESSION_TYPES.includes(type as SessionType)) {

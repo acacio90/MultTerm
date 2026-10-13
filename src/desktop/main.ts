@@ -16,6 +16,7 @@ import {
 } from '../sessions/launch.ts';
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
 import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
+import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { readImportFile } from '../sessions/import.ts';
 import { loadSessionFile, mergeSessions, saveSessionFile, validateSessions } from '../sessions/store.ts';
 
@@ -222,7 +223,10 @@ async function createWindow(): Promise<void> {
     },
   });
   const contents = win.webContents;
-  contents.on('destroyed', () => closeTerminalsOf(contents));
+  contents.on('destroyed', () => {
+    closeTerminalsOf(contents);
+    cancelJobsOf(contents);
+  });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
@@ -244,6 +248,7 @@ async function createWindow(): Promise<void> {
 app.whenReady().then(async () => {
   sessionsPath = await resolveSessionsPath();
   registerIpc();
+  registerToolsIpc();
   initUpdates();
   await createWindow();
   app.on('activate', () => {

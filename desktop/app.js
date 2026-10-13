@@ -1,3 +1,5 @@
+import { buildToolPanel, TOOL_TITLES } from './tools.js';
+
 // Interface: árvore de sessões + formulário de edição + abas de terminal.
 const api = window.multterm;
 const $ = (id) => document.getElementById(id);
@@ -235,7 +237,7 @@ async function remove() {
 /** SSH abre numa aba de terminal embutido; RDP (ou "Janela externa") abre fora do app. */
 async function connect(session, { external = false } = {}) {
   if (session.type === 'ssh' && !external) {
-    await openTerminalTab(session);
+    await openSessionTab(session);
     return;
   }
   showEditor();
@@ -249,10 +251,10 @@ async function connect(session, { external = false } = {}) {
   }
 }
 
-// ---------- abas de terminal ----------
+// ---------- abas (terminais e ferramentas) ----------
 
-// id da aba -> aba. O mesmo id identifica o terminal no processo principal; a aba
-// é registrada antes da abertura, então nenhuma saída chega antes de ela existir.
+// id da aba -> aba. Nas abas de terminal o mesmo id identifica o terminal no processo
+// principal; a aba é registrada antes da abertura, então nenhuma saída chega antes dela.
 const tabsById = new Map();
 let tabSeq = 0;
 let activeTab = null; // null = aba "Sessão"
@@ -278,14 +280,21 @@ function showTab(tab) {
     t.panel.hidden = t !== tab;
   }
   requestAnimationFrame(() => {
-    tab.fit.fit();
-    tab.term.focus();
+    if (tab.term) {
+      tab.fit.fit();
+      tab.term.focus();
+    } else {
+      tab.onShow?.();
+    }
   });
 }
 
 function closeTab(tab) {
-  if (tab.running) api.termClose(tab.id);
-  tab.term.dispose();
+  if (tab.term) {
+    if (tab.running) api.termClose(tab.id);
+    tab.term.dispose();
+  }
+  tab.onClose?.();
   tab.panel.remove();
   tab.button.remove();
   tabsById.delete(tab.id);
@@ -296,6 +305,35 @@ function closeTab(tab) {
   }
 }
 
+/** Cria e registra uma aba (botão + painel) de qualquer tipo. */
+function createTab({ title, tooltip = '', panelClass }) {
+  const tab = { id: ++tabSeq };
+  tab.panel = document.createElement('div');
+  tab.panel.className = `panel ${panelClass}`;
+  $('terminals').append(tab.panel);
+
+  tab.button = document.createElement('button');
+  tab.button.type = 'button';
+  tab.button.className = 'tab';
+  tab.button.setAttribute('role', 'tab');
+  tab.button.title = tooltip;
+  const label = document.createElement('span');
+  label.className = 'title';
+  label.textContent = title;
+  const close = document.createElement('span');
+  close.className = 'close';
+  close.textContent = '×';
+  close.title = 'Fechar';
+  tab.button.append(label, close);
+  tab.button.addEventListener('click', (e) => (e.target === close ? closeTab(tab) : showTab(tab)));
+  tab.button.addEventListener('auxclick', (e) => {
+    if (e.button === 1) closeTab(tab); // botão do meio fecha, como no navegador
+  });
+  $('tabs').append(tab.button);
+  tabsById.set(tab.id, tab);
+  return tab;
+}
+
 function pasteInto(tab) {
   if (tab.running) api.clipboardRead().then((text) => tab.term.paste(text));
 }
@@ -304,7 +342,7 @@ function markEnded(tab, code) {
   tab.running = false;
   tab.button.classList.add('ended');
   const detail = code === null ? '' : ` (código ${code})`;
-  tab.term.writeln(`\r\n\x1b[90m[sessão encerrada${detail}. Pressione R para reconectar.]\x1b[0m`);
+  tab.term.writeln(`\r\n\x1b[90m[${tab.endedText}${detail}. Pressione R para ${tab.restartText}.]\x1b[0m`);
 }
 
 function showNotice(tab, warnings) {
@@ -332,45 +370,28 @@ async function startTab(tab) {
   tab.running = true;
   tab.button.classList.remove('ended');
   try {
-    const { warnings } = await api.termOpen(tab.id, tab.session, tab.term.cols, tab.term.rows);
-    showNotice(tab, warnings);
+    const result = await tab.open(tab.id, tab.term.cols, tab.term.rows);
+    showNotice(tab, result?.warnings ?? []);
   } catch (err) {
     tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`);
     if (tab.running) markEnded(tab, null);
   }
 }
 
-async function openTerminalTab(session) {
-  const tab = { id: ++tabSeq, session, running: false, started: false };
+/**
+ * Aba com terminal embutido. `open(id, cols, rows)` inicia o processo no processo principal
+ * (sessão SSH ou ferramenta como ping/traceroute).
+ */
+async function openTerminalTab({ title, tooltip, open, endedText = 'sessão encerrada', restartText = 'reconectar' }) {
+  const tab = createTab({ title, tooltip, panelClass: 'term-panel' });
+  Object.assign(tab, { open, endedText, restartText, running: false, started: false });
 
-  tab.panel = document.createElement('div');
-  tab.panel.className = 'panel term-panel';
   tab.notice = document.createElement('div');
   tab.notice.className = 'term-notice';
   tab.notice.hidden = true;
   tab.host = document.createElement('div');
   tab.host.className = 'term-host';
   tab.panel.append(tab.notice, tab.host);
-  $('terminals').append(tab.panel);
-
-  tab.button = document.createElement('button');
-  tab.button.type = 'button';
-  tab.button.className = 'tab';
-  tab.button.setAttribute('role', 'tab');
-  tab.button.title = `${session.user ? `${session.user}@` : ''}${session.host}`;
-  const title = document.createElement('span');
-  title.className = 'title';
-  title.textContent = session.name;
-  const close = document.createElement('span');
-  close.className = 'close';
-  close.textContent = '×';
-  close.title = 'Fechar';
-  tab.button.append(title, close);
-  tab.button.addEventListener('click', (e) => (e.target === close ? closeTab(tab) : showTab(tab)));
-  tab.button.addEventListener('auxclick', (e) => {
-    if (e.button === 1) closeTab(tab); // botão do meio fecha, como no navegador
-  });
-  $('tabs').append(tab.button);
 
   tab.term = new Terminal({
     fontFamily: '"Cascadia Mono", Consolas, monospace',
@@ -381,7 +402,6 @@ async function openTerminalTab(session) {
   });
   tab.fit = new FitAddon.FitAddon();
   tab.term.loadAddon(tab.fit);
-  tabsById.set(tab.id, tab);
   showTab(tab);
   tab.term.open(tab.host);
   tab.fit.fit();
@@ -426,9 +446,18 @@ async function openTerminalTab(session) {
   }).observe(tab.host);
 
   await startTab(tab);
+  return tab;
 }
 
-api.onTermData((id, data) => tabsById.get(id)?.term.write(data));
+function openSessionTab(session) {
+  return openTerminalTab({
+    title: session.name,
+    tooltip: `${session.user ? `${session.user}@` : ''}${session.host}`,
+    open: (id, cols, rows) => api.termOpen(id, session, cols, rows),
+  });
+}
+
+api.onTermData((id, data) => tabsById.get(id)?.term?.write(data));
 api.onTermExit((id, code) => {
   const tab = tabsById.get(id);
   if (tab?.running) markEnded(tab, code);
@@ -573,6 +602,94 @@ $('btn-issues').addEventListener('click', () => api.openRepo('/issues'));
 $('btn-show-sessions').addEventListener('click', () => api.showSessionsFile());
 api.onUpdateStatus(renderUpdate);
 api.updateStatus().then(renderUpdate);
+
+// ---------- ferramentas de rede ----------
+
+const selectedSession = () => state.sessions.find((s) => keyOf(s) === state.selected);
+
+/** Rede /24 do host selecionado, como sugestão para o scanner de rede. */
+function guessNetwork(host) {
+  const m = /^(\d+\.\d+\.\d+)\.\d+$/.exec(host ?? '');
+  return m ? `${m[1]}.0/24` : '';
+}
+
+/** Abre o formulário de nova sessão já preenchido (ex.: a partir do scanner de rede). */
+function newSessionFrom({ name, host, type }) {
+  state.selected = state.editing = null;
+  clearMessages();
+  renderTree();
+  showEditor();
+  showForm(null);
+  form.name.value = name;
+  form.host.value = host;
+  form.type.value = type;
+  updateTypeFields();
+  message('Revise os dados e clique em Salvar para criar a sessão.');
+  form.name.focus();
+}
+
+function openToolTab(kind) {
+  const tab = createTab({ title: TOOL_TITLES[kind], panelClass: 'tool-panel' });
+  const session = selectedSession();
+  const ctx = { api, cleanError, host: session?.host, network: guessNetwork(session?.host), newSession: newSessionFrom };
+  const hooks = buildToolPanel(kind, ctx, tab);
+  Object.assign(tab, { onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus });
+  showTab(tab);
+}
+
+api.onToolResult((id, result) => tabsById.get(id)?.onResult?.(result));
+api.onToolProgress((id, done, total) => tabsById.get(id)?.onProgress?.(done, total));
+
+// Ping/traceroute: pergunta o host e roda num terminal embutido.
+const diagDialog = $('diag-dialog');
+const diagForm = $('diag-form');
+let diagKind = 'ping';
+
+function openDiagDialog(kind) {
+  diagKind = kind;
+  $('diag-title').textContent = kind === 'ping' ? 'Ping' : 'Traceroute';
+  $('diag-count-label').hidden = kind !== 'ping';
+  diagForm.host.value = selectedSession()?.host ?? diagForm.host.value;
+  diagForm.count.value = '';
+  diagDialog.showModal();
+  diagForm.host.select();
+}
+
+diagForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const req = { kind: diagKind, host: diagForm.host.value.trim(), count: diagForm.count.value };
+  diagDialog.close();
+  openTerminalTab({
+    title: `${req.kind} ${req.host}`,
+    tooltip: req.kind === 'ping' && !req.count ? 'Ctrl+C para parar' : '',
+    open: (id, cols, rows) => api.termOpenTool(id, req, cols, rows),
+    endedText: `${req.kind} encerrado`,
+    restartText: 'executar de novo',
+  });
+});
+$('diag-cancel').addEventListener('click', () => diagDialog.close());
+
+// Menu "Ferramentas".
+const toolsMenu = $('tools-menu');
+function setToolsMenu(open) {
+  toolsMenu.hidden = !open;
+  $('btn-tools').setAttribute('aria-expanded', String(open));
+}
+$('btn-tools').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setToolsMenu(toolsMenu.hidden);
+});
+toolsMenu.addEventListener('click', (e) => {
+  const kind = e.target.closest('[data-tool]')?.dataset.tool;
+  if (!kind) return;
+  setToolsMenu(false);
+  if (kind === 'ping' || kind === 'traceroute') openDiagDialog(kind);
+  else openToolTab(kind);
+});
+document.addEventListener('click', () => setToolsMenu(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setToolsMenu(false);
+});
 
 async function load() {
   clearMessages();

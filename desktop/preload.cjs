@@ -15,6 +15,17 @@ contextBridge.exposeInMainWorld('multterm', {
   onTermData: (cb) => ipcRenderer.on('term:data', (_e, id, data) => cb(id, data)),
   onTermExit: (cb) => ipcRenderer.on('term:exit', (_e, id, code) => cb(id, code)),
 
+  // Ferramentas de rede.
+  termOpenTool: (id, req, cols, rows) => ipcRenderer.invoke('term:open-tool', id, req, cols, rows),
+  portScan: (id, host, spec, timeoutMs) => ipcRenderer.invoke('tools:portscan', id, host, spec, timeoutMs),
+  netScan: (id, spec, timeoutMs) => ipcRenderer.invoke('tools:netscan', id, spec, timeoutMs),
+  cancelTool: (id) => ipcRenderer.send('tools:cancel', id),
+  onToolResult: (cb) => ipcRenderer.on('tools:result', (_e, id, result) => cb(id, result)),
+  onToolProgress: (cb) => ipcRenderer.on('tools:progress', (_e, id, done, total) => cb(id, done, total)),
+  dnsQuery: (name, type, server) => ipcRenderer.invoke('tools:dns', name, type, server),
+  localPorts: () => ipcRenderer.invoke('tools:local-ports'),
+  saveCsv: (name, csv) => ipcRenderer.invoke('tools:save-csv', name, csv),
+
   clipboardRead: () => ipcRenderer.invoke('clipboard:read'),
   clipboardWrite: (text) => ipcRenderer.send('clipboard:write', text),
 

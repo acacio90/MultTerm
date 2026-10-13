@@ -12,6 +12,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - RDP pelo cliente do sistema (`mstsc` no Windows)
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
+- **Ferramentas de rede**: ping, traceroute, consulta DNS, scanner de portas, scanner de rede e
+  portas abertas locais
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -53,6 +55,23 @@ a variável `MULTTERM_SESSIONS`.
 - Chave `.ppk` (PuTTY): o app usa a versão OpenSSH com o mesmo nome ao lado, se existir.
 - **Janela externa** abre a sessão no Windows Terminal.
 - **F1** ou o botão **Ajuda** abre a tela de ajuda.
+
+### Ferramentas de rede
+
+No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada vem preenchido):
+
+- **Ping / Traceroute** — rodam num terminal embutido; ping sem quantidade é contínuo
+  (Ctrl+C para parar) e **R** executa de novo.
+- **Consulta DNS** — A, AAAA, CNAME, MX, TXT, NS, SOA e SRV; IP faz a consulta reversa (PTR).
+  Usa os servidores DNS do sistema ou um IP informado.
+- **Scanner de portas** — lista e faixas (`22,80,8000-8100`) ou predefinições (`comuns`, `web`,
+  `bancos`, `windows`); mostra aberta, fechada ou filtrada. Exporta CSV.
+- **Scanner de rede** — CIDR (`10.0.0.0/24`), faixa (`10.0.0.10-50`) ou lista; descobre hosts por
+  conexão TCP (22, 80, 443, 445, 3389), mostra nome e portas e cria sessões a partir do resultado.
+- **Portas abertas locais** — conexões e portas em escuta desta máquina com o processo dono
+  (Windows), com filtro e atualização automática.
+
+Nenhuma ferramenta exige rodar o app como administrador.
 
 ### Importar sessões
 

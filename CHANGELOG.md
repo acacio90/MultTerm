@@ -6,6 +6,18 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- Menu **Ferramentas** com ferramentas de rede, cada uma numa aba: ping e traceroute num
+  terminal embutido (#9), consulta DNS (#11), scanner de portas (#6), scanner de rede com
+  criação de sessão a partir do resultado (#5) e portas abertas locais com o processo dono (#7).
+
+### Corrigido
+
+- As notas da versão aparecem como texto (e não HTML cru) ao anunciar uma atualização na
+  ajuda. (#13)
+- Publicação de release sem rascunhos duplicados (`npm run release`).
+
 ## [0.2.0] - 2026-10-12
 
 ### Adicionado
