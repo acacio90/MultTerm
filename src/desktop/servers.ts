@@ -7,6 +7,7 @@ import { startFtp, validateFtp } from '../servers/ftp.ts';
 import { startHttp, validateHttp } from '../servers/http.ts';
 import { startIperf, validateIperf } from '../servers/iperf.ts';
 import { startTelnet, validateTelnet } from '../servers/telnet.ts';
+import { ensureHostKey, startSsh, validateSsh } from '../servers/ssh.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 
 /*
@@ -134,6 +135,27 @@ const DEFS: ServerDef[] = [
     ],
     defaults: () => ({ root: filesDir(), port: 8080, listing: true, stopAfter: 3600 }),
     start: (raw, log) => startHttp(validateHttp(raw), log),
+  },
+  {
+    kind: 'ssh',
+    title: 'SSH/SFTP',
+    description: 'Servidor SSH com SFTP na pasta raiz e shell do Windows pelo ConPTY (ssh usuário@ip deste computador). ' +
+      'Na primeira conexão, confira a impressão digital da chave mostrada no log.',
+    fields: [
+      { key: 'root', label: 'Pasta raiz do SFTP', type: 'dir' },
+      { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      { key: 'user', label: 'Usuário', type: 'text' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
+      ...COMMON,
+    ],
+    defaults: () => ({ root: filesDir(), port: 22, user: 'multterm', password: '', shell: 'powershell', stopAfter: 3600 }),
+    start: async (raw, log) => {
+      const host = await ensureHostKey(join(app.getPath('userData'), 'certs', 'ssh_host_ed25519'));
+      if (host.created) log('chave de host gerada');
+      log(`impressão digital da chave de host: ${host.fingerprint}`);
+      return startSsh({ ...validateSsh(raw), hostKey: host.key }, log);
+    },
   },
   {
     kind: 'telnet',

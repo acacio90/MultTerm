@@ -30,6 +30,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Servidor FTP com usuário e senha (cifrada pelo Windows), anônimo só leitura, modos passivo e
   ativo, retomada, FTPS implícito com certificado autoassinado e confirmação de cada conexão.
   (#23)
+- Servidor SSH/SFTP com usuário e senha, SFTP restrito à pasta raiz, shell do Windows pelo ConPTY,
+  execução de comandos e chave de host ed25519 persistente. (#24)
 - Servidor Telnet com senha, shell do Windows pelo ConPTY (PowerShell ou cmd), tamanho de janela
   (NAWS) e confirmação de cada conexão. (#25)
 - Servidor de teste de banda compatível com o cliente iperf3 (TCP, reverso e vários fluxos). (#26)

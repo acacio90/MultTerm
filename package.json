@@ -84,12 +84,14 @@
     "koffi": "^3.3.3",
     "net-snmp": "^3.29.2",
     "node-pty": "^1.1.0",
+    "ssh2": "^1.17.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
     "@types/net-snmp": "^3.23.0",
     "@types/node": "^24.19.2",
+    "@types/ssh2": "^1.15.6",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
     "typescript": "^5.9.3"

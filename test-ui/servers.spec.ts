@@ -39,7 +39,7 @@ test('HTTP: inicia pelo painel, serve a pasta, registra e para', async () => {
   await writeFile(join(root, 'firmware.bin'), 'conteúdo do firmware');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(5);
+  await expect(panel.locator('.server-row')).toHaveCount(6);
   await panel.locator('.server-row[data-kind=http] .server-name').click();
   const detail = panel.locator('.server-detail');
   await expect(detail.locator('h3')).toHaveText('Servidor HTTP');
@@ -108,7 +108,7 @@ test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async (
   await writeFile(join(root, 'config.txt'), 'interface eth0');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(5);
+  await expect(panel.locator('.server-row')).toHaveCount(6);
   await panel.locator('.server-row[data-kind=ftp] .server-name').click();
   const detail = panel.locator('.server-detail');
   await detail.locator('[name=root]').fill(root);
