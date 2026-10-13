@@ -83,6 +83,7 @@ npm install
 npm start            # compila e abre o app
 npm test
 npm run typecheck
+npm run icon         # regenera desktop/icon.png a partir de desktop/icon.svg
 npm run multterm -- list
 npm run multterm -- import outro.yaml --dry-run
 npm run multterm -- import inventario.ini --folder Ansible --dry-run

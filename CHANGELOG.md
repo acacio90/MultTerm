@@ -11,6 +11,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Importação de inventário do Ansible (INI ou YAML): grupos viram pastas, hosts viram sessões
   SSH (ou RDP para `winrm`/`psrp`); detecção automática do formato em **Importar sessões…**
   e em `multterm import` (com `--folder` para a pasta raiz). (#4)
+- Ícone próprio do aplicativo (janela, executável e instalador), gerado a partir de
+  `desktop/icon.svg` com `npm run icon`. (#1)
 
 ## [0.1.0] - 2026-10-12
 

@@ -15,14 +15,15 @@
     "multterm": "src/cli.ts"
   },
   "scripts": {
-    "start": "npm run build && node scripts/start.mjs",
+    "start": "npm run build && node scripts/electron.mjs .",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc",
     "dist": "npm run build && electron-builder --win nsis --x64 --publish never",
     "multterm": "node src/cli.ts",
     "release": "npm run build && electron-builder --win nsis --x64 --publish always",
-    "prepare": "node scripts/install-hooks.mjs"
+    "prepare": "node scripts/install-hooks.mjs",
+    "icon": "node scripts/electron.mjs scripts/render-icon.mjs"
   },
   "build": {
     "appId": "io.github.acacio90.multterm",
@@ -47,7 +48,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "icon": "desktop/icon.png"
     },
     "nsis": {
       "oneClick": true,

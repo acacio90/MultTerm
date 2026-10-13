@@ -208,6 +208,7 @@ async function createWindow(): Promise<void> {
     height: 700,
     minWidth: 720,
     minHeight: 420,
+    icon: join(appRoot, 'desktop', 'icon.png'),
     title: 'MultTerm',
     backgroundColor: '#1e1f22',
     webPreferences: {
