@@ -31,6 +31,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Editor de sites da VPN no próprio MultTerm: criar, editar, renomear, excluir e exportar
   (.vpn), com padrões fortes para sites novos, a PSK fora da interface e preservação das
   opções que o editor não conhece. (#17)
+- VPN sem instalar nada: motor IPsec próprio (IKEv1 Main Mode com PSK e XAuth, Mode Config,
+  Quick Mode com PFS, ESP em UDP com NAT-T, DPD e renovação de chaves) com adaptador Wintun num
+  processo auxiliar elevado (UAC por conexão); seletor de motor MultTerm/Shrew no painel. (#18)
 - Exportar sessões (todas, pela barra, ou uma pasta com subpastas, pelo menu de contexto) para
   um YAML que a importação lê.
 - Menu de contexto nas pastas da árvore: nova subpasta, nova sessão aqui, renomear (move

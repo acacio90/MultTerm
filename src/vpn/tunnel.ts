@@ -110,9 +110,12 @@ export class Tunnel extends EventEmitter {
     };
     try {
       await this.attach(ike, setup);
+      this.log('criando o adaptador de rede');
       this.tun = this.opts.createTun();
+      this.log('adaptador criado; configurando endereço, rotas e DNS');
       this.tun.onPacket = (ip) => this.outbound(ip);
       await this.opts.net.apply(this.tun, setup);
+      this.log('rede configurada');
     } catch (err) {
       this.stop();
       throw err;

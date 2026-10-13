@@ -33,6 +33,8 @@ interface WintunApi {
   AllocateSendPacket: Fn;
   SendPacket: Fn;
   WaitForSingleObject: Fn;
+  /** Cópia de memória (o Electron proíbe ArrayBuffer sobre memória externa: koffi.view derruba o processo). */
+  Copy: Fn;
   GetLastError: Fn;
   koffi: {
     view(ref: unknown, len: number): ArrayBuffer;
@@ -64,6 +66,7 @@ function load(dllPath: string): WintunApi {
     AllocateSendPacket: f('void * __stdcall WintunAllocateSendPacket(void *session, uint32_t size)'),
     SendPacket: f('void __stdcall WintunSendPacket(void *session, void *packet)'),
     WaitForSingleObject: k32.func('uint32_t __stdcall WaitForSingleObject(void *handle, uint32_t ms)') as Fn,
+    Copy: k32.func('void __stdcall RtlMoveMemory(void *dst, void *src, uintptr_t len)') as Fn,
     GetLastError: k32.func('uint32_t __stdcall GetLastError()') as Fn,
     koffi,
   };
@@ -79,7 +82,10 @@ export class WintunTun implements Tun {
   private event: unknown;
   private closed = false;
 
-  constructor(dllPath: string, name: string) {
+  private readonly trace: (m: string) => void;
+
+  constructor(dllPath: string, name: string, trace: (m: string) => void = () => {}) {
+    this.trace = trace;
     this.w = load(dllPath);
     const g = randomBytes(16);
     const guid = { d1: g.readUInt32LE(0), d2: g.readUInt16LE(4), d3: g.readUInt16LE(6), d4: [...g.subarray(8)] };
@@ -88,12 +94,15 @@ export class WintunTun implements Tun {
     const luid = [0n];
     this.w.GetAdapterLUID(this.adapter, luid);
     this.luid = BigInt(luid[0]);
+    trace(`wintun: adaptador criado, LUID ${this.luid}`);
     this.session = this.w.StartSession(this.adapter, 0x400000);
     if (!this.session) {
       this.w.CloseAdapter(this.adapter);
       throw new Error(`não foi possível iniciar o adaptador (erro ${this.w.GetLastError()})`);
     }
+    trace("wintun: sessão iniciada");
     this.event = this.w.GetReadWaitEvent(this.session);
+    trace("wintun: evento de leitura obtido");
     this.readLoop();
   }
 
@@ -108,7 +117,8 @@ export class WintunTun implements Tun {
         return got;
       }
       got = true;
-      const packet = Buffer.from(this.w.koffi.view(ptr, size[0])); // cópia: o anel é reaproveitado
+      const packet = Buffer.alloc(size[0]); // cópia: o anel é reaproveitado
+      this.w.Copy(packet, ptr, size[0]);
       this.w.ReleaseReceivePacket(this.session, ptr);
       try {
         this.onPacket?.(packet);
@@ -116,7 +126,10 @@ export class WintunTun implements Tun {
     }
   }
 
+  private loops = 0;
+
   private readLoop() {
+    if (this.loops++ < 3) this.trace(`wintun: laço de leitura ${this.loops}`);
     if (this.closed) return;
     if (this.drain()) {
       setImmediate(() => this.readLoop());
@@ -138,7 +151,7 @@ export class WintunTun implements Tun {
     if (this.closed) return;
     const ptr = this.w.AllocateSendPacket(this.session, ip.length);
     if (!ptr) return; // anel cheio: descarta (o TCP retransmite)
-    new Uint8Array(this.w.koffi.view(ptr, ip.length)).set(ip);
+    this.w.Copy(ptr, ip, ip.length);
     this.w.SendPacket(this.session, ptr);
   }
 

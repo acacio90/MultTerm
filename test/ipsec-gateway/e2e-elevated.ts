@@ -65,7 +65,7 @@ const server = createServer((sock) => {
 });
 
 server.listen(pipe, () => {
-  const args = [root, '--multterm-vpn-helper', pipe, token].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ');
+  const args = [root, '--enable-logging=file', `--log-file=${join(process.env.TEMP ?? '.', 'multterm-electron.log')}`, '--multterm-vpn-helper', pipe, token].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ');
   const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
   log('pedindo UAC…');
   execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process -FilePath ${ps(electron)} -ArgumentList ${ps(args)} -Verb RunAs -WindowStyle Hidden`], (err) => {

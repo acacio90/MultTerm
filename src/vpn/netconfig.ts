@@ -42,8 +42,11 @@ export function netScript(luid: bigint, s: NetSetup, gateway: string, mtu = 1400
       `$r = Find-NetRoute -RemoteIPAddress ${q(gateway)} | Where-Object { $_.NextHop } | Select-Object -First 1`,
       `if ($r) { New-NetRoute -DestinationPrefix ${q(`${gateway}/32`)} -InterfaceIndex $r.InterfaceIndex -NextHop $r.NextHop -PolicyStore ActiveStore -ErrorAction SilentlyContinue | Out-Null }`,
     ] : []),
-    `Set-NetIPInterface -InterfaceIndex $i -AddressFamily IPv4 -Dhcp Disabled -NlMtuBytes ${mtu} -InterfaceMetric 5`,
+    // Ponto a ponto: sem detecção de endereço duplicado (deixaria o IP "provisório" e o primeiro
+    // pacote sairia com outra origem, descartado pela política do gateway).
+    `Set-NetIPInterface -InterfaceIndex $i -AddressFamily IPv4 -Dhcp Disabled -NlMtuBytes ${mtu} -InterfaceMetric 5 -DadTransmits 0`,
     `New-NetIPAddress -InterfaceIndex $i -IPAddress ${q(s.address)} -PrefixLength 32 -PolicyStore ActiveStore | Out-Null`,
+    `for ($n = 0; $n -lt 30; $n++) { if ((Get-NetIPAddress -InterfaceIndex $i -IPAddress ${q(s.address)} -ErrorAction SilentlyContinue).AddressState -eq 'Preferred') { break }; Start-Sleep -Milliseconds 100 }`,
     ...routes.map((n) => `New-NetRoute -InterfaceIndex $i -DestinationPrefix ${q(n)} -NextHop '0.0.0.0' -RouteMetric 1 -PolicyStore ActiveStore | Out-Null`),
     ...(s.dns.length ? [`Set-DnsClientServerAddress -InterfaceIndex $i -ServerAddresses @(${s.dns.map(q).join(',')})`] : []),
     ...(s.domain ? [`Set-DnsClient -InterfaceIndex $i -ConnectionSpecificSuffix ${q(s.domain)}`] : []),
