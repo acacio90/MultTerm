@@ -3,6 +3,7 @@ import { isIPv4 } from 'node:net';
 import { isSafeHost } from '../sessions/model.ts';
 import { systemDnsServers } from './dns.ts';
 import { probePort, runPool } from './ports.ts';
+import { runSnmp, type SnmpRequest } from './snmp.ts';
 
 export const DEFAULT_MAX_TARGETS = 65536;
 
@@ -59,6 +60,8 @@ export interface HostResult {
   open: number[];
   latencyMs?: number;
   name?: string;
+  /** De onde veio o nome: DNS reverso ou sysName via SNMP. */
+  nameSource?: 'dns' | 'snmp';
 }
 
 export async function probeHost(
@@ -95,17 +98,48 @@ export async function reverseName(ip: string, timeoutMs = 1500): Promise<string 
   return Promise.race([lookup, timer]);
 }
 
-export async function scanNetwork(
-  targets: string[],
-  opts: { timeoutMs?: number; concurrency?: number; signal?: AbortSignal; onResult?: (r: HostResult) => void; onProgress?: (done: number) => void },
-): Promise<HostResult[]> {
+/** sysName.0 do host por SNMP, com as credenciais já validadas de `base`; vazio se não responder. */
+export async function snmpSysName(target: string, base: SnmpRequest, signal?: AbortSignal): Promise<string | undefined> {
+  try {
+    const [r] = await runSnmp({ ...base, host: target, operation: 'get', oids: [SYS_NAME] }, { signal });
+    return r?.type === 'OctetString' && r.value.trim() ? r.value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const SYS_NAME = '1.3.6.1.2.1.1.5.0';
+
+export interface NetScanOptions {
+  timeoutMs?: number;
+  concurrency?: number;
+  signal?: AbortSignal;
+  onResult?: (r: HostResult) => void;
+  onProgress?: (done: number) => void;
+  /** Credenciais SNMP (validadas) para buscar o nome quando o DNS reverso não tem. */
+  snmp?: SnmpRequest;
+  /** DNS reverso (substituível nos testes). */
+  reverse?: (ip: string) => Promise<string | undefined>;
+}
+
+export async function scanNetwork(targets: string[], opts: NetScanOptions): Promise<HostResult[]> {
   const alive: HostResult[] = [];
+  const reverse = opts.reverse ?? reverseName;
   let done = 0;
   await runPool(targets, opts.concurrency ?? 64, async (target) => {
     const r = await probeHost(target, { timeoutMs: opts.timeoutMs, signal: opts.signal });
     if (opts.signal?.aborted) return;
     if (r.alive) {
-      r.name = isIPv4(target) ? await reverseName(target) : target;
+      if (!isIPv4(target)) {
+        r.name = target;
+      } else {
+        r.name = await reverse(target);
+        if (r.name) r.nameSource = 'dns';
+        else if (opts.snmp && !opts.signal?.aborted) {
+          r.name = await snmpSysName(target, opts.snmp, opts.signal);
+          if (r.name) r.nameSource = 'snmp';
+        }
+      }
       alive.push(r);
       opts.onResult?.(r);
     }

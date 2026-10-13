@@ -165,10 +165,16 @@ function portScanPanel(ctx, tab) {
 function netScanPanel(ctx, tab) {
   const range = el('input', { name: 'range', required: true, value: ctx.network ?? '', placeholder: '10.0.0.0/24, 10.0.0.10-50 ou lista', autocomplete: 'off' });
   const timeout = el('input', { name: 'timeout', type: 'number', min: 100, max: 30000, value: 800 });
+  // Nome via SNMP (sysName) quando o DNS reverso não tem registro.
+  const cred = snmpCredentials({ allowOff: true, onChange: () => { snmpPortField.hidden = !cred.enabled(); } });
+  const snmpPort = el('input', { name: 'snmpPort', type: 'number', min: 1, max: 65535, value: 161 });
+  const snmpPortField = field('Porta SNMP', snmpPort);
+  snmpPortField.hidden = true;
   const c = scanControls(ctx, tab, 'Escanear');
   const tbl = table([
     { key: 'target', label: 'Endereço' },
     { key: 'name', label: 'Nome' },
+    { key: 'source', label: 'Fonte' },
     { key: 'latency', label: 'Resposta' },
     { key: 'ports', label: 'Portas abertas' },
   ]);
@@ -176,12 +182,14 @@ function netScanPanel(ctx, tab) {
   const form = el('form', { className: 'tool-form' },
     field('Faixa', range),
     field('Timeout (ms)', timeout),
+    el('div', { className: 'break' }),
+    ...cred.fields, snmpPortField,
     el('div', { className: 'actions' }, c.run, c.cancel, c.csv),
   );
   let live = false;
   const hint = el('p', {
     className: 'muted',
-    textContent: 'Descobre hosts por conexão TCP nas portas 22, 80, 443, 445 e 3389 (resposta recusada também conta). Hosts que bloqueiam tudo não aparecem.',
+    textContent: 'Descobre hosts por conexão TCP nas portas 22, 80, 443, 445 e 3389 (resposta recusada também conta). Hosts que bloqueiam tudo não aparecem. O nome vem do DNS reverso; com SNMP configurado, hosts sem DNS reverso são consultados pelo sysName. As credenciais não são gravadas.',
   });
 
   form.addEventListener('submit', async (e) => {
@@ -191,7 +199,8 @@ function netScanPanel(ctx, tab) {
     c.start(1);
     live = true;
     try {
-      const { cancelled, results } = await ctx.api.netScan(tab.id, range.value, Number(timeout.value));
+      const { cancelled, results } = await ctx.api.netScan(tab.id, range.value, Number(timeout.value),
+        cred.enabled() ? { ...cred.read(), port: snmpPort.value } : null);
       // A resposta é a fonte da verdade: eventos atrasados são ignorados e a tabela é refeita.
       live = false;
       tbl.clear();
@@ -218,13 +227,17 @@ function netScanPanel(ctx, tab) {
     onResult: (r) => {
       if (live) addHost(r);
     },
-    onClose: () => ctx.api.cancelTool(tab.id),
+    onClose: () => {
+      ctx.api.cancelTool(tab.id);
+      cred.clear();
+    },
   };
 
   function addHost(r) {
     const row = {
       target: r.target,
       name: r.name ?? '',
+      source: { dns: 'DNS', snmp: 'SNMP' }[r.nameSource] ?? '',
       latency: r.latencyMs === undefined ? '' : `${r.latencyMs} ms`,
       ports: r.open.map((p) => `${p} (${NAMES[p] ?? p})`).join(', '),
     };
@@ -257,18 +270,63 @@ function secret(name, placeholder = '') {
 const select = (name, options, value) =>
   el('select', { name }, ...options.map(([v, label]) => el('option', { value: v, textContent: label, selected: v === value })));
 
-function snmpPanel(ctx, tab) {
-  const host = el('input', { name: 'host', required: true, value: ctx.host ?? '', autocomplete: 'off' });
-  const port = el('input', { name: 'port', type: 'number', min: 1, max: 65535, value: 161 });
-  const version = select('version', [['1', 'v1'], ['2c', 'v2c'], ['3', 'v3']], '2c');
+/**
+ * Campos de credencial SNMP (versão, community ou usuário/nível/protocolos/senhas do v3),
+ * compartilhados pela consulta SNMP e pelo scanner de rede. `allowOff` adiciona "não usar".
+ */
+function snmpCredentials({ allowOff = false, onChange } = {}) {
+  const versions = [['1', 'v1'], ['2c', 'v2c'], ['3', 'v3']];
+  const version = select('version', allowOff ? [['', 'não usar'], ...versions] : versions, allowOff ? '' : '2c');
   const community = secret('community', 'public');
-
   const user = el('input', { name: 'user', autocomplete: 'off' });
   const level = select('level', [['noAuthNoPriv', 'sem autenticação (noAuthNoPriv)'], ['authNoPriv', 'autenticação (authNoPriv)'], ['authPriv', 'autenticação + criptografia (authPriv)']], 'authPriv');
   const authProtocol = select('authProtocol', [['md5', 'MD5'], ['sha', 'SHA-1'], ['sha224', 'SHA-224'], ['sha256', 'SHA-256'], ['sha384', 'SHA-384'], ['sha512', 'SHA-512']], 'sha');
   const authKey = secret('authKey', 'mínimo 8 caracteres');
   const privProtocol = select('privProtocol', [['des', 'DES'], ['aes', 'AES-128'], ['aes256b', 'AES-256 (Blumenthal)'], ['aes256r', 'AES-256 (Reeder)']], 'aes');
   const privKey = secret('privKey', 'mínimo 8 caracteres');
+
+  const credCommunity = field('Community', community.node);
+  const credV3 = [field('Usuário', user), field('Nível de segurança', level)];
+  const credAuth = [field('Autenticação', authProtocol), field('Senha de autenticação', authKey.node)];
+  const credPriv = [field('Criptografia', privProtocol), field('Senha de criptografia', privKey.node)];
+
+  function update() {
+    const off = version.value === '';
+    const v3 = version.value === '3';
+    credCommunity.hidden = off || v3;
+    for (const f of credV3) f.hidden = !v3;
+    for (const f of credAuth) f.hidden = !v3 || level.value === 'noAuthNoPriv';
+    for (const f of credPriv) f.hidden = !v3 || level.value !== 'authPriv';
+  }
+  for (const s of [version, level]) {
+    s.addEventListener('change', () => {
+      update();
+      onChange?.();
+    });
+  }
+  update();
+
+  return {
+    version,
+    fields: [field(allowOff ? 'SNMP' : 'Versão', version), credCommunity, ...credV3, ...credAuth, ...credPriv],
+    enabled: () => version.value !== '',
+    read: () => ({
+      version: version.value, community: community.input.value,
+      user: user.value, level: level.value, authProtocol: authProtocol.value, authKey: authKey.input.value,
+      privProtocol: privProtocol.value, privKey: privKey.input.value,
+    }),
+    // Não deixa senhas na memória da página depois de fechar a aba.
+    clear: () => {
+      community.input.value = authKey.input.value = privKey.input.value = '';
+    },
+  };
+}
+
+function snmpPanel(ctx, tab) {
+  const host = el('input', { name: 'host', required: true, value: ctx.host ?? '', autocomplete: 'off' });
+  const port = el('input', { name: 'port', type: 'number', min: 1, max: 65535, value: 161 });
+  const cred = snmpCredentials({ onChange: () => updateFields() });
+  const { version } = cred;
 
   const operation = select('operation', [['get', 'get'], ['getnext', 'getnext'], ['getbulk', 'getbulk'], ['walk', 'walk']], 'get');
   const oids = el('input', { name: 'oids', value: 'sysName sysDescr sysUpTime', autocomplete: 'off' });
@@ -286,10 +344,6 @@ function snmpPanel(ctx, tab) {
   ]);
   let live = false;
 
-  const communityField = field('Community', community.node);
-  const v3Fields = [field('Usuário', user), field('Nível de segurança', level)];
-  const authFields = [field('Autenticação', authProtocol), field('Senha de autenticação', authKey.node)];
-  const privFields = [field('Criptografia', privProtocol), field('Senha de criptografia', privKey.node)];
   const bulkFields = [field('Non-repeaters', nonRepeaters), field('Max-repetitions', maxRepetitions)];
   const walkFields = [field('Limite de resultados', maxResults)];
   const PLACEHOLDERS = {
@@ -300,11 +354,6 @@ function snmpPanel(ctx, tab) {
   };
 
   function updateFields() {
-    const v3 = version.value === '3';
-    communityField.hidden = v3;
-    for (const f of v3Fields) f.hidden = !v3;
-    for (const f of authFields) f.hidden = !v3 || level.value === 'noAuthNoPriv';
-    for (const f of privFields) f.hidden = !v3 || level.value !== 'authPriv';
     for (const f of bulkFields) f.hidden = operation.value !== 'getbulk';
     for (const f of walkFields) f.hidden = operation.value !== 'walk';
     oids.placeholder = PLACEHOLDERS[operation.value];
@@ -312,12 +361,11 @@ function snmpPanel(ctx, tab) {
     operation.querySelector('option[value=getbulk]').disabled = version.value === '1';
     if (version.value === '1' && operation.value === 'getbulk') operation.value = 'getnext';
   }
-  for (const s of [version, level, operation]) s.addEventListener('change', updateFields);
+  operation.addEventListener('change', updateFields);
   updateFields();
 
   const form = el('form', { className: 'tool-form' },
-    field('Host ou IP', host), field('Porta', port), field('Versão', version), communityField,
-    ...v3Fields, ...authFields, ...privFields,
+    field('Host ou IP', host), field('Porta', port), ...cred.fields,
     el('div', { className: 'break' }),
     field('Operação', operation), el('label', { className: 'wide' }, 'OIDs', oids), ...bulkFields, ...walkFields,
     field('Timeout (ms)', timeout), field('Tentativas', retries),
@@ -336,9 +384,7 @@ function snmpPanel(ctx, tab) {
     live = true;
     try {
       const { cancelled, results } = await ctx.api.snmp(tab.id, {
-        host: host.value, port: port.value, version: version.value, community: community.input.value,
-        user: user.value, level: level.value, authProtocol: authProtocol.value, authKey: authKey.input.value,
-        privProtocol: privProtocol.value, privKey: privKey.input.value,
+        host: host.value, port: port.value, ...cred.read(),
         operation: operation.value, oids: oids.value, nonRepeaters: nonRepeaters.value,
         maxRepetitions: maxRepetitions.value, maxResults: maxResults.value, timeoutMs: timeout.value, retries: retries.value,
       });
@@ -364,8 +410,7 @@ function snmpPanel(ctx, tab) {
     },
     onClose: () => {
       ctx.api.cancelTool(tab.id);
-      // Não deixa senhas na memória da página depois de fechar a aba.
-      community.input.value = authKey.input.value = privKey.input.value = '';
+      cred.clear();
     },
   };
 }

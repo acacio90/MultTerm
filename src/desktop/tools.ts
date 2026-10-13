@@ -7,7 +7,7 @@ import { dnsQuery } from '../network/dns.ts';
 import { parseTargets, scanNetwork } from '../network/hosts.ts';
 import { listConnections } from '../network/local-ports.ts';
 import { parsePorts, scanPorts } from '../network/ports.ts';
-import { runSnmp, validateSnmpRequest } from '../network/snmp.ts';
+import { runSnmp, validateSnmpRequest, type SnmpRequest } from '../network/snmp.ts';
 import { isSafeHost } from '../sessions/model.ts';
 import { openTerminal } from './terminals.ts';
 
@@ -44,6 +44,24 @@ export function cancelJobsOf(owner: WebContents): void {
   }
 }
 
+/**
+ * Credenciais SNMP opcionais do scanner de rede (nome via sysName quando não há DNS reverso).
+ * Validadas uma vez, antes da varredura, com timeout curto por host.
+ */
+function netscanSnmp(raw: unknown): SnmpRequest | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const o = raw as Record<string, unknown>;
+  if (!o.version) return undefined;
+  return validateSnmpRequest({
+    timeoutMs: 1000,
+    retries: 0,
+    ...o,
+    host: '127.0.0.1', // trocado pelo IP de cada host
+    operation: 'get',
+    oids: 'sysName',
+  });
+}
+
 export function registerToolsIpc(): void {
   // Ping/traceroute num terminal embutido.
   ipcMain.handle('term:open-tool', (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
@@ -70,11 +88,13 @@ export function registerToolsIpc(): void {
     }));
   });
 
-  ipcMain.handle('tools:netscan', (e, id: unknown, spec: unknown, ms: unknown) => {
+  ipcMain.handle('tools:netscan', (e, id: unknown, spec: unknown, ms: unknown, snmpRaw: unknown) => {
     const targets = parseTargets(typeof spec === 'string' ? spec : '');
+    const snmpConfig = netscanSnmp(snmpRaw);
     e.sender.send('tools:progress', id, 0, targets.length);
     let last = 0;
     return runJob(e.sender, id, (signal) => scanNetwork(targets, {
+      snmp: snmpConfig,
       timeoutMs: timeout(ms, 800),
       signal,
       onResult: (r) => {

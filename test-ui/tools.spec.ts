@@ -184,3 +184,25 @@ test.describe('consulta SNMP contra um agente local', () => {
     await expect(panel.locator('[name=operation] option[value=getbulk]')).toHaveJSProperty('disabled', true);
   });
 });
+
+test('scanner de rede busca o nome por SNMP quando não há DNS reverso', async () => {
+  // 127.0.0.2 também é loopback e não tem DNS reverso; o agente responde só nele.
+  const agent = await startAgent('127.0.0.2');
+  try {
+    await openTool('netscan');
+    const panel = activePanel();
+    await expect(panel.locator('[name=snmpPort]')).toBeHidden();
+    await panel.locator('[name=range]').fill('127.0.0.2');
+    await panel.locator('[name=version]').selectOption('2c');
+    await panel.locator('[name=snmpPort]').fill(String(agent.port));
+    await panel.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toContainText('Concluído: 1 host(s) ativo(s)');
+    const row = panel.locator('table.results tbody tr').first();
+    await expect(row).toContainText('agente-teste');
+    await expect(row).toContainText('SNMP');
+    await row.locator('button', { hasText: '+ sessão' }).first().click();
+    await expect(page.locator('#form [name=name]')).toHaveValue('agente-teste');
+  } finally {
+    await agent.close();
+  }
+});

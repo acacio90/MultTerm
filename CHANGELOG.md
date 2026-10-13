@@ -13,6 +13,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   criação de sessão a partir do resultado (#5) e portas abertas locais com o processo dono (#7).
 - Consulta SNMP v1/v2c/v3 (get, getnext, getbulk e walk), com nomes de OIDs comuns e valores
   formatados; credenciais só em memória. (#14)
+- Scanner de rede busca o nome pelo `sysName` via SNMP quando não há DNS reverso, com a
+  coluna **Fonte** (DNS/SNMP).
 
 ### Corrigido
 

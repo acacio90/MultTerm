@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('multterm', {
   // Ferramentas de rede.
   termOpenTool: (id, req, cols, rows) => ipcRenderer.invoke('term:open-tool', id, req, cols, rows),
   portScan: (id, host, spec, timeoutMs) => ipcRenderer.invoke('tools:portscan', id, host, spec, timeoutMs),
-  netScan: (id, spec, timeoutMs) => ipcRenderer.invoke('tools:netscan', id, spec, timeoutMs),
+  netScan: (id, spec, timeoutMs, snmp) => ipcRenderer.invoke('tools:netscan', id, spec, timeoutMs, snmp),
   cancelTool: (id) => ipcRenderer.send('tools:cancel', id),
   onToolResult: (cb) => ipcRenderer.on('tools:result', (_e, id, result) => cb(id, result)),
   onToolProgress: (cb) => ipcRenderer.on('tools:progress', (_e, id, done, total) => cb(id, done, total)),

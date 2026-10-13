@@ -4,17 +4,17 @@ import snmp from 'net-snmp';
 
 export const V3_USER = { name: 'mt-user', authProtocol: 'sha', authKey: 'senha-auth-123', privProtocol: 'aes', privKey: 'senha-priv-123' };
 
-async function freeUdpPort(): Promise<number> {
+async function freeUdpPort(address: string): Promise<number> {
   const s = createSocket('udp4');
-  await new Promise<void>((r) => s.bind(0, '127.0.0.1', r));
+  await new Promise<void>((r) => s.bind(0, address, r));
   const { port } = s.address();
   await new Promise<void>((r) => s.close(() => r()));
   return port;
 }
 
-export async function startAgent(): Promise<{ port: number; close: () => Promise<void> }> {
-  const port = await freeUdpPort();
-  const agent = snmp.createAgent({ port, address: '127.0.0.1' }, () => {});
+export async function startAgent(address = '127.0.0.1'): Promise<{ port: number; close: () => Promise<void> }> {
+  const port = await freeUdpPort(address);
+  const agent = snmp.createAgent({ port, address }, () => {});
   const auth = agent.getAuthorizer();
   auth.addCommunity('public');
   auth.addUser({

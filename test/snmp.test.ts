@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   describeOid, formatOctets, formatTimeTicks, resolveOid, runSnmp, validateSnmpRequest, type SnmpRequest,
 } from '../src/network/snmp.ts';
+import { scanNetwork } from '../src/network/hosts.ts';
 import { startAgent, V3_USER } from './snmp-agent.ts';
 
 // ---------- validação e formatação ----------
@@ -126,4 +127,27 @@ test('cancelamento antes de começar devolve vazio', async () => {
   const ctrl = new AbortController();
   ctrl.abort();
   assert.deepEqual(await runSnmp(req({ operation: 'walk', oids: 'system' }), { signal: ctrl.signal }), []);
+});
+
+test('scanner de rede: sem DNS reverso, o nome vem do sysName via SNMP', async () => {
+  const base = req({ operation: 'get', oids: 'sysName', timeoutMs: 1000 });
+  const semDns = async () => undefined;
+
+  const [viaSnmp] = await scanNetwork(['127.0.0.1'], { timeoutMs: 800, snmp: base, reverse: semDns });
+  assert.deepEqual([viaSnmp.name, viaSnmp.nameSource], ['agente-teste', 'snmp']);
+
+  // Com DNS reverso o SNMP nem é consultado: community errada com timeout de 2 s (o agente
+  // ignora) faria a varredura demorar ao menos 2 s se fosse usada.
+  const inicio = Date.now();
+  const [viaDns] = await scanNetwork(['127.0.0.1'], {
+    timeoutMs: 800, snmp: { ...base, community: 'errada', timeoutMs: 2000 }, reverse: async () => 'host.exemplo',
+  });
+  assert.deepEqual([viaDns.name, viaDns.nameSource], ['host.exemplo', 'dns']);
+  assert.ok(Date.now() - inicio < 1500, `não deveria consultar o SNMP (${Date.now() - inicio} ms)`);
+
+  const [semNome] = await scanNetwork(['127.0.0.1'], { timeoutMs: 800, snmp: { ...base, community: 'errada', timeoutMs: 300 }, reverse: semDns });
+  assert.deepEqual([semNome.alive, semNome.name, semNome.nameSource], [true, undefined, undefined]);
+
+  const [semSnmp] = await scanNetwork(['127.0.0.1'], { timeoutMs: 800, reverse: semDns });
+  assert.equal(semSnmp.name, undefined);
 });

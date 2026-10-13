@@ -71,6 +71,8 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
   `bancos`, `windows`); mostra aberta, fechada ou filtrada. Exporta CSV.
 - **Scanner de rede** — CIDR (`10.0.0.0/24`), faixa (`10.0.0.10-50`) ou lista; descobre hosts por
   conexão TCP (22, 80, 443, 445, 3389), mostra nome e portas e cria sessões a partir do resultado.
+  O nome vem do DNS reverso; com SNMP configurado (v1/v2c/v3), hosts sem DNS reverso são
+  consultados pelo `sysName`. A coluna **Fonte** indica a origem do nome.
 - **Portas abertas locais** — conexões e portas em escuta desta máquina com o processo dono
   (Windows), com filtro e atualização automática.
 
