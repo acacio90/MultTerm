@@ -171,6 +171,8 @@ form h2 { margin: 0 0 12px; font-size: 16px; }
 
 .terminals { flex: 1; display: flex; min-height: 0; }
 .terminals:empty { display: none; }
+/* Sem isto, display:flex acima anula o atributo hidden e a área oculta espreme a aba Sessão. */
+.terminals[hidden] { display: none; }
 .term-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; background: #1e1f22; }
 .term-panel[hidden] { display: none; }
 .term-host { flex: 1; min-height: 0; padding: 4px; }

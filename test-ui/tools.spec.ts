@@ -206,3 +206,13 @@ test('scanner de rede busca o nome por SNMP quando não há DNS reverso', async 
     await agent.close();
   }
 });
+
+test('voltar para a aba Sessão com uma ferramenta aberta usa a altura toda', async () => {
+  await openTool('dns');
+  await page.click('#tab-editor');
+  await expect(page.locator('#terminals')).toBeHidden();
+  const editor = await page.locator('#panel-editor').boundingBox();
+  const workspace = await page.locator('.workspace').boundingBox();
+  const tabs = await page.locator('#tabs').boundingBox();
+  expect(editor!.height).toBeGreaterThan(workspace!.height - tabs!.height - 4);
+});

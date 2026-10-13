@@ -22,6 +22,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   ajuda. (#13)
 - Publicação de release sem rascunhos duplicados (`npm run release`).
 - O scanner de rede mostra o nome (DNS reverso) usando os servidores DNS do sistema.
+- A aba **Sessão** ficava espremida (metade da altura) quando havia uma aba de terminal ou
+  ferramenta aberta.
 
 ## [0.2.0] - 2026-10-12
 
