@@ -272,3 +272,48 @@ test('Iperf com o cliente iperf3: envio, reverso, vários fluxos e UDP recusado'
     await srv.stop();
   }
 });
+
+test('Telnet: comandos IAC, NAWS e fim de linha', async () => {
+  const { parseTelnet, escapeIac, Tn, validateTelnet } = await import('../src/servers/telnet.ts');
+  const naws = Buffer.from([Tn.IAC, Tn.SB, Tn.NAWS, 0, 120, 0, 40, Tn.IAC, Tn.SE]);
+  const r = parseTelnet(Buffer.concat([Buffer.from([Tn.IAC, Tn.DO, Tn.ECHO]), Buffer.from('ab\r\0c\r\n'), naws, Buffer.from([Tn.IAC, Tn.IAC]), Buffer.from('x\r')]));
+  assert.deepEqual(r.data, Buffer.from([0x61, 0x62, 0x0d, 0x63, 0x0d, 0xff, 0x78]));
+  assert.deepEqual(r.sizes, [{ cols: 120, rows: 40 }]);
+  assert.deepEqual(r.rest, Buffer.from('\r')); // CR no fim espera o próximo pedaço
+  assert.deepEqual(parseTelnet(Buffer.from([Tn.IAC, Tn.SB, Tn.NAWS, 0])).rest.length, 4); // incompleto
+  assert.deepEqual(escapeIac(Buffer.from([1, 255, 2])), Buffer.from([1, 255, 255, 2]));
+  assert.throws(() => validateTelnet({ password: '' }), /senha/);
+  assert.equal(validateTelnet({ password: 'abcd' }).port, 23);
+});
+
+test('Telnet: senha, shell pelo ConPTY e saída', { timeout: 60_000 }, async () => {
+  const { startTelnet } = await import('../src/servers/telnet.ts');
+  const { connect } = await import('node:net');
+  const logs: string[] = [];
+  const srv = await startTelnet({ port: 0, host: '127.0.0.1', password: 'segredo', shell: 'cmd', cwd: tmpdir() }, (l) => logs.push(l));
+  try {
+    const sock = connect(srv.port, '127.0.0.1');
+    let text = '';
+    sock.on('data', (d: Buffer) => { text += d.toString('latin1'); });
+    const until = async (re: RegExp) => {
+      for (let i = 0; i < 200 && !re.test(text); i++) await new Promise((r) => setTimeout(r, 100));
+      assert.match(text, re);
+    };
+    await until(/Senha: $/);
+    sock.write(Buffer.from([255, 250, 31, 0, 100, 0, 30, 255, 240])); // NAWS 100x30
+    sock.write('errada\r\n');
+    await until(/Senha incorreta\.\r\nSenha: $/);
+    text = '';
+    sock.write('segredo\r\n');
+    await until(/>/); // prompt do cmd
+    sock.write('set /a 40+2\r\n');
+    await until(/\b42\b/);
+    const closed = new Promise((r) => sock.on('close', r));
+    sock.write('exit\r\n');
+    await closed;
+    assert.ok(logs.some((l) => /senha errada/.test(l)));
+    assert.ok(logs.some((l) => /login feito/.test(l)));
+  } finally {
+    await srv.stop();
+  }
+});

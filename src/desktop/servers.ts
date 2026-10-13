@@ -6,6 +6,7 @@ import { ensureSelfSignedPfx } from '../servers/cert.ts';
 import { startFtp, validateFtp } from '../servers/ftp.ts';
 import { startHttp, validateHttp } from '../servers/http.ts';
 import { startIperf, validateIperf } from '../servers/iperf.ts';
+import { startTelnet, validateTelnet } from '../servers/telnet.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 
 /*
@@ -45,7 +46,8 @@ const certPath = () => join(app.getPath('userData'), 'certs', 'servidores.pfx');
 export interface ServerField {
   key: string;
   label: string;
-  type: 'dir' | 'number' | 'bool' | 'text' | 'password';
+  type: 'dir' | 'number' | 'bool' | 'text' | 'password' | 'select';
+  options?: [string, string][];
   min?: number;
   max?: number;
   hint?: string;
@@ -132,6 +134,24 @@ const DEFS: ServerDef[] = [
     ],
     defaults: () => ({ root: filesDir(), port: 8080, listing: true, stopAfter: 3600 }),
     start: (raw, log) => startHttp(validateHttp(raw), log),
+  },
+  {
+    kind: 'telnet',
+    title: 'Telnet',
+    description: 'Shell do Windows por Telnet, para equipamentos que só falam Telnet. O Telnet não é cifrado: ' +
+      'a senha e tudo o que for digitado trafegam em texto puro — use só em rede confiável e por pouco tempo.',
+    fields: [
+      { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      { key: 'password', label: 'Senha de acesso', type: 'password' },
+      { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
+      { key: 'confirm', label: 'Perguntar antes de aceitar cada conexão', type: 'bool' },
+      ...COMMON,
+    ],
+    defaults: () => ({ port: 23, password: '', shell: 'powershell', confirm: true, stopAfter: 900 }),
+    start: (raw, log) => startTelnet({
+      ...validateTelnet(raw),
+      confirm: raw.confirm === true ? (client) => confirmConnection('Telnet', client) : undefined,
+    }, log),
   },
   {
     kind: 'iperf',

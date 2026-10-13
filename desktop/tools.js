@@ -616,6 +616,11 @@ function serversPanel(ctx) {
         inputs.set(f.key, input);
         return el('label', { className: 'check' }, input, f.label);
       }
+      if (f.type === 'select') {
+        const input = select(f.key, f.options, value);
+        inputs.set(f.key, input);
+        return field(f.label, input);
+      }
       if (f.type === 'password') {
         // A senha guardada nunca vem para a tela: em branco mantém a atual.
         const pw = secret(f.key, srv.config[`${f.key}Set`] ? 'em branco mantém' : '');
