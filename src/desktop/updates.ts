@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import updater from 'electron-updater';
+import { releaseNotesText } from './release-notes.ts';
 
 const { autoUpdater } = updater;
 
@@ -23,12 +24,6 @@ function publish(next: UpdateStatus): void {
   }
 }
 
-function notesText(notes: unknown): string | undefined {
-  if (typeof notes === 'string') return notes;
-  if (Array.isArray(notes)) return notes.map((n) => (n as { note?: string }).note ?? '').join('\n');
-  return undefined;
-}
-
 export function getUpdateStatus(): UpdateStatus {
   return status;
 }
@@ -49,7 +44,7 @@ export function initUpdates(): void {
 
   autoUpdater.on('checking-for-update', () => publish({ state: 'checking' }));
   autoUpdater.on('update-available', (info) =>
-    publish({ state: 'available', version: info.version, notes: notesText(info.releaseNotes) }));
+    publish({ state: 'available', version: info.version, notes: releaseNotesText(info.releaseNotes) }));
   autoUpdater.on('update-not-available', (info) => publish({ state: 'not-available', version: info.version }));
   autoUpdater.on('download-progress', (p) => publish({ state: 'downloading', percent: Math.round(p.percent) }));
   autoUpdater.on('update-downloaded', (info) => publish({ state: 'downloaded', version: info.version }));
