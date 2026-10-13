@@ -1,5 +1,7 @@
 # MultTerm
 
+[![CI](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml)
+
 Gerenciador de sessões SSH/RDP com terminal em abas.
 As sessões ficam num arquivo YAML legível e versionável, **sem limite de quantidade**.
 
@@ -81,7 +83,8 @@ Requer Node.js 22.18+.
 ```sh
 npm install
 npm start            # compila e abre o app
-npm test
+npm test             # testes de unidade
+npm run test:ui      # testes de interface (abre o app com Playwright)
 npm run typecheck
 npm run icon         # regenera desktop/icon.png a partir de desktop/icon.svg
 npm run multterm -- list

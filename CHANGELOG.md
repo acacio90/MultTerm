@@ -13,6 +13,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   e em `multterm import` (com `--folder` para a pasta raiz). (#4)
 - Ícone próprio do aplicativo (janela, executável e instalador), gerado a partir de
   `desktop/icon.svg` com `npm run icon`. (#1)
+- Testes de interface com Playwright abrindo o app real (`npm run test:ui`) e CI no GitHub
+  Actions rodando typecheck, testes de unidade e de interface no Windows. (#2)
 
 ## [0.1.0] - 2026-10-12
 
