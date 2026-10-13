@@ -18,6 +18,8 @@ import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installU
 import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { registerVpnIpc } from './vpn.ts';
+import { wintunDllPath } from './native-vpn.ts';
+import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
 import { exportFileName, loadSessionFile, mergeSessions, saveSessionFile, sessionsInFolder, validateSessions } from '../sessions/store.ts';
 
@@ -262,7 +264,11 @@ async function createWindow(): Promise<void> {
   await win.loadFile(join(appRoot, 'desktop', 'index.html'));
 }
 
-app.whenReady().then(async () => {
+// Processo auxiliar da VPN (elevado): só o túnel, sem janela nem IPC.
+const vpnHelper = process.argv.includes(HELPER_FLAG);
+if (vpnHelper) void runVpnHelper(process.argv, wintunDllPath(), (code) => app.exit(code));
+
+if (!vpnHelper) app.whenReady().then(async () => {
   sessionsPath = await resolveSessionsPath();
   registerIpc();
   registerToolsIpc();
@@ -275,5 +281,5 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin' && !vpnHelper) app.quit();
 });

@@ -718,6 +718,32 @@ function vpnPanel(ctx, tab) {
     const networks = el('div', { className: 'vpn-networks' });
     const userField = field('Usuário', user);
     const passField = field('Senha', pass.node);
+    // Motor: o do MultTerm (sem instalar nada) ou o Shrew instalado; a escolha fica lembrada.
+    const engines = [...(info.native ? [['native', 'MultTerm (sem instalar nada)']] : []), ...(info.exe ? [['shrew', 'Shrew Soft VPN Client']] : [])];
+    let saved = null;
+    try {
+      saved = localStorage.getItem('multterm-vpn-engine');
+    } catch { /* sem armazenamento */ }
+    const engine = select('engine', engines, engines.some(([v]) => v === saved) ? saved : engines[0][0]);
+    const engineField = field('Motor', engine);
+    engineField.hidden = engines.length < 2;
+    const showField = el('label', { className: 'check' }, show, 'Mostrar a janela do Shrew');
+    const notice = el('p', { className: 'muted' });
+    const syncEngine = () => {
+      showField.hidden = engine.value !== 'shrew';
+      notice.textContent = (engine.value === 'shrew'
+        ? 'O MultTerm usa o cliente do Shrew instalado e oculta a janela dele; a senha não é gravada. '
+        : 'O MultTerm conecta sozinho (IPsec/IKEv1) e cria o adaptador "MultTerm VPN": o Windows pede permissão de ' +
+          'administrador (UAC) a cada conexão. A senha não é gravada. ') +
+        'A conexão continua ao fechar esta aba e é encerrada ao sair do MultTerm.';
+    };
+    engine.addEventListener('change', () => {
+      try {
+        localStorage.setItem('multterm-vpn-engine', engine.value);
+      } catch { /* sem armazenamento */ }
+      syncEngine();
+    });
+    syncEngine();
 
     const current = () => info.sites.find((s) => s.name === site.value);
     let vpnState = info.status;
@@ -821,7 +847,7 @@ function vpnPanel(ctx, tab) {
       log.textContent = s.log.trim();
       connectBtn.disabled = busy || up;
       disconnectBtn.disabled = s.state === 'off' || s.state === 'disconnecting';
-      site.disabled = editBtn.disabled = busy || up;
+      site.disabled = editBtn.disabled = engine.disabled = busy || up;
       if (up) void showNetworks();
       else networks.replaceChildren();
     };
@@ -829,8 +855,7 @@ function vpnPanel(ctx, tab) {
     const form = el('form', { className: 'tool-form' },
       el('label', { className: 'wide' }, 'Site', site),
       el('div', { className: 'actions site-actions' }, newBtn, editBtn, exportBtn, deleteBtn, importBtn),
-      el('div', { className: 'break' }), userField, passField,
-      el('label', { className: 'check' }, show, 'Mostrar a janela do Shrew'),
+      el('div', { className: 'break' }), engineField, userField, passField, showField,
       el('div', { className: 'actions' }, connectBtn, disconnectBtn),
     );
     form.addEventListener('submit', async (e) => {
@@ -838,7 +863,7 @@ function vpnPanel(ctx, tab) {
       status.textContent = '';
       connectBtn.disabled = true;
       try {
-        await ctx.api.vpnConnect({ site: site.value, user: user.value, password: pass.input.value, show: show.checked });
+        await ctx.api.vpnConnect({ engine: engine.value, site: site.value, user: user.value, password: pass.input.value, show: show.checked });
         pass.input.value = '';
         status.textContent = '';
         ctx.vpnThen?.();
@@ -853,17 +878,12 @@ function vpnPanel(ctx, tab) {
       ...(ctx.vpnNotice ? [el('p', { className: 'notice', textContent: ctx.vpnNotice })] : []),
       ...(info.sites.length ? [form] : [
         el('p', {
-          textContent: 'Nenhum site configurado no Shrew Soft VPN. Crie um aqui ou importe um arquivo .vpn ' +
+          textContent: 'Nenhum site de VPN configurado. Crie um aqui ou importe um arquivo .vpn ' +
             '(exportado pelo VPN Access Manager do Shrew).',
         }),
         el('div', { className: 'actions' }, newBtn, importBtn),
       ]),
-      state, networks, log,
-      el('p', {
-        className: 'muted',
-        textContent: 'O MultTerm usa o cliente do Shrew instalado e oculta a janela dele; a senha não é gravada. ' +
-          'A conexão continua ao fechar esta aba e é encerrada ao sair do MultTerm.',
-      }),
+      state, networks, log, notice,
     );
     onStatus(info.status);
     (info.sites.length ? (current()?.credentials && user.value ? pass.input : user) : newBtn).focus();
@@ -874,7 +894,7 @@ function vpnPanel(ctx, tab) {
     try {
       const info = await ctx.api.vpnInfo();
       status.textContent = '';
-      if (!info.exe) renderMissing();
+      if (!info.exe && !info.native) renderMissing();
       else renderForm(info);
     } catch (err) {
       status.textContent = ctx.cleanError(err);

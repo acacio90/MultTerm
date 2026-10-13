@@ -321,3 +321,11 @@ export async function exportSite(dirs: SiteDirs, name: string, dest: string): Pr
   if (!found) throw new Error(`site "${name}" não encontrado`);
   await copyFile(found.path, dest);
 }
+
+/** Conteúdo bruto do site (com a PSK): só para o motor de VPN, nunca para a interface. */
+export async function readSiteText(dirs: SiteDirs, name: string): Promise<string> {
+  if (!isSafeSiteName(name)) throw new Error('nome de site inválido');
+  const found = await findSiteFile(dirs, name);
+  if (!found) throw new Error(`site "${name}" não encontrado`);
+  return readFile(found.path, 'utf8');
+}

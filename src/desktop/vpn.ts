@@ -5,10 +5,21 @@ import { join } from 'node:path';
 import {
   findShrew, importSite, listSites, parseVpnNetworks, ShrewConnection, VPN_NETWORKS_SCRIPT, type SiteDirs, type VpnStatus,
 } from '../network/shrew.ts';
-import { deleteSite, exportSite, newSite, readSite, saveSite, SITE_FIELDS, type SiteSave } from '../network/shrew-site.ts';
+import { deleteSite, exportSite, newSite, readSite, readSiteText, saveSite, SITE_FIELDS, type SiteSave } from '../network/shrew-site.ts';
+import { siteToVpnOptions } from '../vpn/site-config.ts';
+import { NativeVpnConnection } from './native-vpn.ts';
 
-// VPN pelo Shrew Soft VPN Client: uma conexão por vez, independente das abas (o indicador na
+// VPN por um de dois motores: o do próprio MultTerm (IKEv1/ESP + Wintun, processo elevado) ou o
+// Shrew Soft VPN Client instalado. Uma conexão por vez, independente das abas (o indicador na
 // barra superior mostra o estado) e encerrada ao sair do app.
+
+interface Connection {
+  status: VpnStatus;
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  showWindow(show: boolean): void;
+  on(ev: 'status', cb: (s: VpnStatus) => void): unknown;
+}
 
 const shrewExe = () => findShrew({
   // MULTTERM_PROGRAM_FILES (separado por ";") troca as pastas de programas (testes).
@@ -25,7 +36,7 @@ const siteDirs = (): SiteDirs => process.env.MULTTERM_SHREW_SITES
       public: join(process.env.ProgramData || 'C:\\ProgramData', 'Shrew Soft VPN', 'sites'),
     };
 
-let connection: ShrewConnection | undefined;
+let connection: Connection | undefined;
 let lastStatus: VpnStatus | undefined;
 
 function broadcast(status: VpnStatus) {
@@ -58,7 +69,8 @@ export async function disconnectVpn(): Promise<void> {
 export function registerVpnIpc(): void {
   ipcMain.handle('vpn:info', async () => {
     const exe = shrewExe();
-    return { exe, sites: exe ? await listSites(siteDirs()) : [], sitesDir: siteDirs().user, status: lastStatus };
+    // O motor do MultTerm só existe no Windows (Wintun); os sites valem para os dois motores.
+    return { exe, native: process.platform === 'win32', sites: await listSites(siteDirs()), sitesDir: siteDirs().user, status: lastStatus };
   });
 
   ipcMain.handle('vpn:import', async (e) => {
@@ -107,9 +119,11 @@ export function registerVpnIpc(): void {
   });
 
   ipcMain.handle('vpn:connect', async (_e, raw: unknown) => {
-    const exe = shrewExe();
-    if (!exe) throw new Error('Shrew Soft VPN Client não encontrado');
     const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    const engine = o.engine === 'shrew' ? 'shrew' : 'native';
+    const exe = shrewExe();
+    if (engine === 'shrew' && !exe) throw new Error('Shrew Soft VPN Client não encontrado');
+    if (engine === 'native' && process.platform !== 'win32') throw new Error('o motor de VPN do MultTerm só funciona no Windows');
     const site = text(o.site, 'site', 100);
     if (!(await listSites(siteDirs())).some((s) => s.name === site)) throw new Error(`site "${site}" não encontrado`);
     const user = text(o.user, 'usuário');
@@ -118,7 +132,9 @@ export function registerVpnIpc(): void {
       if (connection.status.site === site && connection.status.state === 'connected') return connection.status;
       await disconnectVpn();
     }
-    const c = new ShrewConnection({ exe, site, user, password, show: o.show === true });
+    const c: Connection = engine === 'shrew'
+      ? new ShrewConnection({ exe: exe!, site, user, password, show: o.show === true })
+      : new NativeVpnConnection(site, siteToVpnOptions(await readSiteText(siteDirs(), site), { user, password }));
     connection = c;
     c.on('status', (s: VpnStatus) => {
       if (connection === c || s.state === 'off') broadcast(s);
@@ -130,7 +146,14 @@ export function registerVpnIpc(): void {
 
   ipcMain.handle('vpn:disconnect', () => disconnectVpn());
   ipcMain.on('vpn:show-window', (_e, show: unknown) => connection?.showWindow(show === true));
-  ipcMain.handle('vpn:networks', () => (connection?.status.state === 'connected' ? vpnNetworks() : { networks: [] }));
+  ipcMain.handle('vpn:networks', () => {
+    if (connection?.status.state !== 'connected') return { networks: [] };
+    if (connection instanceof NativeVpnConnection) {
+      const s = connection.setup;
+      return { ip: s?.address, networks: (s?.networks ?? []).filter((n) => n !== '0.0.0.0/0') };
+    }
+    return vpnNetworks();
+  });
 
   // Derruba o túnel antes de sair (o cliente do Shrew ficaria aberto e conectado).
   let quitting = false;

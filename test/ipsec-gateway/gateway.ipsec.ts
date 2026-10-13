@@ -62,3 +62,29 @@ test('senha errada é recusada no XAuth', async () => {
 test('proposta que o gateway não aceita', async () => {
   await assert.rejects(connect({ dhGroup: 5, phase1: [{ cipher: '3des', hash: 'md5' }] }), /recusou as propostas|tempo esgotado/);
 });
+
+test('Tunnel: adaptador falso, roteamento por rede e política na entrada', async () => {
+  const { Tunnel } = await import('../../src/vpn/tunnel.ts');
+  const written: Buffer[] = [];
+  const tun = { onPacket: undefined as ((ip: Buffer) => void) | undefined, write: (ip: Buffer) => written.push(ip), close: () => {} };
+  const applied: unknown[] = [];
+  const t = new Tunnel({
+    ike: base, createTun: () => tun,
+    net: { apply: async (_t, s) => { applied.push(s); }, clear: async () => {} },
+    dpdIntervalMs: 0,
+  });
+  const setup = await t.start();
+  try {
+    assert.deepEqual(setup.networks, ['10.99.0.0/24', '10.97.0.0/16']);
+    assert.deepEqual(applied, [setup]);
+    tun.onPacket!(icmpEcho(setup.address, '10.99.0.1', 9, 1));
+    tun.onPacket!(icmpEcho(setup.address, '8.8.8.8', 9, 2)); // fora da VPN: descartado
+    for (let i = 0; i < 50 && !written.length; i++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal(written.length, 1);
+    assert.equal([...written[0].subarray(12, 16)].join('.'), '10.99.0.1');
+    assert.equal(t.stats.packetsOut, 1);
+    assert.equal(t.stats.dropped, 1);
+  } finally {
+    await t.stop();
+  }
+});

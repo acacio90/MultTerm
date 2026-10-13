@@ -306,6 +306,8 @@ export class IkeClient extends EventEmitter {
         const n = decodeNotify(p.body);
         if (n.type === Notify.RUThere) {
           this.sendInformational([{ type: Payload.Notify, body: encodeNotify({ ...n, type: Notify.RUThereAck }) }]);
+        } else if (n.type === Notify.RUThereAck) {
+          this.dpdAck?.(n.data.length >= 4 ? n.data.readUInt32BE(0) : -1);
         } else this.notifyError(n.type);
       } else if (p.type === Payload.Delete) {
         const d = decodeDelete(p.body);
@@ -613,6 +615,43 @@ export class IkeClient extends EventEmitter {
     this.children.push(child);
     this.log(`fase 2 estabelecida para ${network} (ESP ${cipher}/${hash})`);
     return child;
+  }
+
+  // ---------- DPD e exclusão de SA ----------
+
+  private dpdSeq = randomBytes(4).readUInt32BE(0) & 0x7fffffff;
+  private dpdAck?: (seq: number) => void;
+
+  /** Pergunta se o gateway está vivo (RFC 3706); resolve true com a resposta. */
+  probe(timeoutMs = 5000): Promise<boolean> {
+    if (!this.keys || this.closed) return Promise.resolve(false);
+    const seq = ++this.dpdSeq >>> 0;
+    const data = Buffer.alloc(4);
+    data.writeUInt32BE(seq, 0);
+    const notify = encodeNotify({ doi: 1, protocol: Protocol.ISAKMP, spi: Buffer.concat([this.icookie, this.rcookie]), type: Notify.RUThere, data });
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.dpdAck = undefined;
+        resolve(false);
+      }, timeoutMs);
+      this.dpdAck = (s) => {
+        if (s !== seq) return;
+        clearTimeout(timer);
+        this.dpdAck = undefined;
+        resolve(true);
+      };
+      this.sendInformational([{ type: Payload.Notify, body: notify }]);
+    });
+  }
+
+  /** Exclui uma SA de fase 2 (depois de renovada). */
+  deleteChild(child: ChildSa) {
+    this.children = this.children.filter((c) => c !== child);
+    if (this.keys && !this.closed) this.sendInformational([{ type: Payload.Delete, body: encodeDelete(Protocol.ESP, [child.inbound.spi]) }]);
+  }
+
+  get supportsDpd() {
+    return this.peerVendor.dpd;
   }
 
   // ---------- ciclo de vida ----------

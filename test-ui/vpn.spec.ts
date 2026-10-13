@@ -38,11 +38,35 @@ async function openVpn(yaml: string, env: Record<string, string>) {
 const MATRIZ = 's:network-host:vpn.example.org\ns:auth-method:mutual-psk-xauth\ns:client-saved-username:ana\n';
 const FILIAL = 's:network-host:10.9.9.9\nn:network-ike-port:4500\ns:auth-method:mutual-psk\n';
 
-test('sem o Shrew, orienta a instalação', async () => {
-  const panel = await openVpn('version: 1\nsessions: []\n', { MULTTERM_PROGRAM_FILES: root, MULTTERM_SHREW_SITES: root });
-  await expect(panel).toContainText('instale o Shrew Soft VPN Client');
-  await expect(panel.locator('button', { hasText: 'Verificar de novo' })).toBeVisible();
+test('sem o Shrew, usa o motor do MultTerm sem seletor', async () => {
+  const sites = join(root, 'sites');
+  await mkdir(sites);
+  await writeFile(join(sites, 'Matriz'), MATRIZ);
+  const panel = await openVpn('version: 1\nsessions: []\n', { MULTTERM_PROGRAM_FILES: root, MULTTERM_SHREW_SITES: sites });
+  await expect(panel.locator('[name=site] option')).toHaveText(['Matriz — vpn.example.org']);
+  await expect(panel.locator('[name=engine]')).toBeHidden();
+  await expect(panel.locator('[name=engine]')).toHaveValue('native');
+  await expect(panel).toContainText('O MultTerm conecta sozinho');
+  await expect(panel.locator('[name=show]')).toBeHidden();
   await expect(ctx!.page.locator('#vpn-indicator')).toBeHidden();
+  // Site sem PSK: o motor recusa antes de pedir administrador.
+  await panel.locator('[name=password]').fill('x');
+  await panel.locator('button[type=submit]').click();
+  await expect(panel.locator('.tool-status')).toHaveText('o site não tem chave compartilhada (PSK)');
+});
+
+test('com o Shrew instalado, o seletor troca o motor e lembra a escolha', async () => {
+  const panel = await openVpn('version: 1\nsessions: []\n', await fakeShrew({ Matriz: MATRIZ }));
+  const engine = panel.locator('[name=engine]');
+  await expect(engine.locator('option')).toHaveText(['MultTerm (sem instalar nada)', 'Shrew Soft VPN Client']);
+  await expect(panel.locator('[name=show]')).toBeHidden();
+  await engine.selectOption('shrew');
+  await expect(panel.locator('[name=show]')).toBeVisible();
+  await expect(panel).toContainText('usa o cliente do Shrew instalado');
+  // Reabrir a aba (a da VPN é única) mantém a escolha.
+  await ctx!.page.click('#btn-tools');
+  await ctx!.page.click('#tools-menu [data-tool="vpn"]');
+  await expect(ctx!.page.locator('.panel:not([hidden])').last().locator('[name=engine]')).toHaveValue('shrew');
 });
 
 test('lista os sites e mostra usuário/senha só para XAuth', async () => {
@@ -53,18 +77,19 @@ test('lista os sites e mostra usuário/senha só para XAuth', async () => {
   await site.selectOption('Matriz');
   await expect(panel.locator('[name=user]')).toHaveValue('ana');
   await expect(panel.locator('[name=password]')).toBeVisible();
-  await expect(panel).toContainText('a senha não é gravada');
+  await expect(panel).toContainText('A senha não é gravada');
 });
 
 test('sem sites, oferece importar um .vpn', async () => {
   const panel = await openVpn('version: 1\nsessions: []\n', await fakeShrew({}));
-  await expect(panel).toContainText('Nenhum site configurado');
+  await expect(panel).toContainText('Nenhum site de VPN configurado');
   await expect(panel.locator('button', { hasText: 'Importar site (.vpn)…' })).toBeVisible();
 });
 
 test('falha ao abrir o cliente aparece no painel', async () => {
   test.skip(process.platform !== 'win32', 'controle da janela do Shrew só no Windows');
   const panel = await openVpn('version: 1\nsessions: []\n', await fakeShrew({ Matriz: MATRIZ }));
+  await panel.locator('[name=engine]').selectOption('shrew');
   await panel.locator('[name=password]').fill('segredo');
   await panel.locator('button[type=submit]').click();
   // O ipsecc.exe falso (vazio) não é um executável válido.
@@ -156,7 +181,7 @@ test.describe('editor de sites', () => {
     ctx!.page.once('dialog', (d) => d.accept());
     await panel.locator('button', { hasText: 'Excluir' }).click();
     await expect(panel.locator('.tool-status')).toHaveText('Site "Matriz Nova" excluído.');
-    await expect(panel).toContainText('Nenhum site configurado');
+    await expect(panel).toContainText('Nenhum site de VPN configurado');
   });
 
   test('cancelar o editor volta ao painel sem gravar', async () => {
