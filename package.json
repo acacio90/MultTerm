@@ -23,7 +23,8 @@
     "multterm": "node src/cli.ts",
     "release": "npm run build && electron-builder --win nsis --x64 --publish always",
     "prepare": "node scripts/install-hooks.mjs",
-    "icon": "node scripts/electron.mjs scripts/render-icon.mjs"
+    "icon": "node scripts/electron.mjs scripts/render-icon.mjs",
+    "test:ui": "npm run build && playwright test"
   },
   "build": {
     "appId": "io.github.acacio90.multterm",
@@ -73,6 +74,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/node": "^24.19.2",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",

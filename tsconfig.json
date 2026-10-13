@@ -16,6 +16,8 @@
   "include": [
     "src",
     "test",
-    "scripts"
+    "scripts",
+    "test-ui",
+    "playwright.config.ts"
   ]
 }

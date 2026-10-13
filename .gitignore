@@ -3,3 +3,5 @@ dist/
 release/
 # Added by code-review-graph
 .code-review-graph/
+test-results/
+playwright-report/
