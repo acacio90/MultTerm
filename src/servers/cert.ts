@@ -34,10 +34,20 @@ export async function ensureSelfSignedPfx(path: string, passphrase: string | und
     '}',
   ].join('\n');
   await new Promise<void>((resolve, reject) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 60_000 }, (err, _o, stderr) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 60_000, env: windowsPowerShellEnv() }, (err, _o, stderr) => {
       if (err) reject(new Error(`não foi possível gerar o certificado: ${String(stderr || err.message).trim().split('\n')[0]}`));
       else resolve();
     });
   });
   return { pfx: await readFile(path), passphrase: pass, created: true };
+}
+
+/**
+ * Ambiente para o Windows PowerShell 5.1 sem o PSModulePath herdado do PowerShell 7 (quando o app
+ * é aberto a partir do pwsh, o 5.1 tenta carregar os módulos do 7 e falha com "Error in TypeData").
+ */
+export function windowsPowerShellEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.PSModulePath;
+  return env;
 }
