@@ -240,6 +240,136 @@ function netScanPanel(ctx, tab) {
   }
 }
 
+// ---------- SNMP ----------
+
+/** Campo de senha com botão para mostrar/ocultar. */
+function secret(name, placeholder = '') {
+  const input = el('input', { name, type: 'password', autocomplete: 'off', placeholder });
+  const toggle = el('button', { type: 'button', className: 'link', textContent: 'mostrar' });
+  toggle.addEventListener('click', () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    toggle.textContent = show ? 'ocultar' : 'mostrar';
+  });
+  return { input, node: el('span', { className: 'secret' }, input, toggle) };
+}
+
+const select = (name, options, value) =>
+  el('select', { name }, ...options.map(([v, label]) => el('option', { value: v, textContent: label, selected: v === value })));
+
+function snmpPanel(ctx, tab) {
+  const host = el('input', { name: 'host', required: true, value: ctx.host ?? '', autocomplete: 'off' });
+  const port = el('input', { name: 'port', type: 'number', min: 1, max: 65535, value: 161 });
+  const version = select('version', [['1', 'v1'], ['2c', 'v2c'], ['3', 'v3']], '2c');
+  const community = secret('community', 'public');
+
+  const user = el('input', { name: 'user', autocomplete: 'off' });
+  const level = select('level', [['noAuthNoPriv', 'sem autenticação (noAuthNoPriv)'], ['authNoPriv', 'autenticação (authNoPriv)'], ['authPriv', 'autenticação + criptografia (authPriv)']], 'authPriv');
+  const authProtocol = select('authProtocol', [['md5', 'MD5'], ['sha', 'SHA-1'], ['sha224', 'SHA-224'], ['sha256', 'SHA-256'], ['sha384', 'SHA-384'], ['sha512', 'SHA-512']], 'sha');
+  const authKey = secret('authKey', 'mínimo 8 caracteres');
+  const privProtocol = select('privProtocol', [['des', 'DES'], ['aes', 'AES-128'], ['aes256b', 'AES-256 (Blumenthal)'], ['aes256r', 'AES-256 (Reeder)']], 'aes');
+  const privKey = secret('privKey', 'mínimo 8 caracteres');
+
+  const operation = select('operation', [['get', 'get'], ['getnext', 'getnext'], ['getbulk', 'getbulk'], ['walk', 'walk']], 'get');
+  const oids = el('input', { name: 'oids', value: 'sysName sysDescr sysUpTime', autocomplete: 'off' });
+  const nonRepeaters = el('input', { name: 'nonRepeaters', type: 'number', min: 0, value: 0 });
+  const maxRepetitions = el('input', { name: 'maxRepetitions', type: 'number', min: 1, max: 1000, value: 20 });
+  const maxResults = el('input', { name: 'maxResults', type: 'number', min: 1, max: 100000, value: 10000 });
+  const timeout = el('input', { name: 'timeout', type: 'number', min: 200, max: 60000, value: 3000 });
+  const retries = el('input', { name: 'retries', type: 'number', min: 0, max: 5, value: 1 });
+  const c = scanControls(ctx, tab, 'Executar');
+  const tbl = table([
+    { key: 'oid', label: 'OID' },
+    { key: 'name', label: 'Nome' },
+    { key: 'type', label: 'Tipo' },
+    { key: 'value', label: 'Valor', cls: () => 'wrap' },
+  ]);
+  let live = false;
+
+  const communityField = field('Community', community.node);
+  const v3Fields = [field('Usuário', user), field('Nível de segurança', level)];
+  const authFields = [field('Autenticação', authProtocol), field('Senha de autenticação', authKey.node)];
+  const privFields = [field('Criptografia', privProtocol), field('Senha de criptografia', privKey.node)];
+  const bulkFields = [field('Non-repeaters', nonRepeaters), field('Max-repetitions', maxRepetitions)];
+  const walkFields = [field('Limite de resultados', maxResults)];
+  const PLACEHOLDERS = {
+    get: 'sysName sysDescr ou 1.3.6.1.2.1.1.5.0',
+    getnext: 'ifDescr (devolve o próximo OID)',
+    getbulk: 'ifDescr ifOperStatus',
+    walk: 'system, interfaces, ifDescr ou um OID numérico',
+  };
+
+  function updateFields() {
+    const v3 = version.value === '3';
+    communityField.hidden = v3;
+    for (const f of v3Fields) f.hidden = !v3;
+    for (const f of authFields) f.hidden = !v3 || level.value === 'noAuthNoPriv';
+    for (const f of privFields) f.hidden = !v3 || level.value !== 'authPriv';
+    for (const f of bulkFields) f.hidden = operation.value !== 'getbulk';
+    for (const f of walkFields) f.hidden = operation.value !== 'walk';
+    oids.placeholder = PLACEHOLDERS[operation.value];
+    // getbulk não existe no v1: oferece só o que funciona.
+    operation.querySelector('option[value=getbulk]').disabled = version.value === '1';
+    if (version.value === '1' && operation.value === 'getbulk') operation.value = 'getnext';
+  }
+  for (const s of [version, level, operation]) s.addEventListener('change', updateFields);
+  updateFields();
+
+  const form = el('form', { className: 'tool-form' },
+    field('Host ou IP', host), field('Porta', port), field('Versão', version), communityField,
+    ...v3Fields, ...authFields, ...privFields,
+    el('div', { className: 'break' }),
+    field('Operação', operation), el('label', { className: 'wide' }, 'OIDs', oids), ...bulkFields, ...walkFields,
+    field('Timeout (ms)', timeout), field('Tentativas', retries),
+    el('div', { className: 'actions' }, c.run, c.cancel, c.csv),
+  );
+  const hint = el('p', {
+    className: 'muted',
+    textContent: 'OIDs numéricos ou nomes comuns (sysName, sysDescr, sysUpTime, ifDescr, ifOperStatus, ifHCInOctets…); vários separados por espaço. walk percorre a subárvore do OID. As credenciais não são gravadas.',
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    tbl.clear();
+    c.status.textContent = 'Consultando…';
+    c.start(1);
+    live = true;
+    try {
+      const { cancelled, results } = await ctx.api.snmp(tab.id, {
+        host: host.value, port: port.value, version: version.value, community: community.input.value,
+        user: user.value, level: level.value, authProtocol: authProtocol.value, authKey: authKey.input.value,
+        privProtocol: privProtocol.value, privKey: privKey.input.value,
+        operation: operation.value, oids: oids.value, nonRepeaters: nonRepeaters.value,
+        maxRepetitions: maxRepetitions.value, maxResults: maxResults.value, timeoutMs: timeout.value, retries: retries.value,
+      });
+      live = false;
+      tbl.clear();
+      for (const r of results) tbl.add(r);
+      const limit = operation.value === 'walk' && results.length >= Number(maxResults.value) ? ' (limite atingido)' : '';
+      c.status.textContent = `${cancelled ? 'Cancelado' : 'Concluído'}: ${results.length} resultado(s)${limit}.`;
+    } catch (err) {
+      c.status.textContent = ctx.cleanError(err);
+    }
+    live = false;
+    c.finish(tbl.rows.length > 0);
+  });
+  c.csv.addEventListener('click', () => exportCsv(ctx, tbl, `snmp-${host.value}.csv`, c.status));
+
+  return {
+    title: 'Consulta SNMP',
+    content: [form, hint, c.progress, c.status, tbl.node],
+    focus: () => host.focus(),
+    onResult: (r) => {
+      if (live) tbl.add(r);
+    },
+    onClose: () => {
+      ctx.api.cancelTool(tab.id);
+      // Não deixa senhas na memória da página depois de fechar a aba.
+      community.input.value = authKey.input.value = privKey.input.value = '';
+    },
+  };
+}
+
 // ---------- DNS ----------
 
 const DNS_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'SRV'];
@@ -359,7 +489,7 @@ function localPortsPanel(ctx, tab) {
   };
 }
 
-const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, localports: localPortsPanel };
+const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel };
 
 /** Cria o painel da ferramenta `kind` dentro de `tab.panel`; devolve os ganchos da aba. */
 export function buildToolPanel(kind, ctx, tab) {
@@ -370,4 +500,4 @@ export function buildToolPanel(kind, ctx, tab) {
   return p;
 }
 
-export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', localports: 'Portas locais' };
+export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais' };

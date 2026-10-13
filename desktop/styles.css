@@ -306,3 +306,10 @@ pre.dns-result {
   white-space: pre-wrap;
 }
 pre.dns-result:empty { display: none; }
+
+.tool-form label[hidden] { display: none; }
+.tool-form label.wide { flex: 1 1 320px; }
+.tool-form .break { flex-basis: 100%; height: 0; }
+.secret { display: flex; align-items: center; gap: 8px; }
+.secret input { flex: 1; }
+table.results td.wrap { white-space: normal; word-break: break-word; }

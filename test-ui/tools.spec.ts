@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createServer, type Server } from 'node:net';
+import { startAgent, V3_USER } from '../test/snmp-agent.ts';
 import { launchApp, type LaunchedApp } from './fixture.ts';
 
 const SESSIONS = `version: 1
@@ -114,4 +115,72 @@ test('fechar a aba de ferramenta volta para a aba Sessão', async () => {
   await expect(page.locator('#tabs .tab', { hasText: 'Consulta DNS' })).toHaveClass(/active/);
   await page.locator('#tabs .tab', { hasText: 'Consulta DNS' }).locator('.close').click();
   await expect(page.locator('#panel-editor')).toBeVisible();
+});
+
+test.describe('consulta SNMP contra um agente local', () => {
+  let agent: Awaited<ReturnType<typeof startAgent>>;
+  test.beforeEach(async () => {
+    agent = await startAgent();
+  });
+  test.afterEach(async () => {
+    await agent.close();
+  });
+
+  async function openSnmp() {
+    await openTool('snmp');
+    const panel = activePanel();
+    await panel.locator('[name=host]').fill('127.0.0.1');
+    await panel.locator('[name=port]').fill(String(agent.port));
+    await panel.locator('[name=timeout]').fill('1500');
+    return panel;
+  }
+
+  test('v2c walk lista a subárvore com nomes e valores formatados', async () => {
+    const panel = await openSnmp();
+    await panel.locator('[name=operation]').selectOption('walk');
+    await panel.locator('[name=oids]').fill('system');
+    await panel.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toHaveText('Concluído: 5 resultado(s).');
+    const rows = panel.locator('table.results tbody tr');
+    await expect(rows).toHaveCount(5);
+    await expect(rows.nth(2)).toContainText('sysUpTime.0');
+    await expect(rows.nth(2)).toContainText('3d 03:00:00');
+  });
+
+  test('campos mudam com versão e nível; v3 authPriv faz get', async () => {
+    const panel = await openSnmp();
+    const visible = (name: string) => panel.locator(`[name=${name}]`).isVisible();
+    expect(await visible('community')).toBe(true);
+    expect(await visible('user')).toBe(false);
+
+    await panel.locator('[name=version]').selectOption('3');
+    expect(await visible('community')).toBe(false);
+    await panel.locator('[name=level]').selectOption('authNoPriv');
+    expect(await visible('authKey')).toBe(true);
+    expect(await visible('privKey')).toBe(false);
+    await panel.locator('[name=level]').selectOption('authPriv');
+
+    await panel.locator('[name=user]').fill(V3_USER.name);
+    await panel.locator('[name=authProtocol]').selectOption('sha');
+    await panel.locator('[name=authKey]').fill(V3_USER.authKey);
+    await panel.locator('[name=privProtocol]').selectOption('aes');
+    await panel.locator('[name=privKey]').fill(V3_USER.privKey);
+    await panel.locator('[name=oids]').fill('sysName');
+    await panel.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toHaveText('Concluído: 1 resultado(s).');
+    await expect(panel.locator('table.results tbody tr').first()).toContainText('agente-teste');
+
+    await panel.locator('[name=authKey]').fill('senha-errada-9');
+    await panel.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toContainText('confira host, porta, usuário, senhas e protocolos do SNMPv3');
+  });
+
+  test('v1 não oferece getbulk', async () => {
+    const panel = await openSnmp();
+    await panel.locator('[name=operation]').selectOption('getbulk');
+    await panel.locator('[name=version]').selectOption('1');
+    await expect(panel.locator('[name=operation]')).toHaveValue('getnext');
+    // toBeDisabled() do Playwright não considera <option>; verifica a propriedade.
+    await expect(panel.locator('[name=operation] option[value=getbulk]')).toHaveJSProperty('disabled', true);
+  });
 });

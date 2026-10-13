@@ -11,12 +11,15 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Menu **Ferramentas** com ferramentas de rede, cada uma numa aba: ping e traceroute num
   terminal embutido (#9), consulta DNS (#11), scanner de portas (#6), scanner de rede com
   criação de sessão a partir do resultado (#5) e portas abertas locais com o processo dono (#7).
+- Consulta SNMP v1/v2c/v3 (get, getnext, getbulk e walk), com nomes de OIDs comuns e valores
+  formatados; credenciais só em memória. (#14)
 
 ### Corrigido
 
 - As notas da versão aparecem como texto (e não HTML cru) ao anunciar uma atualização na
   ajuda. (#13)
 - Publicação de release sem rascunhos duplicados (`npm run release`).
+- O scanner de rede mostra o nome (DNS reverso) usando os servidores DNS do sistema.
 
 ## [0.2.0] - 2026-10-12
 

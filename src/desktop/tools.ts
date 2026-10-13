@@ -7,6 +7,7 @@ import { dnsQuery } from '../network/dns.ts';
 import { parseTargets, scanNetwork } from '../network/hosts.ts';
 import { listConnections } from '../network/local-ports.ts';
 import { parsePorts, scanPorts } from '../network/ports.ts';
+import { runSnmp, validateSnmpRequest } from '../network/snmp.ts';
 import { isSafeHost } from '../sessions/model.ts';
 import { openTerminal } from './terminals.ts';
 
@@ -95,7 +96,18 @@ export function registerToolsIpc(): void {
     jobs.delete(key);
   });
 
-  ipcMain.handle('tools:dns', (_e, name: unknown, type: unknown, server: unknown) =>
+  // SNMP: credenciais só em memória, nunca em log nem em disco.
+  ipcMain.handle('tools:snmp', (e, id: unknown, raw: unknown) => {
+    const req = validateSnmpRequest(raw);
+    return runJob(e.sender, id, (signal) => runSnmp(req, {
+      signal,
+      onResult: (r) => {
+        if (!e.sender.isDestroyed()) e.sender.send('tools:result', id, r);
+      },
+    }));
+  });
+
+  ipcMain.handle('tools:dns',(_e, name: unknown, type: unknown, server: unknown) =>
     dnsQuery(String(name ?? ''), String(type ?? 'A'), typeof server === 'string' ? server : undefined));
 
   ipcMain.handle('tools:local-ports', () => listConnections());

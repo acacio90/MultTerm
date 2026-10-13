@@ -12,8 +12,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - RDP pelo cliente do sistema (`mstsc` no Windows)
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
-- **Ferramentas de rede**: ping, traceroute, consulta DNS, scanner de portas, scanner de rede e
-  portas abertas locais
+- **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
+  portas, scanner de rede e portas abertas locais
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -64,6 +64,9 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
   (Ctrl+C para parar) e **R** executa de novo.
 - **Consulta DNS** — A, AAAA, CNAME, MX, TXT, NS, SOA e SRV; IP faz a consulta reversa (PTR).
   Usa os servidores DNS do sistema ou um IP informado.
+- **Consulta SNMP** — v1/v2c (community) ou v3 (usuário, nível de segurança, autenticação
+  MD5/SHA-1/SHA-2 e criptografia DES/AES); operações get, getnext, getbulk e walk; OIDs numéricos
+  ou nomes comuns (`sysName`, `ifDescr`…), com valores formatados. As credenciais não são gravadas.
 - **Scanner de portas** — lista e faixas (`22,80,8000-8100`) ou predefinições (`comuns`, `web`,
   `bancos`, `windows`); mostra aberta, fechada ou filtrada. Exporta CSV.
 - **Scanner de rede** — CIDR (`10.0.0.0/24`), faixa (`10.0.0.10-50`) ou lista; descobre hosts por
