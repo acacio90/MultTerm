@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   findShrew, importSite, listSites, parseVpnNetworks, ShrewConnection, VPN_NETWORKS_SCRIPT, type SiteDirs, type VpnStatus,
 } from '../network/shrew.ts';
+import { deleteSite, exportSite, newSite, readSite, saveSite, SITE_FIELDS, type SiteSave } from '../network/shrew-site.ts';
 
 // VPN pelo Shrew Soft VPN Client: uma conexão por vez, independente das abas (o indicador na
 // barra superior mostra o estado) e encerrada ao sair do app.
@@ -70,6 +71,39 @@ export function registerVpnIpc(): void {
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
     if (res.canceled || !res.filePaths[0]) return null;
     return importSite(res.filePaths[0], siteDirs().user);
+  });
+
+  // Editor de sites: a PSK nunca vai para a interface (só "pskSet").
+  ipcMain.handle('vpn:site-schema', () => SITE_FIELDS);
+  ipcMain.handle('vpn:site-get', (_e, name: unknown) => (name ? readSite(siteDirs(), text(name, 'site', 100)) : newSite()));
+  ipcMain.handle('vpn:site-save', (_e, raw: unknown) => {
+    const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    const values = (typeof o.values === 'object' && o.values !== null ? o.values : {}) as Record<string, unknown>;
+    const req: SiteSave = {
+      ...(o.original ? { original: text(o.original, 'site', 100) } : {}),
+      name: String(o.name ?? ''),
+      values,
+      psk: typeof o.psk === 'string' ? o.psk : '',
+    };
+    return saveSite(siteDirs(), req);
+  });
+  ipcMain.handle('vpn:site-delete', async (_e, name: unknown) => {
+    const site = text(name, 'site', 100);
+    if (connection && connection.status.site.toLowerCase() === site.toLowerCase()) throw new Error('desconecte a VPN antes de excluir o site');
+    await deleteSite(siteDirs(), site);
+  });
+  ipcMain.handle('vpn:site-export', async (e, name: unknown) => {
+    const site = text(name, 'site', 100);
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const opts = {
+      title: 'Exportar site da VPN',
+      defaultPath: join(app.getPath('documents'), `${site}.vpn`),
+      filters: [{ name: 'Site do Shrew Soft VPN', extensions: ['vpn'] }],
+    };
+    const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (res.canceled || !res.filePath) return null;
+    await exportSite(siteDirs(), site, res.filePath);
+    return res.filePath;
   });
 
   ipcMain.handle('vpn:connect', async (_e, raw: unknown) => {

@@ -28,6 +28,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   sem expor a senha, mostra estado, log, erros traduzidos e as redes acessíveis (com atalho
   para o scanner de rede), indicador na barra superior e desconexão ao sair; campo opcional
   `vpn` na sessão conecta a VPN antes de abri-la. (#16)
+- Editor de sites da VPN no próprio MultTerm: criar, editar, renomear, excluir e exportar
+  (.vpn), com padrões fortes para sites novos, a PSK fora da interface e preservação das
+  opções que o editor não conhece. (#17)
 - Exportar sessões (todas, pela barra, ou uma pasta com subpastas, pelo menu de contexto) para
   um YAML que a importação lê.
 - Menu de contexto nas pastas da árvore: nova subpasta, nova sessão aqui, renomear (move

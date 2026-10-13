@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld('multterm', {
   vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),
   vpnShowWindow: (show) => ipcRenderer.send('vpn:show-window', show),
   vpnNetworks: () => ipcRenderer.invoke('vpn:networks'),
+  vpnSiteSchema: () => ipcRenderer.invoke('vpn:site-schema'),
+  vpnSiteGet: (name) => ipcRenderer.invoke('vpn:site-get', name),
+  vpnSiteSave: (req) => ipcRenderer.invoke('vpn:site-save', req),
+  vpnSiteDelete: (name) => ipcRenderer.invoke('vpn:site-delete', name),
+  vpnSiteExport: (name) => ipcRenderer.invoke('vpn:site-export', name),
   onVpnStatus: (cb) => ipcRenderer.on('vpn:status', (_e, status) => cb(status)),
 
   clipboardRead: () => ipcRenderer.invoke('clipboard:read'),

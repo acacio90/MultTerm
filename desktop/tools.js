@@ -572,6 +572,115 @@ function capturePanel(ctx, tab) {
 
 const VPN_STATES = { connecting: 'Conectando…', connected: 'Conectada', disconnecting: 'Desconectando…', off: 'Desconectada' };
 
+/**
+ * Editor de site do Shrew montado a partir do esquema do processo principal (campos, grupos,
+ * opções e dependências). A PSK nunca vem preenchida: em branco mantém a atual.
+ */
+async function siteEditor(ctx, name, { onSaved, onCancel, status }) {
+  const [schema, site] = await Promise.all([ctx.api.vpnSiteSchema(), ctx.api.vpnSiteGet(name)]);
+  const inputs = new Map();
+  const labels = new Map();
+  const nameInput = el('input', { name: 'site-name', required: true, value: site.name, autocomplete: 'off', maxLength: 100 });
+  let psk = null;
+
+  const control = (f) => {
+    const value = site.values[f.key] ?? '';
+    if (f.input === 'select') {
+      const opts = [...f.options];
+      if (value && !opts.some(([v]) => v === value)) opts.push([value, `${value} (atual)`]);
+      return select(f.key, opts, value || opts[0][0]);
+    }
+    if (f.input === 'bool') return el('input', { type: 'checkbox', name: f.key, checked: value === '1' });
+    if (f.input === 'secret') {
+      psk = secret(f.key, site.pskSet ? 'em branco mantém' : 'obrigatória');
+      return psk.node;
+    }
+    return el('input', {
+      name: f.key, value, autocomplete: 'off',
+      ...(f.input === 'number' ? { type: 'number', min: f.min, max: f.max } : {}),
+      ...(f.hint ? { placeholder: f.hint } : {}),
+    });
+  };
+  const valueOf = (key) => {
+    const input = inputs.get(key);
+    if (!input) return site.values[key] ?? '';
+    if (input.type === 'checkbox') return input.checked ? '1' : '0';
+    return input.value;
+  };
+
+  const groups = new Map();
+  for (const f of schema) {
+    const input = control(f);
+    const real = f.input === 'secret' ? psk.input : input;
+    inputs.set(f.key, real);
+    const label = f.input === 'bool'
+      ? el('label', { className: 'check' }, input, f.label)
+      : el('label', { className: f.input === 'networks' ? 'wide' : '' }, f.label, input);
+    labels.set(f.key, label);
+    const id = `${f.advanced ? 'a' : 'b'}:${f.group}`;
+    if (!groups.has(id)) groups.set(id, { title: f.group, advanced: !!f.advanced, nodes: [] });
+    groups.get(id).nodes.push(label);
+  }
+
+  // Mostra cada campo só quando a dependência dele está satisfeita (em cadeia).
+  const visible = (key) => {
+    const f = schema.find((x) => x.key === key);
+    if (!f?.when) return true;
+    return visible(f.when.key) && f.when.values.includes(valueOf(f.when.key));
+  };
+  const sync = () => {
+    for (const f of schema) labels.get(f.key).hidden = !visible(f.key);
+  };
+
+  const section = (g) => el('fieldset', { className: 'site-group' }, el('legend', { textContent: g.title }), el('div', { className: 'tool-form' }, ...g.nodes));
+  const basic = [...groups.values()].filter((g) => !g.advanced);
+  const advanced = [...groups.values()].filter((g) => g.advanced);
+  const save = el('button', { type: 'submit', className: 'primary', textContent: 'Salvar site' });
+  const cancel = el('button', { type: 'button', textContent: 'Cancelar' });
+  const form = el('form', { className: 'site-editor' },
+    el('h3', { textContent: name ? `Editar site "${name}"` : 'Novo site' }),
+    ...(site.public ? [el('p', { className: 'notice', textContent: 'Este site é de todos os usuários: salvar cria uma cópia sua, que passa a ser usada.' })] : []),
+    el('div', { className: 'tool-form' }, el('label', { className: 'wide' }, 'Nome do site', nameInput)),
+    ...basic.map(section),
+    el('details', { className: 'site-advanced' }, el('summary', { textContent: 'Avançado (cliente, rede, fases 1 e 2, políticas)' }),
+      ...advanced.map(section)),
+    el('p', {
+      className: 'muted',
+      textContent: 'Os valores precisam bater com a configuração do gateway. Opções que o editor não mostra (certificados, por ' +
+        'exemplo) são mantidas como estão no arquivo do site.',
+    }),
+    el('div', { className: 'actions' }, save, cancel),
+  );
+  form.addEventListener('input', sync);
+  form.addEventListener('change', sync);
+  cancel.addEventListener('click', onCancel);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const values = {};
+    for (const f of schema) {
+      // Campo oculto não vai: o valor do arquivo fica como está.
+      if (f.input === 'secret' || !visible(f.key)) continue;
+      values[f.key] = valueOf(f.key);
+    }
+    if (!name && visible('auth-mutual-psk') && !psk.input.value) {
+      status.textContent = 'Informe a chave compartilhada (PSK).';
+      psk.input.focus();
+      return;
+    }
+    save.disabled = true;
+    try {
+      const saved = await ctx.api.vpnSiteSave({ original: name || undefined, name: nameInput.value, values, psk: psk.input.value });
+      psk.input.value = '';
+      onSaved(saved);
+    } catch (err) {
+      status.textContent = ctx.cleanError(err);
+      save.disabled = false;
+    }
+  });
+  sync();
+  return { form, focus: () => nameInput.focus() };
+}
+
 function vpnPanel(ctx, tab) {
   const body = el('div');
   const status = statusLine();
@@ -595,6 +704,10 @@ function vpnPanel(ctx, tab) {
         value: s.name, textContent: `${s.name} — ${s.host}${s.port ? `:${s.port}` : ''}${s.public ? ' (todos os usuários)' : ''}`,
       })));
     const importBtn = el('button', { type: 'button', textContent: 'Importar site (.vpn)…' });
+    const newBtn = el('button', { type: 'button', textContent: 'Novo site' });
+    const editBtn = el('button', { type: 'button', textContent: 'Editar' });
+    const exportBtn = el('button', { type: 'button', textContent: 'Exportar…' });
+    const deleteBtn = el('button', { type: 'button', className: 'danger', textContent: 'Excluir' });
     const user = el('input', { name: 'user', autocomplete: 'off' });
     const pass = secret('password');
     const show = el('input', { type: 'checkbox', name: 'show' });
@@ -607,10 +720,15 @@ function vpnPanel(ctx, tab) {
     const passField = field('Senha', pass.node);
 
     const current = () => info.sites.find((s) => s.name === site.value);
+    let vpnState = info.status;
     const syncSite = () => {
       const s = current();
       userField.hidden = passField.hidden = !s?.credentials;
       if (s && !user.value) user.value = s.savedUser ?? '';
+      const inUse = vpnState && vpnState.state !== 'off' && vpnState.site === s?.name;
+      editBtn.disabled = exportBtn.disabled = !s;
+      deleteBtn.disabled = !s || s.public || !!inUse;
+      deleteBtn.title = s?.public ? 'site de todos os usuários: exclua pelo Shrew' : inUse ? 'desconecte antes de excluir' : '';
     };
     if (ctx.vpnSite && info.sites.some((s) => s.name === ctx.vpnSite)) site.value = ctx.vpnSite;
     site.addEventListener('change', () => {
@@ -626,6 +744,46 @@ function vpnPanel(ctx, tab) {
         ctx.vpnSite = added.name;
         await load();
         status.textContent = `Site "${added.name}" importado.`;
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    const openEditor = async (name) => {
+      status.textContent = '';
+      try {
+        const ed = await siteEditor(ctx, name, {
+          status,
+          onSaved: async (saved) => {
+            ctx.vpnSite = saved.name;
+            await load();
+            status.textContent = `Site "${saved.name}" salvo.`;
+          },
+          onCancel: () => load(),
+        });
+        body.replaceChildren(ed.form);
+        ed.focus();
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    };
+    newBtn.addEventListener('click', () => openEditor(null));
+    editBtn.addEventListener('click', () => openEditor(site.value));
+    exportBtn.addEventListener('click', async () => {
+      try {
+        const path = await ctx.api.vpnSiteExport(site.value);
+        if (path) status.textContent = `Site exportado para ${path}`;
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    deleteBtn.addEventListener('click', async () => {
+      const name = site.value;
+      if (!confirm(`Excluir o site "${name}" do Shrew Soft VPN?`)) return;
+      try {
+        await ctx.api.vpnSiteDelete(name);
+        ctx.vpnSite = undefined;
+        await load();
+        status.textContent = `Site "${name}" excluído.`;
       } catch (err) {
         status.textContent = ctx.cleanError(err);
       }
@@ -653,6 +811,8 @@ function vpnPanel(ctx, tab) {
 
     onStatus = (s) => {
       if (!s) return;
+      vpnState = s;
+      syncSite();
       const busy = s.state === 'connecting' || s.state === 'disconnecting';
       const up = s.state === 'connected';
       state.textContent = `${s.site}: ${VPN_STATES[s.state] ?? s.state}${up && s.since ? ` desde ${new Date(s.since).toLocaleTimeString('pt-BR')}` : ''}`;
@@ -661,15 +821,17 @@ function vpnPanel(ctx, tab) {
       log.textContent = s.log.trim();
       connectBtn.disabled = busy || up;
       disconnectBtn.disabled = s.state === 'off' || s.state === 'disconnecting';
-      site.disabled = busy || up;
+      site.disabled = editBtn.disabled = busy || up;
       if (up) void showNetworks();
       else networks.replaceChildren();
     };
 
     const form = el('form', { className: 'tool-form' },
-      el('label', { className: 'wide' }, 'Site', site), userField, passField,
+      el('label', { className: 'wide' }, 'Site', site),
+      el('div', { className: 'actions site-actions' }, newBtn, editBtn, exportBtn, deleteBtn, importBtn),
+      el('div', { className: 'break' }), userField, passField,
       el('label', { className: 'check' }, show, 'Mostrar a janela do Shrew'),
-      el('div', { className: 'actions' }, connectBtn, disconnectBtn, importBtn),
+      el('div', { className: 'actions' }, connectBtn, disconnectBtn),
     );
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -691,10 +853,10 @@ function vpnPanel(ctx, tab) {
       ...(ctx.vpnNotice ? [el('p', { className: 'notice', textContent: ctx.vpnNotice })] : []),
       ...(info.sites.length ? [form] : [
         el('p', {
-          textContent: 'Nenhum site configurado no Shrew Soft VPN. Importe um arquivo .vpn (exportado pelo VPN Access ' +
-            'Manager do Shrew) ou crie o site no próprio Shrew.',
+          textContent: 'Nenhum site configurado no Shrew Soft VPN. Crie um aqui ou importe um arquivo .vpn ' +
+            '(exportado pelo VPN Access Manager do Shrew).',
         }),
-        el('div', { className: 'actions' }, importBtn),
+        el('div', { className: 'actions' }, newBtn, importBtn),
       ]),
       state, networks, log,
       el('p', {
@@ -704,7 +866,7 @@ function vpnPanel(ctx, tab) {
       }),
     );
     onStatus(info.status);
-    (info.sites.length ? (current()?.credentials && user.value ? pass.input : user) : importBtn).focus();
+    (info.sites.length ? (current()?.credentials && user.value ? pass.input : user) : newBtn).focus();
   }
 
   async function load() {

@@ -94,3 +94,78 @@ test('sessão com VPN: campo no formulário e abertura pede a VPN', async () => 
   await page.locator('#form button[type=submit]').click();
   await expect.poll(async () => readFile(ctx!.sessionsFile, 'utf8')).not.toContain('vpn:');
 });
+
+test.describe('editor de sites', () => {
+  test('cria um site sem arquivo .vpn, com PSK e redes', async () => {
+    const env = await fakeShrew({});
+    const panel = await openVpn('version: 1\nsessions: []\n', env);
+    await panel.locator('button', { hasText: 'Novo site' }).click();
+    const editor = panel.locator('form.site-editor');
+    await expect(editor.locator('h3')).toHaveText('Novo site');
+    await editor.locator('[name=site-name]').fill('Matriz');
+    await editor.locator('[name="network-host"]').fill('vpn.example.org');
+    // Sem PSK num site novo: pede antes de gravar.
+    await editor.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toHaveText('Informe a chave compartilhada (PSK).');
+    await editor.locator('[name="auth-mutual-psk"]').fill('segredo');
+    await editor.locator('[name="client-saved-username"]').fill('ana');
+    // Redes manuais aparecem ao desligar a obtenção automática.
+    await expect(editor.locator('[name="policy-list-include"]')).toBeHidden();
+    await editor.locator('[name="policy-list-auto"]').uncheck();
+    await editor.locator('[name="policy-list-include"]').fill('10.0.0.0/8, 192.168.10.0/24');
+    await editor.locator('summary').click();
+    await editor.locator('[name="phase1-dhgroup"]').selectOption('15');
+    await editor.locator('button[type=submit]').click();
+
+    await expect(panel.locator('.tool-status')).toHaveText('Site "Matriz" salvo.');
+    await expect(panel.locator('[name=site] option')).toHaveText(['Matriz — vpn.example.org']);
+    await expect(panel.locator('[name=user]')).toHaveValue('ana');
+    const text = await readFile(join(env.MULTTERM_SHREW_SITES, 'Matriz'), 'utf8');
+    expect(text).toContain(`b:auth-mutual-psk:${Buffer.from('segredo').toString('base64')}`);
+    expect(text).toContain('s:policy-list-include:10.0.0.0 / 255.0.0.0,192.168.10.0 / 255.255.255.0');
+    expect(text).toContain('n:phase1-dhgroup:15');
+    expect(text).toContain('s:phase1-hash:sha2-256');
+  });
+
+  test('edita sem mostrar a PSK, renomeia, exporta e exclui', async () => {
+    const original = `${MATRIZ}b:auth-mutual-psk:c2VncmVkbw==\ns:auth-server-cert:ca.pem\n`;
+    const env = await fakeShrew({ Matriz: original });
+    const panel = await openVpn('version: 1\nsessions: []\n', env);
+    await panel.locator('button', { hasText: 'Editar' }).click();
+    const editor = panel.locator('form.site-editor');
+    await expect(editor.locator('[name="network-host"]')).toHaveValue('vpn.example.org');
+    await expect(editor.locator('[name="auth-mutual-psk"]')).toHaveValue('');
+    await expect(editor.locator('[name="auth-mutual-psk"]')).toHaveAttribute('placeholder', 'em branco mantém');
+    await editor.locator('[name=site-name]').fill('Matriz Nova');
+    await editor.locator('[name="network-host"]').fill('nova.example.org');
+    await editor.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toHaveText('Site "Matriz Nova" salvo.');
+    const text = await readFile(join(env.MULTTERM_SHREW_SITES, 'Matriz Nova'), 'utf8');
+    expect(text).toContain('b:auth-mutual-psk:c2VncmVkbw=='); // PSK mantida
+    expect(text).toContain('s:auth-server-cert:ca.pem'); // chave fora do editor mantida
+    expect(text).toContain('s:network-host:nova.example.org');
+
+    const out = join(root, 'exportado.vpn');
+    await ctx!.app.evaluate(({ dialog }, target) => {
+      dialog.showSaveDialog = (async () => ({ canceled: false, filePath: target })) as typeof dialog.showSaveDialog;
+    }, out);
+    await panel.locator('button', { hasText: 'Exportar…' }).click();
+    await expect(panel.locator('.tool-status')).toHaveText(`Site exportado para ${out}`);
+    expect(await readFile(out, 'utf8')).toBe(text);
+
+    ctx!.page.once('dialog', (d) => d.accept());
+    await panel.locator('button', { hasText: 'Excluir' }).click();
+    await expect(panel.locator('.tool-status')).toHaveText('Site "Matriz Nova" excluído.');
+    await expect(panel).toContainText('Nenhum site configurado');
+  });
+
+  test('cancelar o editor volta ao painel sem gravar', async () => {
+    const env = await fakeShrew({ Matriz: MATRIZ });
+    const panel = await openVpn('version: 1\nsessions: []\n', env);
+    await panel.locator('button', { hasText: 'Editar' }).click();
+    await panel.locator('form.site-editor [name="network-host"]').fill('outro');
+    await panel.locator('button', { hasText: 'Cancelar' }).click();
+    await expect(panel.locator('[name=site] option')).toHaveText(['Matriz — vpn.example.org']);
+    expect(await readFile(join(env.MULTTERM_SHREW_SITES, 'Matriz'), 'utf8')).toBe(MATRIZ);
+  });
+});

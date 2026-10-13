@@ -109,6 +109,13 @@ estado e o log.
 
 - Lista os sites do Shrew (do usuário e de todos os usuários) e importa arquivos `.vpn`
   exportados pelo VPN Access Manager.
+- **Novo site / Editar / Exportar… / Excluir**: cria e edita sites sem depender de `.vpn` nem
+  do VPN Access Manager — gateway, autenticação (PSK, usuário lembrado, identificações),
+  cliente (endereço, DNS), NAT-T, fragmentação, fases 1 e 2 e redes da VPN em CIDR. Um site
+  novo já vem com AES-256, SHA-2 256 e DH 14. A chave compartilhada nunca aparece na tela (em
+  branco mantém a atual) e opções que o editor não mostra, como certificados, são preservadas.
+  Exportar grava o `.vpn`, que o Shrew e o MultTerm importam. Editar um site de todos os
+  usuários cria uma cópia sua.
 - Mostra o estado (conectando/conectada), o log do cliente e o motivo das falhas (gateway sem
   resposta, usuário ou senha recusados, configuração incompleta, serviço do Shrew parado).
 - Conectada, mostra o IP recebido e as redes roteadas pelo túnel, com atalho para o scanner de

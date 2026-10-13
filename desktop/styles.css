@@ -292,6 +292,12 @@ dialog#diag-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .vpn-state:empty { display: none; }
 .tool-body .notice { padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); }
 pre.vpn-log { max-height: 220px; overflow: auto; }
+.site-actions { margin-top: 0; }
+.site-editor h3 { margin: 4px 0 8px; }
+.site-group { border: 1px solid var(--border); border-radius: 4px; margin: 10px 0; padding: 6px 10px 10px; }
+.site-group legend { color: var(--muted); padding: 0 4px; }
+.site-advanced { margin: 10px 0; }
+.site-advanced summary { cursor: pointer; color: var(--muted); }
 .tool-form label.check input { width: auto; }
 .tool-form .actions { margin-top: 0; }
 .tool-body .muted { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
