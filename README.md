@@ -89,13 +89,23 @@ fix(sessions): rejeita host iniciado por "-"
 docs: explica a configuração do agente SSH
 ```
 
+### Branches
+
+- `develop`: desenvolvimento do dia a dia; todo trabalho novo entra aqui.
+- `main`: só versões lançadas; cada merge em `main` corresponde a uma tag `vX.Y.Z` e a uma
+  release no GitHub.
+
 ### Gerar e publicar uma versão
 
-1. Suba a `version` no `package.json`.
-2. `npm run dist` gera `release/MultTerm-setup-<versão>.exe` localmente.
-3. `npm run release` gera e publica o instalador e o `latest.yml` numa release (rascunho)
-   do GitHub; requer `GH_TOKEN` (ex.: `$env:GH_TOKEN = gh auth token`). Publique o rascunho
-   no GitHub para os apps instalados encontrarem a atualização.
+1. Em `develop`: suba a `version` no `package.json` e registre as mudanças no `CHANGELOG.md`
+   (commit `chore(release): X.Y.Z`).
+2. Leve para a `main` e crie a tag:
+   `git checkout main && git merge --ff-only develop && git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`
+3. `npm run release` gera o instalador e envia o `.exe`, o `.blockmap` e o `latest.yml` para uma
+   release em rascunho; requer `GH_TOKEN` (ex.: `$env:GH_TOKEN = gh auth token`).
+4. Confira os arquivos do rascunho, escreva as notas e publique. Os apps instalados encontram a
+   versão nova em **Ajuda → Buscar atualizações**.
+5. Feche o milestone da versão e volte para `develop`.
 
 ### Grafo de código (code-review-graph)
 
