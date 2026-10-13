@@ -1,6 +1,7 @@
 import { promises as dns } from 'node:dns';
 import { isIPv4 } from 'node:net';
 import { isSafeHost } from '../sessions/model.ts';
+import { systemDnsServers } from './dns.ts';
 import { probePort, runPool } from './ports.ts';
 
 export const DEFAULT_MAX_TARGETS = 65536;
@@ -80,10 +81,17 @@ export async function probeHost(
   return { target, alive, open, latencyMs };
 }
 
-async function reverseName(ip: string, timeoutMs = 1500): Promise<string | undefined> {
+/**
+ * Nome do host pelo DNS reverso (PTR). Usa os mesmos servidores da consulta DNS: o resolvedor
+ * padrão do Node pode cair em 127.0.0.1 no Windows e responder "não encontrado" para tudo.
+ */
+export async function reverseName(ip: string, timeoutMs = 1500): Promise<string | undefined> {
   if (!isIPv4(ip)) return undefined;
-  const timer = new Promise<undefined>((r) => setTimeout(() => r(undefined), timeoutMs));
-  const lookup = dns.reverse(ip).then((names) => names[0], () => undefined);
+  const resolver = new dns.Resolver({ timeout: timeoutMs, tries: 1 });
+  const servers = await systemDnsServers();
+  if (servers.length) resolver.setServers(servers);
+  const timer = new Promise<undefined>((r) => setTimeout(() => r(undefined), timeoutMs + 200));
+  const lookup = resolver.reverse(ip).then((names) => names[0], () => undefined);
   return Promise.race([lookup, timer]);
 }
 
