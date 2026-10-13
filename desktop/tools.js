@@ -568,6 +568,165 @@ function capturePanel(ctx, tab) {
   };
 }
 
+// ---------- VPN (Shrew Soft VPN Client) ----------
+
+const VPN_STATES = { connecting: 'Conectando…', connected: 'Conectada', disconnecting: 'Desconectando…', off: 'Desconectada' };
+
+function vpnPanel(ctx, tab) {
+  const body = el('div');
+  const status = statusLine();
+  let onStatus = () => {};
+
+  function renderMissing() {
+    const again = el('button', { type: 'button', textContent: 'Verificar de novo' });
+    again.addEventListener('click', load);
+    body.replaceChildren(
+      el('p', {
+        textContent: 'Para conectar a VPN, instale o Shrew Soft VPN Client (shrew.net). O MultTerm usa o cliente ' +
+          'instalado: conecta pelos sites configurados nele, sem guardar senhas.',
+      }),
+      el('div', { className: 'actions' }, again),
+    );
+  }
+
+  function renderForm(info) {
+    const site = el('select', { name: 'site' },
+      ...info.sites.map((s) => el('option', {
+        value: s.name, textContent: `${s.name} — ${s.host}${s.port ? `:${s.port}` : ''}${s.public ? ' (todos os usuários)' : ''}`,
+      })));
+    const importBtn = el('button', { type: 'button', textContent: 'Importar site (.vpn)…' });
+    const user = el('input', { name: 'user', autocomplete: 'off' });
+    const pass = secret('password');
+    const show = el('input', { type: 'checkbox', name: 'show' });
+    const connectBtn = el('button', { type: 'submit', className: 'primary', textContent: 'Conectar' });
+    const disconnectBtn = el('button', { type: 'button', textContent: 'Desconectar', disabled: true });
+    const state = el('p', { className: 'vpn-state' });
+    const log = el('pre', { className: 'dns-result vpn-log' });
+    const networks = el('div', { className: 'vpn-networks' });
+    const userField = field('Usuário', user);
+    const passField = field('Senha', pass.node);
+
+    const current = () => info.sites.find((s) => s.name === site.value);
+    const syncSite = () => {
+      const s = current();
+      userField.hidden = passField.hidden = !s?.credentials;
+      if (s && !user.value) user.value = s.savedUser ?? '';
+    };
+    if (ctx.vpnSite && info.sites.some((s) => s.name === ctx.vpnSite)) site.value = ctx.vpnSite;
+    site.addEventListener('change', () => {
+      user.value = '';
+      syncSite();
+    });
+    syncSite();
+
+    importBtn.addEventListener('click', async () => {
+      try {
+        const added = await ctx.api.vpnImport();
+        if (!added) return;
+        ctx.vpnSite = added.name;
+        await load();
+        status.textContent = `Site "${added.name}" importado.`;
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    show.addEventListener('change', () => ctx.api.vpnShowWindow(show.checked));
+    disconnectBtn.addEventListener('click', () => ctx.api.vpnDisconnect().catch((err) => {
+      status.textContent = ctx.cleanError(err);
+    }));
+
+    async function showNetworks() {
+      networks.replaceChildren();
+      const { ip, networks: nets } = await ctx.api.vpnNetworks().catch(() => ({ networks: [] }));
+      if (!ip && !nets.length) return;
+      const tbl = table([{ key: 'network', label: 'Rede acessível pela VPN' }]);
+      for (const network of nets) {
+        const scan = el('button', { type: 'button', className: 'link', textContent: 'Escanear' });
+        scan.addEventListener('click', () => ctx.openTool('netscan', { network }));
+        tbl.add({ network }, scan);
+      }
+      networks.replaceChildren(
+        ...(ip ? [el('p', { className: 'muted', textContent: `IP recebido na VPN: ${ip}` })] : []),
+        ...(nets.length ? [tbl.node] : []),
+      );
+    }
+
+    onStatus = (s) => {
+      if (!s) return;
+      const busy = s.state === 'connecting' || s.state === 'disconnecting';
+      const up = s.state === 'connected';
+      state.textContent = `${s.site}: ${VPN_STATES[s.state] ?? s.state}${up && s.since ? ` desde ${new Date(s.since).toLocaleTimeString('pt-BR')}` : ''}`;
+      state.className = `vpn-state vpn-${s.state}`;
+      if (s.error) status.textContent = s.error;
+      log.textContent = s.log.trim();
+      connectBtn.disabled = busy || up;
+      disconnectBtn.disabled = s.state === 'off' || s.state === 'disconnecting';
+      site.disabled = busy || up;
+      if (up) void showNetworks();
+      else networks.replaceChildren();
+    };
+
+    const form = el('form', { className: 'tool-form' },
+      el('label', { className: 'wide' }, 'Site', site), userField, passField,
+      el('label', { className: 'check' }, show, 'Mostrar a janela do Shrew'),
+      el('div', { className: 'actions' }, connectBtn, disconnectBtn, importBtn),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = '';
+      connectBtn.disabled = true;
+      try {
+        await ctx.api.vpnConnect({ site: site.value, user: user.value, password: pass.input.value, show: show.checked });
+        pass.input.value = '';
+        status.textContent = '';
+        ctx.vpnThen?.();
+        ctx.vpnThen = undefined;
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+        connectBtn.disabled = false;
+      }
+    });
+
+    body.replaceChildren(
+      ...(ctx.vpnNotice ? [el('p', { className: 'notice', textContent: ctx.vpnNotice })] : []),
+      ...(info.sites.length ? [form] : [
+        el('p', {
+          textContent: 'Nenhum site configurado no Shrew Soft VPN. Importe um arquivo .vpn (exportado pelo VPN Access ' +
+            'Manager do Shrew) ou crie o site no próprio Shrew.',
+        }),
+        el('div', { className: 'actions' }, importBtn),
+      ]),
+      state, networks, log,
+      el('p', {
+        className: 'muted',
+        textContent: 'O MultTerm usa o cliente do Shrew instalado e oculta a janela dele; a senha não é gravada. ' +
+          'A conexão continua ao fechar esta aba e é encerrada ao sair do MultTerm.',
+      }),
+    );
+    onStatus(info.status);
+    (info.sites.length ? (current()?.credentials && user.value ? pass.input : user) : importBtn).focus();
+  }
+
+  async function load() {
+    status.textContent = 'Procurando o Shrew Soft VPN Client…';
+    try {
+      const info = await ctx.api.vpnInfo();
+      status.textContent = '';
+      if (!info.exe) renderMissing();
+      else renderForm(info);
+    } catch (err) {
+      status.textContent = ctx.cleanError(err);
+    }
+  }
+  load();
+
+  return {
+    title: 'VPN',
+    content: [body, status],
+    onVpnStatus: (s) => onStatus(s),
+  };
+}
+
 // ---------- Wake-on-LAN ----------
 
 function wolPanel(ctx) {
@@ -726,7 +885,7 @@ function localPortsPanel(ctx, tab) {
   };
 }
 
-const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel };
+const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel, vpn: vpnPanel };
 
 /** Cria o painel da ferramenta `kind` dentro de `tab.panel`; devolve os ganchos da aba. */
 export function buildToolPanel(kind, ctx, tab) {
@@ -737,4 +896,4 @@ export function buildToolPanel(kind, ctx, tab) {
   return p;
 }
 
-export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes' };
+export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes', vpn: 'VPN' };

@@ -33,6 +33,15 @@ contextBridge.exposeInMainWorld('multterm', {
   localPorts: () => ipcRenderer.invoke('tools:local-ports'),
   saveCsv: (name, csv) => ipcRenderer.invoke('tools:save-csv', name, csv),
 
+  // VPN (Shrew Soft VPN Client).
+  vpnInfo: () => ipcRenderer.invoke('vpn:info'),
+  vpnImport: () => ipcRenderer.invoke('vpn:import'),
+  vpnConnect: (req) => ipcRenderer.invoke('vpn:connect', req),
+  vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),
+  vpnShowWindow: (show) => ipcRenderer.send('vpn:show-window', show),
+  vpnNetworks: () => ipcRenderer.invoke('vpn:networks'),
+  onVpnStatus: (cb) => ipcRenderer.on('vpn:status', (_e, status) => cb(status)),
+
   clipboardRead: () => ipcRenderer.invoke('clipboard:read'),
   clipboardWrite: (text) => ipcRenderer.send('clipboard:write', text),
 

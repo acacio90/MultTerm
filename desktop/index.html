@@ -28,9 +28,12 @@
         <button type="button" role="menuitem" data-tool="localports">Portas abertas locais</button>
         <button type="button" role="menuitem" data-tool="capture">Captura de pacotes</button>
         <button type="button" role="menuitem" data-tool="wol">Wake-on-LAN</button>
+        <hr>
+        <button type="button" role="menuitem" data-tool="vpn">VPN (Shrew Soft)</button>
       </div>
     </div>
     <span class="spacer"></span>
+    <button id="vpn-indicator" class="vpn-indicator" type="button" hidden></button>
     <button id="btn-help" type="button" title="Ajuda (F1)">Ajuda <span id="update-badge" class="badge-dot" hidden title="Atualização disponível"></span></button>
   </header>
 
@@ -64,9 +67,11 @@
             <label>Usuário <input name="user"></label>
             <label class="ssh-only wide">Chave privada <input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"></label>
             <label>MAC (Wake-on-LAN) <input name="mac" placeholder="opcional, ex.: aa:bb:cc:dd:ee:ff" autocomplete="off"></label>
+            <label>VPN (Shrew) <input name="vpn" list="vpn-sites" placeholder="opcional: site da VPN" autocomplete="off"></label>
             <label class="wide">Tags <input name="tags" placeholder="separadas por vírgula"></label>
           </div>
           <datalist id="folders"></datalist>
+          <datalist id="vpn-sites"></datalist>
           <div class="actions">
             <button type="submit" class="primary">Salvar</button>
             <button id="btn-connect" type="button">Conectar</button>

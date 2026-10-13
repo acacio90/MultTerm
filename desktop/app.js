@@ -172,6 +172,7 @@ function showForm(session) {
   form.user.value = session?.user ?? '';
   form.identityFile.value = session?.identityFile ?? '';
   form.mac.value = session?.mac ?? '';
+  form.vpn.value = session?.vpn ?? '';
   form.tags.value = (session?.tags ?? []).join(', ');
   $('btn-connect').disabled = !session;
   $('btn-external').disabled = !session;
@@ -197,6 +198,7 @@ function readForm() {
   if (form.user.value.trim()) session.user = form.user.value.trim();
   if (form.type.value === 'ssh' && form.identityFile.value.trim()) session.identityFile = form.identityFile.value.trim();
   if (form.mac.value.trim()) session.mac = form.mac.value.trim();
+  if (form.vpn.value.trim()) session.vpn = form.vpn.value.trim();
   if (tags.length) session.tags = tags;
   return session;
 }
@@ -250,6 +252,15 @@ async function remove() {
 
 /** SSH abre numa aba de terminal embutido; RDP (ou "Janela externa") abre fora do app. */
 async function connect(session, { external = false } = {}) {
+  // Sessão atrás de uma VPN: conecta a VPN primeiro e depois abre a sessão.
+  if (session.vpn && !(vpnStatus?.site === session.vpn && vpnStatus.state === 'connected')) {
+    openToolTab('vpn', {
+      vpnSite: session.vpn,
+      vpnNotice: `A sessão "${session.name}" usa a VPN "${session.vpn}". Ela abre assim que a VPN conectar.`,
+      vpnThen: () => connect(session, { external }),
+    });
+    return;
+  }
   if (session.type === 'ssh' && !external) {
     await openSessionTab(session);
     return;
@@ -874,17 +885,47 @@ function newSessionFrom({ name, host, type }) {
 }
 
 function openToolTab(kind, target) {
+  // Uma aba de VPN só (a conexão é única).
+  if (kind === 'vpn') for (const t of tabsById.values()) if (t.kind === 'vpn') closeTab(t);
   const tab = createTab({ title: TOOL_TITLES[kind], panelClass: 'tool-panel' });
+  tab.kind = kind;
   const session = selectedSession();
   const host = target?.host ?? session?.host;
   const ctx = {
-    api, cleanError, host, network: guessNetwork(host), newSession: newSessionFrom,
-    mac: target?.mac ?? session?.mac, sessions: state.sessions,
+    api, cleanError, host, network: target?.network ?? guessNetwork(host), newSession: newSessionFrom,
+    mac: target?.mac ?? session?.mac, sessions: state.sessions, openTool: openToolTab,
+    vpnSite: target?.vpnSite ?? session?.vpn, vpnNotice: target?.vpnNotice, vpnThen: target?.vpnThen,
   };
   const hooks = buildToolPanel(kind, ctx, tab);
-  Object.assign(tab, { onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus });
+  Object.assign(tab, {
+    onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus, onVpnStatus: hooks.onVpnStatus,
+  });
   showTab(tab);
 }
+
+// Indicador da VPN na barra superior (clique abre a aba da VPN).
+let vpnStatus = null;
+function renderVpnIndicator() {
+  const btn = $('vpn-indicator');
+  const on = vpnStatus && vpnStatus.state !== 'off';
+  btn.hidden = !on;
+  if (!on) return;
+  btn.className = `vpn-indicator vpn-${vpnStatus.state}`;
+  btn.textContent = `VPN: ${vpnStatus.site}`;
+  btn.title = vpnStatus.state === 'connected' ? 'VPN conectada' : 'VPN conectando…';
+}
+api.onVpnStatus((s) => {
+  vpnStatus = s;
+  renderVpnIndicator();
+  for (const t of tabsById.values()) t.onVpnStatus?.(s);
+});
+$('vpn-indicator').addEventListener('click', () => openToolTab('vpn'));
+api.vpnInfo().then((info) => {
+  vpnStatus = info.status ?? null;
+  renderVpnIndicator();
+  // Sugestões do campo VPN do formulário: os sites do Shrew.
+  $('vpn-sites').replaceChildren(...info.sites.map((s) => Object.assign(document.createElement('option'), { value: s.name })));
+}, () => {});
 
 api.onToolResult((id, result) => tabsById.get(id)?.onResult?.(result));
 api.onToolProgress((id, done, total) => tabsById.get(id)?.onProgress?.(done, total));

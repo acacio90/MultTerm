@@ -1,3 +1,5 @@
+import { isSafeSiteName } from '../network/shrew.ts';
+
 export type SessionType = 'ssh' | 'rdp';
 
 export const SESSION_TYPES: readonly SessionType[] = ['ssh', 'rdp'];
@@ -15,6 +17,8 @@ export interface Session {
   identityFile?: string;
   /** Endereço MAC para Wake-on-LAN, normalizado como "aa:bb:cc:dd:ee:ff". */
   mac?: string;
+  /** Site do Shrew Soft VPN que precisa estar conectado para alcançar o host. */
+  vpn?: string;
   tags?: string[];
 }
 
@@ -117,11 +121,14 @@ export function validateSession(raw: unknown, where: string): Session {
   const macText = optionalString(obj, 'mac', where);
   const mac = macText === undefined ? undefined : normalizeMac(macText);
   if (macText !== undefined && !mac) throw new SessionError(`${where}: "mac" inválido (${macText})`);
+  const vpn = optionalString(obj, 'vpn', where)?.trim() || undefined;
+  if (vpn !== undefined && !isSafeSiteName(vpn)) throw new SessionError(`${where}: "vpn" inválido (${vpn})`);
   // Campos opcionais ausentes ficam fora do objeto (comparação e IPC mais limpos).
   if (port !== undefined) session.port = port;
   if (user !== undefined) session.user = user;
   if (identityFile !== undefined) session.identityFile = identityFile;
   if (mac !== undefined) session.mac = mac;
+  if (vpn !== undefined) session.vpn = vpn;
   if (tags !== undefined) session.tags = tags;
   return session;
 }

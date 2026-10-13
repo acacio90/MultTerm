@@ -15,6 +15,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
+- **VPN** pelo Shrew Soft VPN Client instalado (IPsec), com indicador na barra e sessões que
+  conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -37,6 +39,7 @@ sessions:
     host: web-01.example.org
     user: deploy
     identityFile: ~/.ssh/id_ed25519
+    vpn: Matriz          # opcional: site do Shrew Soft VPN conectado antes de abrir
   - name: ad-01
     folder: Servidores/Infraestrutura
     type: rdp
@@ -95,6 +98,25 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
 
 Nenhuma ferramenta exige rodar o app como administrador (a captura usa o Npcap no modo padrão,
 sem a opção "restringir a administradores"; o modo pktmon pede a elevação só durante a captura).
+
+### VPN (Shrew Soft VPN Client)
+
+**Ferramentas → VPN** conecta pelos sites do [Shrew Soft VPN Client](https://www.shrew.net)
+instalado (IPsec/IKEv1, inclusive XAuth com usuário e senha). O MultTerm não embute o cliente:
+abre o `ipsecc.exe` do Shrew com o site, oculta a janela dele, preenche usuário e senha pelos
+campos (a senha não aparece na linha de comando nem é gravada), clica em conectar e acompanha o
+estado e o log.
+
+- Lista os sites do Shrew (do usuário e de todos os usuários) e importa arquivos `.vpn`
+  exportados pelo VPN Access Manager.
+- Mostra o estado (conectando/conectada), o log do cliente e o motivo das falhas (gateway sem
+  resposta, usuário ou senha recusados, configuração incompleta, serviço do Shrew parado).
+- Conectada, mostra o IP recebido e as redes roteadas pelo túnel, com atalho para o scanner de
+  rede — o caminho para descobrir os ativos do outro lado.
+- A conexão é uma só e não depende da aba: o indicador **VPN:** na barra superior mostra o
+  estado e abre a aba. Sair do MultTerm desconecta a VPN.
+- Uma sessão com o campo **VPN (Shrew)** preenchido abre a VPN primeiro e se conecta assim que
+  ela sobe.
 
 ### Exportar sessões
 

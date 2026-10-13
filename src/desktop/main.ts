@@ -17,6 +17,7 @@ import {
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
 import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
+import { registerVpnIpc } from './vpn.ts';
 import { readImportFile } from '../sessions/import.ts';
 import { exportFileName, loadSessionFile, mergeSessions, saveSessionFile, sessionsInFolder, validateSessions } from '../sessions/store.ts';
 
@@ -265,6 +266,7 @@ app.whenReady().then(async () => {
   sessionsPath = await resolveSessionsPath();
   registerIpc();
   registerToolsIpc();
+  registerVpnIpc();
   initUpdates();
   await createWindow();
   app.on('activate', () => {
