@@ -599,8 +599,9 @@ function serversPanel(ctx) {
     status.textContent = '';
     try {
       const config = detail?.kind === srv.kind ? detail.read() : srv.config;
-      srv.config = config;
       await ctx.api.serversStart(srv.kind, config);
+      // Recarrega o que ficou gravado (ex.: a senha passa a constar como "definida").
+      srv.config = (await ctx.api.serversList()).find((s) => s.kind === srv.kind)?.config ?? config;
     } catch (err) {
       status.textContent = `${srv.title}: ${ctx.cleanError(err)}`;
     }
@@ -614,6 +615,12 @@ function serversPanel(ctx) {
         const input = el('input', { type: 'checkbox', name: f.key, checked: value !== false });
         inputs.set(f.key, input);
         return el('label', { className: 'check' }, input, f.label);
+      }
+      if (f.type === 'password') {
+        // A senha guardada nunca vem para a tela: em branco mantém a atual.
+        const pw = secret(f.key, srv.config[`${f.key}Set`] ? 'em branco mantém' : '');
+        inputs.set(f.key, pw.input);
+        return field(f.label, pw.node);
       }
       if (f.type === 'dir') {
         const input = el('input', { name: f.key, value: value ?? '', autocomplete: 'off' });

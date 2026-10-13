@@ -162,3 +162,82 @@ test('HTTP: arquivos, Range, HEAD, listagem e raiz protegida', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('FTP com o curl: login, listagem, download, upload, retomada, renomear, apagar e raiz', { skip: !hasCurl && 'sem curl' }, async () => {
+  const { startFtp, validateFtp } = await import('../src/servers/ftp.ts');
+  assert.throws(() => validateFtp({ root: tmpdir(), user: '', password: '' }), /usuário e senha/);
+  assert.equal(validateFtp({ root: tmpdir(), anonymous: true }).port, 21);
+  const root = await tmp();
+  await writeFile(join(root, 'fw.bin'), randomBytes(300_000));
+  await writeFile(join(root, 'sub', 'nota.txt'), 'olá');
+  const logs: string[] = [];
+  const srv = await startFtp({ root, port: 0, host: '127.0.0.1', user: 'ana', password: 's3nha', anonymous: true }, (l) => logs.push(l));
+  const base = `ftp://127.0.0.1:${srv.port}`;
+  const auth = ['-u', 'ana:s3nha'];
+  try {
+    let r = await curl([...auth, `${base}/`]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /fw\.bin/);
+    assert.match(r.out, /^d.* sub$/m);
+    r = await curl([...auth, '--list-only', `${base}/sub/`]);
+    assert.equal(r.out.trim(), 'nota.txt');
+    const out = join(root, 'baixado.bin');
+    r = await curl([...auth, '-o', out, `${base}/fw.bin`]);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(await readFile(out), await readFile(join(root, 'fw.bin')));
+    r = await curl([...auth, '--ftp-port', '127.0.0.1', '-o', out, `${base}/sub/nota.txt`]); // modo ativo
+    assert.equal(r.code, 0, r.err);
+    assert.equal(await readFile(out, 'utf8'), 'olá');
+    r = await curl([...auth, '-r', '299990-', `${base}/fw.bin`]); // REST
+    assert.equal(r.out.length, 10);
+
+    const up = join(root, 'local.bin');
+    await writeFile(up, randomBytes(123_456));
+    r = await curl([...auth, '-T', up, `${base}/sub/enviado.bin`]);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(await readFile(join(root, 'sub', 'enviado.bin')), await readFile(up));
+    r = await curl([...auth, '-Q', '-RNFR sub/enviado.bin', '-Q', '-RNTO sub/renomeado.bin', '-Q', '-DELE fw.bin', `${base}/`]);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(existsSync(join(root, 'sub', 'renomeado.bin')), true);
+    assert.equal(existsSync(join(root, 'fw.bin')), false);
+
+    // Senha errada, anônimo só leitura, fora da raiz.
+    r = await curl(['-u', 'ana:errada', `${base}/`]);
+    assert.notEqual(r.code, 0);
+    r = await curl([`${base}/sub/nota.txt`]); // curl usa anonymous por padrão
+    assert.equal(Buffer.from(r.out, 'latin1').toString('utf8'), 'olá');
+    r = await curl(['-T', up, `${base}/anon.bin`]);
+    assert.notEqual(r.code, 0);
+    assert.equal(existsSync(join(root, 'anon.bin')), false);
+    r = await curl([...auth, `${base}/../../windows/win.ini`]);
+    assert.notEqual(r.code, 0);
+    assert.ok(logs.some((l) => /senha errada para "ana"/.test(l)));
+    assert.ok(logs.some((l) => /enviou \/sub\/enviado\.bin \(123456 bytes/.test(l)));
+  } finally {
+    await srv.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('FTPS implícito com certificado autoassinado', { skip: !hasCurl && 'sem curl', timeout: 120_000 }, async () => {
+  const { startFtp } = await import('../src/servers/ftp.ts');
+  const { ensureSelfSignedPfx } = await import('../src/servers/cert.ts');
+  const root = await tmp();
+  try {
+    const cert = await ensureSelfSignedPfx(join(root, 'cert', 'ftps.pfx'), undefined);
+    assert.equal(cert.created, true);
+    const again = await ensureSelfSignedPfx(join(root, 'cert', 'ftps.pfx'), cert.passphrase);
+    assert.equal(again.created, false);
+    await writeFile(join(root, 'seguro.txt'), 'cifrado');
+    const srv = await startFtp({ root, port: 0, host: '127.0.0.1', user: 'ana', password: 'x', tls: { pfx: cert.pfx, passphrase: cert.passphrase } }, () => {});
+    try {
+      const r = await curl(['-k', '-u', 'ana:x', `ftps://127.0.0.1:${srv.port}/seguro.txt`]);
+      assert.equal(r.code, 0, r.err);
+      assert.equal(r.out, 'cifrado');
+    } finally {
+      await srv.stop();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

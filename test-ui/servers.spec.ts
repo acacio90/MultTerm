@@ -39,7 +39,7 @@ test('HTTP: inicia pelo painel, serve a pasta, registra e para', async () => {
   await writeFile(join(root, 'firmware.bin'), 'conteúdo do firmware');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(2);
+  await expect(panel.locator('.server-row')).toHaveCount(3);
   await panel.locator('.server-row[data-kind=http] .server-name').click();
   const detail = panel.locator('.server-detail');
   await expect(detail.locator('h3')).toHaveText('Servidor HTTP');
@@ -101,4 +101,39 @@ test('TFTP: recebe um arquivo pelo curl e para sozinho no tempo limite', async (
 
   await expect(panel.locator('.server-row[data-kind=tftp] .server-state')).toHaveText('parado', { timeout: 10_000 });
   await expect(detail.locator('.server-log')).toContainText('tempo limite de 3 s');
+});
+
+test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async () => {
+  test.skip(!existsSync('C:/Windows/System32/curl.exe'), 'sem curl');
+  await writeFile(join(root, 'config.txt'), 'interface eth0');
+  const port = await freePort();
+  const panel = await openServers();
+  await expect(panel.locator('.server-row')).toHaveCount(3);
+  await panel.locator('.server-row[data-kind=ftp] .server-name').click();
+  const detail = panel.locator('.server-detail');
+  await detail.locator('[name=root]').fill(root);
+  await detail.locator('[name=port]').fill(String(port));
+  await detail.locator('[name=user]').fill('tecnico');
+  await detail.locator('[name=password]').fill('senha-forte');
+  await panel.locator('.server-row[data-kind=ftp] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.server-row[data-kind=ftp] .server-state')).toContainText(`rodando na porta ${port}`);
+
+  const get = (args: string[]) => new Promise<{ code: number; out: string }>((resolve) => execFile('C:/Windows/System32/curl.exe', ['-s', ...args], (e, out) => resolve({ code: e ? 1 : 0, out })));
+  expect((await get(['-u', 'tecnico:senha-forte', `ftp://127.0.0.1:${port}/config.txt`])).out).toBe('interface eth0');
+  expect((await get([`ftp://127.0.0.1:${port}/config.txt`])).code).not.toBe(0); // anônimo desligado
+  await expect(detail.locator('.server-log')).toContainText('login de tecnico');
+
+  // A senha não fica em texto puro no arquivo nem volta para a tela.
+  const saved = await readFile(join(root, 'servers.json'), 'utf8');
+  expect(saved).not.toContain('senha-forte');
+  expect(JSON.parse(saved).ftp.passwordSealed).toBeTruthy();
+  await panel.locator('.server-row[data-kind=ftp] button', { hasText: 'Parar' }).click();
+  await panel.locator('.server-row[data-kind=http] .server-name').click();
+  await panel.locator('.server-row[data-kind=ftp] .server-name').click();
+  await expect(detail.locator('[name=password]')).toHaveValue('');
+  await expect(detail.locator('[name=password]')).toHaveAttribute('placeholder', 'em branco mantém');
+  // Em branco reinicia com a senha guardada.
+  await panel.locator('.server-row[data-kind=ftp] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.server-row[data-kind=ftp] .server-state')).toContainText('rodando');
+  expect((await get(['-u', 'tecnico:senha-forte', `ftp://127.0.0.1:${port}/config.txt`])).out).toBe('interface eth0');
 });

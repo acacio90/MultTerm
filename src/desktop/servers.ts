@@ -1,19 +1,50 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { timestamp, type RunningServer } from '../servers/common.ts';
+import { ensureSelfSignedPfx } from '../servers/cert.ts';
+import { startFtp, validateFtp } from '../servers/ftp.ts';
 import { startHttp, validateHttp } from '../servers/http.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 
 /*
  * Servidores locais (Ferramentas → Servidores): iniciar/parar, parar sozinho depois de N
- * segundos, log por servidor e configurações lembradas. Todos param ao sair do app.
+ * segundos, log por servidor e configurações lembradas. Todos param ao sair do app. Senhas
+ * ficam cifradas pelo Windows (safeStorage) e nunca voltam para a interface.
  */
+
+/** Senha guardada: cifrada pelo sistema (base64) — nunca em texto puro. */
+const seal = (text: string) => {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('o Windows não liberou a cifra para guardar a senha');
+  return safeStorage.encryptString(text).toString('base64');
+};
+const unseal = (b64: unknown) => {
+  if (typeof b64 !== 'string' || !b64) return '';
+  try {
+    return safeStorage.decryptString(Buffer.from(b64, 'base64'));
+  } catch {
+    return '';
+  }
+};
+
+/** Pergunta, numa janela do Windows, se aceita a conexão (recusa sozinho em 60 s). */
+async function confirmConnection(server: string, client: string): Promise<boolean> {
+  const win = BrowserWindow.getAllWindows()[0];
+  const opts = {
+    type: 'question' as const, buttons: ['Aceitar', 'Recusar'], defaultId: 1, cancelId: 1,
+    title: 'MultTerm', message: `Aceitar a conexão ${server} de ${client}?`,
+  };
+  const answer = win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts);
+  const timeout = new Promise<{ response: number }>((r) => setTimeout(() => r({ response: 1 }), 60_000));
+  return (await Promise.race([answer, timeout])).response === 0;
+}
+
+const certPath = () => join(app.getPath('userData'), 'certs', 'servidores.pfx');
 
 export interface ServerField {
   key: string;
   label: string;
-  type: 'dir' | 'number' | 'bool' | 'text';
+  type: 'dir' | 'number' | 'bool' | 'text' | 'password';
   min?: number;
   max?: number;
   hint?: string;
@@ -55,6 +86,40 @@ const DEFS: ServerDef[] = [
     }, log),
   },
   {
+    kind: 'ftp',
+    title: 'FTP',
+    description: 'Servidor FTP para trocar arquivos com equipamentos (usuário e senha, ou anônimo só leitura).',
+    fields: [
+      { key: 'root', label: 'Pasta raiz', type: 'dir' },
+      { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      { key: 'user', label: 'Usuário', type: 'text' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'anonymous', label: 'Permitir acesso anônimo (só leitura)', type: 'bool' },
+      { key: 'tls', label: 'FTPS implícito (TLS com certificado autoassinado)', type: 'bool' },
+      { key: 'confirm', label: 'Perguntar antes de aceitar cada conexão', type: 'bool' },
+      ...COMMON,
+    ],
+    defaults: () => ({ root: filesDir(), port: 21, user: 'multterm', password: '', anonymous: false, tls: false, confirm: false, stopAfter: 3600 }),
+    start: async (raw, log) => {
+      const base = validateFtp(raw);
+      let tls: { pfx: Buffer; passphrase: string } | undefined;
+      if (raw.tls === true) {
+        const cert = await ensureSelfSignedPfx(certPath(), unseal(configs._cert?.passphrase) || undefined);
+        if (cert.created) {
+          configs._cert = { passphrase: seal(cert.passphrase) };
+          await saveConfigs();
+          log('certificado autoassinado gerado para o FTPS');
+        }
+        tls = { pfx: cert.pfx, passphrase: cert.passphrase };
+      }
+      return startFtp({
+        ...base,
+        tls,
+        confirm: raw.confirm === true ? (client) => confirmConnection('FTP', client) : undefined,
+      }, log);
+    },
+  },
+  {
     kind: 'http',
     title: 'HTTP',
     description: 'Servidor web de arquivos (só leitura) para baixar arquivos pelo navegador ou por wget/curl.',
@@ -78,7 +143,7 @@ interface Running {
 
 const running = new Map<string, Running>();
 const logs = new Map<string, string[]>();
-let configs: Record<string, Record<string, unknown>> = {};
+let configs: Record<string, Record<string, unknown>> & { _cert?: { passphrase?: string } } = {};
 // MULTTERM_SERVERS_FILE troca o arquivo de configurações (testes).
 const configFile = () => process.env.MULTTERM_SERVERS_FILE || join(app.getPath('userData'), 'servers.json');
 
@@ -93,6 +158,21 @@ async function loadConfigs() {
 async function saveConfigs() {
   await mkdir(join(configFile(), '..'), { recursive: true });
   await writeFile(configFile(), JSON.stringify(configs, null, 2));
+}
+
+function passwordKeys(def: ServerDef) {
+  return def.fields.filter((f) => f.type === 'password').map((f) => f.key);
+}
+
+/** Configuração para a interface: sem as senhas (só "chaveSet"). */
+function publicConfig(def: ServerDef) {
+  const cfg: Record<string, unknown> = { ...def.defaults(), ...configs[def.kind] };
+  for (const k of passwordKeys(def)) {
+    cfg[`${k}Set`] = !!cfg[`${k}Sealed`];
+    delete cfg[`${k}Sealed`];
+    cfg[k] = '';
+  }
+  return cfg;
 }
 
 function broadcast(kind: string, extra: Record<string, unknown> = {}) {
@@ -135,7 +215,7 @@ export function registerServersIpc(): void {
     await loaded;
     return DEFS.map((d) => ({
       kind: d.kind, title: d.title, description: d.description, fields: d.fields,
-      config: { ...d.defaults(), ...configs[d.kind] },
+      config: publicConfig(d),
       state: stateOf(d.kind),
       log: logs.get(d.kind) ?? [],
     }));
@@ -146,12 +226,23 @@ export function registerServersIpc(): void {
     const def = DEFS.find((d) => d.kind === kind);
     if (!def) throw new Error('servidor desconhecido');
     if (running.has(def.kind)) return stateOf(def.kind);
-    const cfg = { ...def.defaults(), ...(typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {}) };
+    const given = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {};
+    const cfg: Record<string, unknown> = { ...def.defaults(), ...given };
+    // Senhas: a digitada vale; em branco, usa a guardada. Só a versão cifrada é gravada.
+    const stored: Record<string, unknown> = { ...cfg };
+    for (const k of passwordKeys(def)) {
+      const typed = typeof given[k] === 'string' ? given[k] as string : '';
+      const sealed = typed ? seal(typed) : configs[def.kind]?.[`${k}Sealed`];
+      cfg[k] = typed || unseal(sealed);
+      delete stored[k];
+      delete stored[`${k}Set`];
+      if (sealed) stored[`${k}Sealed`] = sealed;
+    }
     const stopAfter = Number(cfg.stopAfter ?? 0);
     if (!Number.isInteger(stopAfter) || stopAfter < 0 || stopAfter > 86400) throw new Error('tempo para parar inválido (0 a 86400 s)');
     // A pasta padrão é criada; uma escolhida pelo usuário precisa existir.
     if (cfg.root === def.defaults().root) await mkdir(String(cfg.root), { recursive: true });
-    configs[def.kind] = cfg;
+    configs[def.kind] = stored;
     await saveConfigs();
     log(def.kind, `iniciando o servidor ${def.title}…`);
     let server: RunningServer;

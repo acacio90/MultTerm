@@ -15,7 +15,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
-- **Servidores locais** TFTP e HTTP para trocar arquivos com equipamentos
+- **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
   na barra e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
@@ -110,6 +110,10 @@ lembradas e todos param ao sair do MultTerm. Os arquivos ficam em `Documentos\Mu
 - **TFTP** (porta 69): baixar e enviar firmware e configurações de equipamentos, com negociação
   de bloco (até 64 KB), tamanho e timeout, arquivos grandes, opção de bloquear envio ou
   sobrescrita e aviso do Windows a cada transferência.
+- **FTP** (porta 21): usuário e senha (guardada cifrada pelo Windows, nunca em texto puro),
+  anônimo só leitura opcional, modos passivo e ativo, retomada, renomear e apagar; FTPS
+  implícito opcional com certificado autoassinado gerado na primeira vez; opção de perguntar
+  antes de aceitar cada conexão.
 - **HTTP** (porta 8080): serve a pasta só para leitura, com listagem opcional, `index.html` e
   retomada de download.
 
