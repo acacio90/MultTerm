@@ -241,3 +241,34 @@ test('FTPS implícito com certificado autoassinado', { skip: !hasCurl && 'sem cu
     await rm(root, { recursive: true, force: true });
   }
 });
+
+const IPERF3 = process.env.MULTTERM_IPERF3
+  ?? join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Packages', 'ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe', 'iperf3.exe');
+
+test('Iperf com o cliente iperf3: envio, reverso, vários fluxos e UDP recusado', { skip: !existsSync(IPERF3) && 'iperf3 não instalado', timeout: 120_000 }, async () => {
+  const { startIperf, validateIperf } = await import('../src/servers/iperf.ts');
+  assert.equal(validateIperf({}).port, 5201);
+  const logs: string[] = [];
+  const srv = await startIperf({ port: 0, host: '127.0.0.1' }, (l) => logs.push(l));
+  const run = (args: string[]) => new Promise<{ error?: string; end?: { sum_received: { bytes: number; bits_per_second: number } } }>((resolve) => {
+    execFile(IPERF3, ['-c', '127.0.0.1', '-p', String(srv.port), '-t', '1', '-J', ...args], { timeout: 30_000, maxBuffer: 1 << 24 }, (_e, out) => resolve(JSON.parse(out)));
+  });
+  try {
+    let r = await run([]);
+    assert.equal(r.error, undefined);
+    assert.ok(r.end!.sum_received.bytes > 1_000_000);
+    r = await run(['-R']);
+    assert.equal(r.error, undefined);
+    assert.ok(r.end!.sum_received.bits_per_second > 100e6);
+    r = await run(['-P', '3', '-l', '32K']);
+    assert.equal(r.error, undefined);
+    assert.ok(r.end!.sum_received.bytes > 1_000_000);
+    r = await run(['-u']);
+    assert.match(r.error ?? '', /not implemented/);
+    assert.ok(logs.some((l) => /reverso \(servidor envia\), 1 fluxo/.test(l)));
+    assert.ok(logs.some((l) => /3 fluxo\(s\)/.test(l)));
+    assert.ok(logs.some((l) => /MB em .* s = .*bit\/s/.test(l)));
+  } finally {
+    await srv.stop();
+  }
+});

@@ -15,7 +15,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
-- **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos
+- **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos e Iperf (iperf3)
+  para medir banda
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
   na barra e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
@@ -116,6 +117,9 @@ lembradas e todos param ao sair do MultTerm. Os arquivos ficam em `Documentos\Mu
   antes de aceitar cada conexão.
 - **HTTP** (porta 8080): serve a pasta só para leitura, com listagem opcional, `index.html` e
   retomada de download.
+- **Iperf** (porta 5201): compatível com o cliente `iperf3` (TCP, `-R` e `-P`; UDP ainda não).
+  O cliente iperf3 do Windows usa buffer de envio pequeno: para medir acima de ~600 Mbit/s, use
+  `-P 4` ou `-w 1M`.
 
 Na primeira vez, o Firewall do Windows pergunta se o MultTerm pode receber conexões na rede.
 

@@ -30,6 +30,7 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Servidor FTP com usuário e senha (cifrada pelo Windows), anônimo só leitura, modos passivo e
   ativo, retomada, FTPS implícito com certificado autoassinado e confirmação de cada conexão.
   (#23)
+- Servidor de teste de banda compatível com o cliente iperf3 (TCP, reverso e vários fluxos). (#26)
 - VPN IPsec sem instalar nada: motor próprio (IKEv1 Main Mode com PSK e XAuth, Mode Config,
   Quick Mode com PFS, ESP em UDP com NAT-T, DPD e renovação de chaves) com adaptador Wintun num
   processo auxiliar elevado (UAC por conexão); mostra estado, log, erros traduzidos e as redes

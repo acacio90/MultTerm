@@ -5,6 +5,7 @@ import { timestamp, type RunningServer } from '../servers/common.ts';
 import { ensureSelfSignedPfx } from '../servers/cert.ts';
 import { startFtp, validateFtp } from '../servers/ftp.ts';
 import { startHttp, validateHttp } from '../servers/http.ts';
+import { startIperf, validateIperf } from '../servers/iperf.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 
 /*
@@ -131,6 +132,18 @@ const DEFS: ServerDef[] = [
     ],
     defaults: () => ({ root: filesDir(), port: 8080, listing: true, stopAfter: 3600 }),
     start: (raw, log) => startHttp(validateHttp(raw), log),
+  },
+  {
+    kind: 'iperf',
+    title: 'Iperf',
+    description: 'Teste de banda com o cliente iperf3 (iperf3 -c <ip deste computador>; -R mede no sentido contrário, ' +
+      '-P N usa vários fluxos). Clientes iperf3 do Windows usam buffer pequeno: para medir acima de ~600 Mbit/s, use -P 4 ou -w 1M.',
+    fields: [
+      { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      ...COMMON,
+    ],
+    defaults: () => ({ port: 5201, stopAfter: 3600 }),
+    start: (raw, log) => startIperf(validateIperf(raw), log),
   },
 ];
 
