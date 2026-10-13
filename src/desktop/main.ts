@@ -19,6 +19,9 @@ import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTer
 import { readImportFile } from '../sessions/import.ts';
 import { loadSessionFile, mergeSessions, saveSessionFile, validateSessions } from '../sessions/store.ts';
 
+// Pasta de dados alternativa (testes isolados, perfis separados). Precisa vir antes do "ready".
+if (process.env.MULTTERM_USER_DATA) app.setPath('userData', resolve(process.env.MULTTERM_USER_DATA));
+
 const appRoot = app.getAppPath();
 const configPath = () => join(app.getPath('userData'), 'config.json');
 let sessionsPath = '';

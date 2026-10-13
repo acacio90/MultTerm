@@ -35,10 +35,13 @@ test.beforeEach(async () => {
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
   app = await electron.launch({
     args: ['.'],
-    env: { ...env, MULTTERM_SESSIONS: sessionsFile, MULTTERM_UPDATE_URL: '' },
+    // Pasta de dados própria por teste: nada (pastas recolhidas, config, caches) vaza entre
+    // testes nem para o perfil real do usuário.
+    env: { ...env, MULTTERM_SESSIONS: sessionsFile, MULTTERM_USER_DATA: join(dir, 'userdata'), MULTTERM_UPDATE_URL: '' },
   });
   page = await app.firstWindow();
   await expect(page.locator('#status-count')).toHaveText('3 sessões · sem limite');
+  expect(await app.evaluate(({ app: a }) => a.getPath('userData'))).toBe(join(dir, 'userdata'));
 });
 
 test.afterEach(async () => {
