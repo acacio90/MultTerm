@@ -16,7 +16,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
 - **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos, Iperf (iperf3)
-  para medir banda, SSH/SFTP e Telnet
+  para medir banda, SSH/SFTP, Telnet e um agendador de comandos (cron)
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
   na barra e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
@@ -122,6 +122,9 @@ lembradas e todos param ao sair do MultTerm. Os arquivos ficam em `Documentos\Mu
   ed25519 é gerada na primeira vez e a impressão digital aparece no log.
 - **Telnet** (porta 23): shell do Windows (PowerShell ou cmd) pelo ConPTY, com senha obrigatória
   e confirmação de cada conexão ligada por padrão. Não é cifrado: use só em rede confiável.
+- **Agendador (cron)**: tarefas no formato do crontab (`*/5 * * * * comando`, `0 7 * * mon-fri ...`,
+  `@daily ...`) rodadas no PowerShell ou no cmd enquanto o MultTerm estiver aberto, com a saída
+  no log; pode iniciar junto com o app.
 - **Iperf** (porta 5201): compatível com o cliente `iperf3` (TCP, `-R` e `-P`; UDP ainda não).
   O cliente iperf3 do Windows usa buffer de envio pequeno: para medir acima de ~600 Mbit/s, use
   `-P 4` ou `-w 1M`.

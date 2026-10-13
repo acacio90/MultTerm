@@ -8,6 +8,7 @@ import { startHttp, validateHttp } from '../servers/http.ts';
 import { startIperf, validateIperf } from '../servers/iperf.ts';
 import { startTelnet, validateTelnet } from '../servers/telnet.ts';
 import { ensureHostKey, startSsh, validateSsh } from '../servers/ssh.ts';
+import { startCron, validateCron } from '../servers/cron.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 
 /*
@@ -47,7 +48,7 @@ const certPath = () => join(app.getPath('userData'), 'certs', 'servidores.pfx');
 export interface ServerField {
   key: string;
   label: string;
-  type: 'dir' | 'number' | 'bool' | 'text' | 'password' | 'select';
+  type: 'dir' | 'number' | 'bool' | 'text' | 'password' | 'select' | 'textarea';
   options?: [string, string][];
   min?: number;
   max?: number;
@@ -176,6 +177,21 @@ const DEFS: ServerDef[] = [
     }, log),
   },
   {
+    kind: 'cron',
+    title: 'Agendador (cron)',
+    description: 'Roda comandos em horários marcados enquanto o MultTerm estiver aberto, no formato do crontab: ' +
+      'minuto hora dia mês dia-da-semana comando (ex.: "*/5 * * * * ping -n 1 10.0.0.1", "0 7 * * mon-fri backup.cmd", ' +
+      '"@daily ..."). Linhas com # são comentários. A saída de cada execução vai para o log.',
+    fields: [
+      { key: 'jobs', label: 'Tarefas (uma por linha)', type: 'textarea' },
+      { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
+      { key: 'startWithApp', label: 'Iniciar o agendador junto com o MultTerm', type: 'bool' },
+      ...COMMON,
+    ],
+    defaults: () => ({ jobs: '# minuto hora dia mês dia-da-semana comando\n', shell: 'powershell', startWithApp: false, stopAfter: 0 }),
+    start: (raw, log) => startCron(validateCron(raw), log),
+  },
+  {
     kind: 'iperf',
     title: 'Iperf',
     description: 'Teste de banda com o cliente iperf3 (iperf3 -c <ip deste computador>; -R mede no sentido contrário, ' +
@@ -278,6 +294,17 @@ export function registerServersIpc(): void {
 
   ipcMain.handle('servers:start', async (_e, kind: unknown, raw: unknown) => {
     await loaded;
+    return startServer(kind, raw);
+  });
+
+  // Agendador marcado para iniciar junto com o app (com a configuração guardada).
+  void loaded.then(() => {
+    if (configs.cron?.startWithApp === true) {
+      startServer('cron', configs.cron).catch((err: Error) => log('cron', `não iniciou junto com o app: ${err.message}`));
+    }
+  });
+
+  async function startServer(kind: unknown, raw: unknown) {
     const def = DEFS.find((d) => d.kind === kind);
     if (!def) throw new Error('servidor desconhecido');
     if (running.has(def.kind)) return stateOf(def.kind);
@@ -323,7 +350,7 @@ export function registerServersIpc(): void {
     running.set(def.kind, r);
     broadcast(def.kind);
     return stateOf(def.kind);
-  });
+  }
 
   ipcMain.handle('servers:stop', (_e, kind: unknown) => stop(String(kind)));
   ipcMain.handle('servers:clear-log', (_e, kind: unknown) => {

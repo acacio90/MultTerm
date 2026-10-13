@@ -34,6 +34,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   execução de comandos e chave de host ed25519 persistente. (#24)
 - Servidor Telnet com senha, shell do Windows pelo ConPTY (PowerShell ou cmd), tamanho de janela
   (NAWS) e confirmação de cada conexão. (#25)
+- Agendador de comandos no formato do crontab (intervalos, passos, nomes e atalhos @daily etc.),
+  com saída no log e opção de iniciar junto com o app. (#27)
 - Servidor de teste de banda compatível com o cliente iperf3 (TCP, reverso e vários fluxos). (#26)
 - VPN IPsec sem instalar nada: motor próprio (IKEv1 Main Mode com PSK e XAuth, Mode Config,
   Quick Mode com PFS, ESP em UDP com NAT-T, DPD e renovação de chaves) com adaptador Wintun num

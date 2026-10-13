@@ -584,7 +584,7 @@ function serversPanel(ctx) {
     const s = Math.max(0, Math.round((state.stopAt - Date.now()) / 1000));
     return ` · para em ${s} s`;
   };
-  const stateText = (srv) => (srv.state ? `rodando na porta ${srv.state.port}${remaining(srv.state)}` : 'parado');
+  const stateText = (srv) => (srv.state ? `rodando${srv.state.port ? ` na porta ${srv.state.port}` : ''}${remaining(srv.state)}` : 'parado');
 
   function renderRow(srv) {
     const row = rows.get(srv.kind);
@@ -615,6 +615,11 @@ function serversPanel(ctx) {
         const input = el('input', { type: 'checkbox', name: f.key, checked: value !== false });
         inputs.set(f.key, input);
         return el('label', { className: 'check' }, input, f.label);
+      }
+      if (f.type === 'textarea') {
+        const input = el('textarea', { name: f.key, value: value ?? '', rows: 8, spellcheck: false, className: 'server-textarea' });
+        inputs.set(f.key, input);
+        return el('label', { className: 'wide' }, f.label, input);
       }
       if (f.type === 'select') {
         const input = select(f.key, f.options, value);
@@ -671,7 +676,7 @@ function serversPanel(ctx) {
     return node;
   }
 
-  function select(kind) {
+  function selectServer(kind) {
     selected = kind;
     const srv = servers.find((s) => s.kind === kind);
     for (const s of servers) renderRow(s);
@@ -688,9 +693,9 @@ function serversPanel(ctx) {
       const name = el('button', { type: 'button', className: 'server-name', textContent: srv.title });
       const node = el('div', { className: 'server-row' }, name, badge, el('span', { className: 'row-actions' }, startBtn, stopBtn));
       node.dataset.kind = srv.kind;
-      name.addEventListener('click', () => select(srv.kind));
+      name.addEventListener('click', () => selectServer(srv.kind));
       startBtn.addEventListener('click', () => {
-        if (selected !== srv.kind) select(srv.kind);
+        if (selected !== srv.kind) selectServer(srv.kind);
         void start(srv);
       });
       stopBtn.addEventListener('click', () => ctx.api.serversStop(srv.kind));
@@ -698,7 +703,7 @@ function serversPanel(ctx) {
       list.append(node);
     }
     body.replaceChildren(list, el('div', { className: 'server-detail' }));
-    select(servers[0].kind);
+    selectServer(servers[0].kind);
     ticker = setInterval(() => {
       for (const s of servers) if (s.state?.stopAt) renderRow(s);
     }, 1000);

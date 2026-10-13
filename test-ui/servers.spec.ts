@@ -39,7 +39,7 @@ test('HTTP: inicia pelo painel, serve a pasta, registra e para', async () => {
   await writeFile(join(root, 'firmware.bin'), 'conteúdo do firmware');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(6);
+  await expect(panel.locator('.server-row')).toHaveCount(7);
   await panel.locator('.server-row[data-kind=http] .server-name').click();
   const detail = panel.locator('.server-detail');
   await expect(detail.locator('h3')).toHaveText('Servidor HTTP');
@@ -108,7 +108,7 @@ test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async (
   await writeFile(join(root, 'config.txt'), 'interface eth0');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(6);
+  await expect(panel.locator('.server-row')).toHaveCount(7);
   await panel.locator('.server-row[data-kind=ftp] .server-name').click();
   const detail = panel.locator('.server-detail');
   await detail.locator('[name=root]').fill(root);
@@ -136,4 +136,39 @@ test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async (
   await panel.locator('.server-row[data-kind=ftp] button', { hasText: 'Iniciar' }).click();
   await expect(panel.locator('.server-row[data-kind=ftp] .server-state')).toContainText('rodando');
   expect((await get(['-u', 'tecnico:senha-forte', `ftp://127.0.0.1:${port}/config.txt`])).out).toBe('interface eth0');
+});
+
+test('agendador: valida as tarefas, roda sem porta e inicia junto com o app', async () => {
+  let panel = await openServers();
+  await panel.locator('.server-row[data-kind=cron] .server-name').click();
+  const detail = () => panel.locator('.server-detail');
+  await detail().locator('[name=jobs]').fill('60 * * * * echo x');
+  await panel.locator('.server-row[data-kind=cron] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.tool-status')).toContainText('linha 1: fora do intervalo');
+  await detail().locator('[name=jobs]').fill('# backup\n*/5 * * * * echo ok');
+  await detail().locator('[name=startWithApp]').check();
+  await panel.locator('.server-row[data-kind=cron] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.server-row[data-kind=cron] .server-state')).toHaveText('rodando');
+  await expect(detail().locator('.server-log')).toContainText('agendador iniciado com 1 tarefa(s)');
+  await expect(detail().locator('.server-log')).toContainText('próxima:');
+
+  // Reabrir o app: o agendador sobe sozinho com a configuração guardada.
+  const env = { MULTTERM_SERVERS_FILE: join(root, 'servers.json') };
+  await ctx!.close();
+  ctx = await launchApp('version: 1\nsessions: []\n', env);
+  await ctx.page.click('#btn-tools');
+  await ctx.page.click('#tools-menu [data-tool="servers"]');
+  panel = ctx.page.locator('.panel:not([hidden])').last();
+  await expect(panel.locator('.server-row[data-kind=cron] .server-state')).toHaveText('rodando');
+});
+
+test('todos os servidores abrem as configurações (inclusive os com caixa de seleção)', async () => {
+  const panel = await openServers();
+  for (const [kind, title] of [['tftp', 'TFTP'], ['ftp', 'FTP'], ['http', 'HTTP'], ['ssh', 'SSH/SFTP'], ['telnet', 'Telnet'], ['cron', 'Agendador (cron)'], ['iperf', 'Iperf']]) {
+    await panel.locator(`.server-row[data-kind=${kind}] .server-name`).click();
+    await expect(panel.locator('.server-detail h3')).toHaveText(`Servidor ${title}`);
+  }
+  await panel.locator('.server-row[data-kind=telnet] .server-name').click();
+  await expect(panel.locator('.server-detail [name=shell]')).toHaveValue('powershell');
+  await expect(panel.locator('.server-detail')).toContainText('não é cifrado');
 });

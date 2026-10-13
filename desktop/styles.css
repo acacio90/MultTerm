@@ -313,6 +313,7 @@ pre.vpn-log { max-height: 220px; overflow: auto; }
 .dir-pick input { flex: 1; }
 .server-log-head { display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px; }
 pre.server-log { min-height: 120px; max-height: 260px; overflow: auto; }
+.server-textarea { width: 100%; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; resize: vertical; }
 @media (max-width: 800px) { .servers { grid-template-columns: 1fr; } }
 .tool-form label.check input { width: auto; }
 .tool-form .actions { margin-top: 0; }
