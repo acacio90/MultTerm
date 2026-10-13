@@ -118,8 +118,9 @@ docs: explica a configuração do agente SSH
    (commit `chore(release): X.Y.Z`).
 2. Leve para a `main` e crie a tag:
    `git checkout main && git merge --ff-only develop && git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`
-3. `npm run release` gera o instalador e envia o `.exe`, o `.blockmap` e o `latest.yml` para uma
-   release em rascunho; requer `GH_TOKEN` (ex.: `$env:GH_TOKEN = gh auth token`).
+3. `npm run release` cria o rascunho da release da tag, gera o instalador e envia o `.exe`, o
+   `.blockmap` e o `latest.yml`. Usa o login do `gh` (ou `GH_TOKEN`) e recusa versões já
+   publicadas; `node scripts/release.mjs --dry-run` só confere.
 4. Confira os arquivos do rascunho, escreva as notas e publique. Os apps instalados encontram a
    versão nova em **Ajuda → Buscar atualizações**.
 5. Feche o milestone da versão e volte para `develop`.
