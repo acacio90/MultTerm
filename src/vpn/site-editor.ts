@@ -1,13 +1,12 @@
 import { copyFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { isIPv4 } from 'node:net';
 import { join } from 'node:path';
-import { isSafeSiteName, type SiteDirs } from './shrew.ts';
+import { isSafeSiteName, type SiteDirs } from './sites.ts';
 
 /*
- * Criação e edição dos sites do Shrew Soft VPN no formato do próprio cliente (linhas
- * "s:chave:texto", "n:chave:número", "b:chave:base64"). Valores conferidos no ipseca.exe
- * (VPN Access Manager) e na libike.dll 2.2.2. Chaves que o editor não conhece (certificados,
- * opções de outras versões) são preservadas na ordem original.
+ * Criação e edição dos sites de VPN no formato .vpn (linhas "s:chave:texto", "n:chave:número",
+ * "b:chave:base64"). As opções oferecidas são as que o motor do MultTerm suporta; chaves que o
+ * editor não conhece (de arquivos importados) são preservadas na ordem original.
  */
 
 type Kind = 's' | 'n' | 'b';
@@ -32,9 +31,9 @@ export interface SiteField {
 const DH: [string, string][] = [['1', '1 (768)'], ['2', '2 (1024)'], ['5', '5 (1536)'], ['14', '14 (2048)'], ['15', '15 (3072)'], ['16', '16 (4096)'], ['17', '17 (6144)'], ['18', '18 (8192)']];
 const KEYLEN: [string, string][] = [['0', 'automático'], ['128', '128'], ['192', '192'], ['256', '256']];
 const HASH: [string, string][] = [['auto', 'automático'], ['md5', 'MD5'], ['sha1', 'SHA-1'], ['sha2-256', 'SHA-2 256'], ['sha2-384', 'SHA-2 384'], ['sha2-512', 'SHA-2 512']];
-const IDENT: [string, string][] = [['address', 'Endereço IP'], ['fqdn', 'Nome de domínio (FQDN)'], ['ufqdn', 'E-mail (UFQDN)'], ['keyid', 'Identificador de chave'], ['asn1dn', 'DN do certificado (ASN.1)']];
-const XAUTH = ['hybrid-rsa-xauth', 'hybrid-grp-xauth', 'mutual-rsa-xauth', 'mutual-psk-xauth'];
-const PSK = ['hybrid-grp-xauth', 'mutual-psk-xauth', 'mutual-psk'];
+const IDENT: [string, string][] = [['address', 'Endereço IP'], ['fqdn', 'Nome de domínio (FQDN)'], ['ufqdn', 'E-mail (UFQDN)'], ['keyid', 'Identificador de chave']];
+const XAUTH = ['mutual-psk-xauth'];
+const PSK = ['mutual-psk-xauth', 'mutual-psk'];
 const on = (key: string, ...values: string[]) => ({ key, values });
 
 export const SITE_FIELDS: SiteField[] = [
@@ -44,10 +43,6 @@ export const SITE_FIELDS: SiteField[] = [
     key: 'auth-method', kind: 's', input: 'select', label: 'Autenticação', group: 'Autenticação', options: [
       ['mutual-psk-xauth', 'Chave compartilhada + usuário e senha (Mutual PSK + XAuth)'],
       ['mutual-psk', 'Só chave compartilhada (Mutual PSK)'],
-      ['hybrid-grp-xauth', 'Grupo + usuário e senha (Hybrid GRP + XAuth)'],
-      ['hybrid-rsa-xauth', 'Certificado do gateway + usuário e senha (Hybrid RSA + XAuth)'],
-      ['mutual-rsa-xauth', 'Certificados + usuário e senha (Mutual RSA + XAuth)'],
-      ['mutual-rsa', 'Certificados (Mutual RSA)'],
     ],
   },
   {
@@ -60,8 +55,8 @@ export const SITE_FIELDS: SiteField[] = [
   { key: 'ident-server-type', kind: 's', input: 'select', label: 'Identificação do gateway', group: 'Autenticação', options: [['any', 'Qualquer'], ...IDENT], advanced: true },
   { key: 'ident-server-data', kind: 's', input: 'text', label: 'Valor da identificação do gateway', group: 'Autenticação', advanced: true, hint: 'vazio = automático' },
 
-  { key: 'client-auto-mode', kind: 's', input: 'select', label: 'Configuração automática', group: 'Cliente', options: [['pull', 'Obter do gateway (ike config pull)'], ['push', 'Gateway envia (ike config push)'], ['dhcp', 'DHCP sobre IPsec'], ['disabled', 'Desativada']], advanced: true },
-  { key: 'client-iface', kind: 's', input: 'select', label: 'Adaptador', group: 'Cliente', options: [['virtual', 'Adaptador virtual (endereço da VPN)'], ['direct', 'Adaptador existente (sem endereço próprio)']], advanced: true },
+  { key: 'client-auto-mode', kind: 's', input: 'select', label: 'Configuração automática', group: 'Cliente', options: [['pull', 'Obter do gateway (ike config pull)'], ['disabled', 'Desativada (endereço fixo)']], advanced: true },
+  { key: 'client-iface', kind: 's', input: 'select', label: 'Adaptador', group: 'Cliente', options: [['virtual', 'Adaptador virtual (endereço da VPN)']], advanced: true },
   { key: 'client-addr-auto', kind: 'n', input: 'bool', label: 'Obter endereço automaticamente', group: 'Cliente', advanced: true, when: on('client-iface', 'virtual') },
   { key: 'client-ip-addr', kind: 's', input: 'ipv4', label: 'Endereço', group: 'Cliente', advanced: true, when: on('client-addr-auto', '0') },
   { key: 'client-ip-mask', kind: 's', input: 'ipv4', label: 'Máscara', group: 'Cliente', advanced: true, when: on('client-addr-auto', '0') },
@@ -77,24 +72,24 @@ export const SITE_FIELDS: SiteField[] = [
   { key: 'client-wins-auto', kind: 'n', input: 'bool', label: 'Obter WINS automaticamente', group: 'Cliente', advanced: true, when: on('client-wins-used', '1') },
   { key: 'client-banner-enable', kind: 'n', input: 'bool', label: 'Mostrar o aviso (banner) do gateway', group: 'Cliente', advanced: true },
 
-  { key: 'network-natt-mode', kind: 's', input: 'select', label: 'NAT Traversal', group: 'Rede', options: [['enable', 'Ativado'], ['disable', 'Desativado'], ['force-draft', 'Forçar (draft)'], ['force-rfc', 'Forçar (RFC)'], ['force-cisco-udp', 'Forçar (Cisco UDP)']], advanced: true },
-  { key: 'network-natt-port', kind: 'n', input: 'number', label: 'Porta NAT-T', group: 'Rede', min: 1, max: 65535, advanced: true, when: on('network-natt-mode', 'enable', 'force-draft', 'force-rfc', 'force-cisco-udp') },
-  { key: 'network-natt-rate', kind: 'n', input: 'number', label: 'Keep-alive NAT-T (s)', group: 'Rede', min: 0, max: 3600, advanced: true, when: on('network-natt-mode', 'enable', 'force-draft', 'force-rfc', 'force-cisco-udp') },
+  { key: 'network-natt-mode', kind: 's', input: 'select', label: 'NAT Traversal', group: 'Rede', options: [['enable', 'Ativado'], ['force-rfc', 'Forçar (RFC)']], advanced: true },
+  { key: 'network-natt-port', kind: 'n', input: 'number', label: 'Porta NAT-T', group: 'Rede', min: 1, max: 65535, advanced: true, when: on('network-natt-mode', 'enable', 'force-rfc') },
+  { key: 'network-natt-rate', kind: 'n', input: 'number', label: 'Keep-alive NAT-T (s)', group: 'Rede', min: 0, max: 3600, advanced: true, when: on('network-natt-mode', 'enable', 'force-rfc') },
   { key: 'network-frag-mode', kind: 's', input: 'select', label: 'Fragmentação IKE', group: 'Rede', options: [['enable', 'Ativada'], ['disable', 'Desativada'], ['force', 'Forçada']], advanced: true },
   { key: 'network-frag-size', kind: 'n', input: 'number', label: 'Tamanho máximo do pacote IKE', group: 'Rede', min: 256, max: 9000, advanced: true, when: on('network-frag-mode', 'enable', 'force') },
   { key: 'network-dpd-enable', kind: 'n', input: 'bool', label: 'Detectar gateway inativo (DPD)', group: 'Rede', advanced: true },
   { key: 'network-notify-enable', kind: 'n', input: 'bool', label: 'Notificações ISAKMP', group: 'Rede', advanced: true },
 
-  { key: 'phase1-exchange', kind: 's', input: 'select', label: 'Modo de troca', group: 'Fase 1', options: [['main', 'Main'], ['aggressive', 'Aggressive']], advanced: true },
+  { key: 'phase1-exchange', kind: 's', input: 'select', label: 'Modo de troca', group: 'Fase 1', options: [['main', 'Main']], advanced: true },
   { key: 'phase1-dhgroup', kind: 'n', input: 'select', label: 'Grupo DH', group: 'Fase 1', options: DH, advanced: true },
-  { key: 'phase1-cipher', kind: 's', input: 'select', label: 'Cifra', group: 'Fase 1', options: [['auto', 'automática'], ['aes', 'AES'], ['blowfish', 'Blowfish'], ['3des', '3DES'], ['cast', 'CAST'], ['des', 'DES']], advanced: true },
+  { key: 'phase1-cipher', kind: 's', input: 'select', label: 'Cifra', group: 'Fase 1', options: [['auto', 'automática'], ['aes', 'AES'], ['3des', '3DES'], ['des', 'DES']], advanced: true },
   { key: 'phase1-keylen', kind: 'n', input: 'select', label: 'Tamanho da chave', group: 'Fase 1', options: KEYLEN, advanced: true },
   { key: 'phase1-hash', kind: 's', input: 'select', label: 'Hash', group: 'Fase 1', options: HASH, advanced: true },
   { key: 'phase1-life-secs', kind: 'n', input: 'number', label: 'Vida (segundos)', group: 'Fase 1', min: 0, max: 31_536_000, advanced: true },
   { key: 'phase1-life-kbytes', kind: 'n', input: 'number', label: 'Vida (KB, 0 = sem limite)', group: 'Fase 1', min: 0, max: 2_147_483_647, advanced: true },
   { key: 'vendor-chkpt-enable', kind: 'n', input: 'bool', label: 'Compatibilidade Check Point', group: 'Fase 1', advanced: true },
 
-  { key: 'phase2-transform', kind: 's', input: 'select', label: 'Transformação', group: 'Fase 2', options: [['auto', 'automática'], ['esp-aes', 'ESP-AES'], ['esp-blowfish', 'ESP-Blowfish'], ['esp-3des', 'ESP-3DES'], ['esp-cast', 'ESP-CAST'], ['esp-des', 'ESP-DES']], advanced: true },
+  { key: 'phase2-transform', kind: 's', input: 'select', label: 'Transformação', group: 'Fase 2', options: [['auto', 'automática'], ['esp-aes', 'ESP-AES'], ['esp-3des', 'ESP-3DES'], ['esp-des', 'ESP-DES']], advanced: true },
   { key: 'phase2-keylen', kind: 'n', input: 'select', label: 'Tamanho da chave', group: 'Fase 2', options: KEYLEN, advanced: true },
   { key: 'phase2-hmac', kind: 's', input: 'select', label: 'HMAC', group: 'Fase 2', options: HASH, advanced: true },
   { key: 'phase2-pfsgroup', kind: 'n', input: 'select', label: 'Grupo PFS', group: 'Fase 2', options: [['0', 'desativado'], ...DH], advanced: true },
@@ -114,7 +109,7 @@ export const SITE_FIELDS: SiteField[] = [
 
 const FIELD = new Map(SITE_FIELDS.map((f) => [f.key, f]));
 
-/** Padrões de um site novo: os atuais do Shrew com cifras fortes (AES-256, SHA-2, DH 14). */
+/** Padrões de um site novo, com cifras fortes (AES-256, SHA-2, DH 14). */
 export const SITE_DEFAULTS: Record<string, string> = {
   'network-ike-port': '500', 'auth-method': 'mutual-psk-xauth', 'ident-client-type': 'address', 'ident-server-type': 'address',
   'client-auto-mode': 'pull', 'client-iface': 'virtual', 'client-addr-auto': '1', 'network-mtu-size': '1380',
@@ -164,7 +159,7 @@ export function networksToCidr(value: string): string {
   }).filter(Boolean).join(', ');
 }
 
-/** "10.0.0.0/8, 192.168.1.0/24" → formato do Shrew; aceita também "endereço / máscara". */
+/** "10.0.0.0/8, 192.168.1.0/24" → formato do arquivo; aceita também "endereço / máscara". */
 export function cidrToNetworks(value: string): string {
   const items = value.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
   return items.map((item) => {
@@ -178,14 +173,13 @@ export function cidrToNetworks(value: string): string {
 
 export interface SiteEdit {
   name: string;
-  public: boolean;
   /** Valores do editor (sem a PSK); redes em CIDR. */
   values: Record<string, string>;
   pskSet: boolean;
 }
 
-function toEdit(name: string, lines: Line[], isPublic: boolean): SiteEdit {
-  // Chave ausente no arquivo aparece com o padrão (o Shrew exige todas; sem isso o editor
+function toEdit(name: string, lines: Line[]): SiteEdit {
+  // Chave ausente no arquivo aparece com o padrão (sem isso o editor
   // mostraria a primeira opção e gravaria um valor que ninguém escolheu).
   const values: Record<string, string> = { ...SITE_DEFAULTS };
   for (const l of lines) {
@@ -193,27 +187,23 @@ function toEdit(name: string, lines: Line[], isPublic: boolean): SiteEdit {
     if (!f || f.input === 'secret') continue;
     values[l.key] = f.input === 'networks' ? networksToCidr(l.value) : l.value;
   }
-  return { name, public: isPublic, values, pskSet: lines.some((l) => l.key === 'auth-mutual-psk' && l.value.trim() !== '') };
+  return { name, values, pskSet: lines.some((l) => l.key === 'auth-mutual-psk' && l.value.trim() !== '') };
 }
 
-async function findSiteFile(dirs: SiteDirs, name: string): Promise<{ path: string; public: boolean } | undefined> {
-  for (const [dir, isPublic] of [[dirs.user, false], [dirs.public, true]] as const) {
-    if (!dir) continue;
-    const match = (await readdir(dir).catch(() => [] as string[])).find((n) => n.toLowerCase() === name.toLowerCase());
-    if (match) return { path: join(dir, match), public: isPublic };
-  }
-  return undefined;
+async function findSiteFile(dirs: SiteDirs, name: string): Promise<{ path: string } | undefined> {
+  const match = (await readdir(dirs.user).catch(() => [] as string[])).find((n) => n.toLowerCase() === name.toLowerCase());
+  return match ? { path: join(dirs.user, match) } : undefined;
 }
 
 export async function readSite(dirs: SiteDirs, name: string): Promise<SiteEdit> {
   if (!isSafeSiteName(name)) throw new Error('nome de site inválido');
   const found = await findSiteFile(dirs, name);
   if (!found) throw new Error(`site "${name}" não encontrado`);
-  return toEdit(name, parseLines(await readFile(found.path, 'utf8')), found.public);
+  return toEdit(name, parseLines(await readFile(found.path, 'utf8')));
 }
 
 export function newSite(): SiteEdit {
-  return { name: '', public: false, values: { ...SITE_DEFAULTS }, pskSet: false };
+  return { name: '', values: { ...SITE_DEFAULTS }, pskSet: false };
 }
 
 /** Confere um valor do editor e devolve como vai para o arquivo ('' = remover a chave). */
@@ -256,8 +246,7 @@ export interface SiteSave {
 }
 
 /**
- * Grava o site na pasta do usuário. Um site público editado vira uma cópia do usuário (que tem
- * precedência). Mantém a ordem e as chaves desconhecidas do arquivo original.
+ * Grava o site. Mantém a ordem e as chaves desconhecidas do arquivo original.
  */
 export async function saveSite(dirs: SiteDirs, req: SiteSave): Promise<SiteEdit> {
   const name = String(req.name ?? '').trim();
@@ -268,7 +257,7 @@ export async function saveSite(dirs: SiteDirs, req: SiteSave): Promise<SiteEdit>
     const found = await findSiteFile(dirs, req.original);
     if (!found) throw new Error(`site "${req.original}" não encontrado`);
     lines = parseLines(await readFile(found.path, 'utf8'));
-    if (!found.public) originalPath = found.path;
+    originalPath = found.path;
   } else {
     lines = [{ kind: 'n', key: 'version', value: '4' }];
   }
@@ -276,7 +265,7 @@ export async function saveSite(dirs: SiteDirs, req: SiteSave): Promise<SiteEdit>
   const host = String(req.values['network-host'] ?? lines.find((l) => l.key === 'network-host')?.value ?? '').trim();
   if (!host || /\s/.test(host) || host.startsWith('-') || host.length > 255) throw new Error('informe o gateway (host ou IP)');
   const renamed = !req.original || req.original.toLowerCase() !== name.toLowerCase();
-  if (renamed && (await findSiteFile({ user: dirs.user }, name))) throw new Error(`já existe um site "${name}"`);
+  if (renamed && (await findSiteFile(dirs, name))) throw new Error(`já existe um site "${name}"`);
 
   const set = (key: string, kind: Kind, value: string) => {
     const i = lines.findIndex((l) => l.key === key);
@@ -303,18 +292,17 @@ export async function saveSite(dirs: SiteDirs, req: SiteSave): Promise<SiteEdit>
   await writeFile(tmp, text, { mode: 0o600 });
   await rename(tmp, target);
   if (originalPath && renamed) await rm(originalPath, { force: true });
-  return toEdit(name, lines, false);
+  return toEdit(name, lines);
 }
 
-/** Exclui só sites do usuário (os públicos pertencem a todos os usuários da máquina). */
 export async function deleteSite(dirs: SiteDirs, name: string): Promise<void> {
   if (!isSafeSiteName(name)) throw new Error('nome de site inválido');
-  const found = await findSiteFile({ user: dirs.user }, name);
-  if (!found) throw new Error(`site "${name}" não é do usuário (sites de todos os usuários não são excluídos aqui)`);
+  const found = await findSiteFile(dirs, name);
+  if (!found) throw new Error(`site "${name}" não encontrado`);
   await rm(found.path);
 }
 
-/** Exporta no formato .vpn (o mesmo arquivo do site, que o Shrew e o MultTerm importam). */
+/** Exporta no formato .vpn (o mesmo arquivo do site, que a importação lê). */
 export async function exportSite(dirs: SiteDirs, name: string, dest: string): Promise<void> {
   if (!isSafeSiteName(name)) throw new Error('nome de site inválido');
   const found = await findSiteFile(dirs, name);

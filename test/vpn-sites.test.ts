@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   cidrToNetworks, deleteSite, exportSite, networksToCidr, newSite, readSite, saveSite, SITE_DEFAULTS, SITE_FIELDS,
-} from '../src/network/shrew-site.ts';
-import { listSites } from '../src/network/shrew.ts';
+} from '../src/vpn/site-editor.ts';
+import { importSite, isSafeSiteName, listSites, migrateSites, parseSiteFile, siteInfo } from '../src/vpn/sites.ts';
 
 const ORIGINAL = [
   'n:version:4',
@@ -24,10 +24,8 @@ const ORIGINAL = [
 async function dirs() {
   const root = await mkdtemp(join(tmpdir(), 'multterm-site-'));
   const user = join(root, 'user');
-  const pub = join(root, 'public');
   await mkdir(user);
-  await mkdir(pub);
-  return { root, user, public: pub };
+  return { root, user };
 }
 
 test('redes: CIDR na interface, "endereço / máscara" no arquivo', () => {
@@ -125,20 +123,62 @@ test('saveSite cria site novo, valida e não sobrescreve outro', async () => {
   }
 });
 
-test('site público editado vira cópia do usuário; excluir só os do usuário; exportar', async () => {
+test('exportar copia o arquivo; excluir remove', async () => {
   const d = await dirs();
   try {
-    await writeFile(join(d.public, 'Campus'), ORIGINAL);
-    await saveSite(d, { original: 'Campus', name: 'Campus', values: { 'network-host': 'campus.example.org' } });
-    assert.deepEqual(await readdir(d.public), ['Campus']); // o público fica intacto
-    assert.equal((await readSite(d, 'Campus')).public, false);
-    await deleteSite(d, 'Campus');
-    assert.equal((await readSite(d, 'Campus')).public, true); // volta a valer o público
-    await assert.rejects(deleteSite(d, 'Campus'), /não é do usuário/);
-
+    await writeFile(join(d.user, 'Campus'), ORIGINAL);
     const dest = join(d.root, 'Campus.vpn');
-    await exportSite(d, 'Campus', dest);
+    await exportSite(d, 'campus', dest);
     assert.equal(await readFile(dest, 'utf8'), ORIGINAL);
+    await deleteSite(d, 'Campus');
+    assert.deepEqual(await readdir(d.user), []);
+    await assert.rejects(deleteSite(d, 'Campus'), /não encontrado/);
+  } finally {
+    await rm(d.root, { recursive: true, force: true });
+  }
+});
+
+test('arquivo de site: leitura, resumo e nomes seguros', () => {
+  const cfg = parseSiteFile('s:network-host:vpn.example.org\r\ns:policy-list-include:10.0.0.0 / 255.0.0.0\nlixo\n');
+  assert.equal(cfg.get('network-host'), 'vpn.example.org');
+  assert.equal(cfg.get('policy-list-include'), '10.0.0.0 / 255.0.0.0');
+  assert.deepEqual(siteInfo('Matriz', ORIGINAL), { name: 'Matriz', host: 'vpn.example.org', auth: 'mutual-psk-xauth', credentials: true });
+  assert.deepEqual(siteInfo('F', 's:network-host:1.2.3.4\nn:network-ike-port:4500\ns:auth-method:mutual-psk\n'),
+    { name: 'F', host: '1.2.3.4', port: 4500, auth: 'mutual-psk', credentials: false });
+  for (const ok of ['Matriz', 'VPN Campus 2', 'São Paulo']) assert.ok(isSafeSiteName(ok), ok);
+  for (const bad of ['', '..', 'a/b', 'a\\b', 'a"b', '-r', ' x', 'x ', 'c:x']) assert.ok(!isSafeSiteName(bad), bad);
+});
+
+test('listar, importar (sem sobrescrever) e migrar sites antigos uma vez só', async () => {
+  const d = await dirs();
+  try {
+    await writeFile(join(d.user, 'Matriz'), ORIGINAL);
+    await writeFile(join(d.user, 'sem-host'), 's:auth-method:mutual-psk\n');
+    assert.deepEqual((await listSites(d)).map((x) => x.name), ['Matriz']);
+
+    const file = join(d.root, 'Matriz.vpn');
+    await writeFile(file, ORIGINAL);
+    assert.equal((await importSite(file, d.user)).name, 'Matriz (2)');
+    const bad = join(d.root, 'x.vpn');
+    await writeFile(bad, 'qualquer coisa');
+    await assert.rejects(importSite(bad, d.user), /não é um site de VPN/);
+
+    const old1 = join(d.root, 'antigo1');
+    const old2 = join(d.root, 'antigo2');
+    await mkdir(old1);
+    await mkdir(old2);
+    await writeFile(join(old1, 'Campus'), ORIGINAL);
+    await writeFile(join(old1, 'lixo'), 'nada');
+    await writeFile(join(old2, 'campus'), 's:network-host:outro\n'); // mesmo nome: vale o primeiro
+    await writeFile(join(old2, 'Filial'), 's:network-host:10.9.9.9\n');
+    const target = join(d.root, 'novos');
+    assert.equal(await migrateSites([old1, old2, join(d.root, 'nao-existe')], target), 2);
+    assert.deepEqual((await readdir(target)).sort(), ['Campus', 'Filial']);
+    assert.equal(await readFile(join(target, 'Campus'), 'utf8'), ORIGINAL);
+    // Com a pasta já criada, não copia de novo (sites excluídos não voltam).
+    await rm(join(target, 'Filial'));
+    assert.equal(await migrateSites([old1, old2], target), 0);
+    assert.deepEqual(await readdir(target), ['Campus']);
   } finally {
     await rm(d.root, { recursive: true, force: true });
   }

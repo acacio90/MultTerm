@@ -2,13 +2,12 @@ import { isIPv4 } from 'node:net';
 import { IdType, ipv4 } from './ike/packet.ts';
 import type { IkeConfig, Phase1Proposal } from './ike/client.ts';
 import type { CipherName, HashName } from './ike/crypto.ts';
-import { parseSiteFile } from '../network/shrew.ts';
-import { networksToCidr } from '../network/shrew-site.ts';
+import { parseSiteFile } from './sites.ts';
+import { networksToCidr } from './site-editor.ts';
 
 /*
- * Site do Shrew (o mesmo arquivo do editor) → configuração do motor de VPN do MultTerm.
- * O que o motor ainda não faz (certificados, modo agressivo, sem NAT-T...) é recusado com
- * uma mensagem clara, para usar o Shrew nesses casos.
+ * Site de VPN (o arquivo do editor) → configuração do motor de VPN do MultTerm. O que o motor
+ * ainda não faz (certificados, modo aggressive, sem NAT-T...) é recusado com uma mensagem clara.
  */
 
 export interface NativeVpnOptions {
@@ -29,7 +28,7 @@ function ciphers(name: string, keylen: number, what: string): { cipher: CipherNa
     case 'aes': return aes(keylen);
     case '3des': return [{ cipher: '3des' }];
     case 'des': return [{ cipher: 'des' }];
-    default: throw new Error(`${what}: a cifra "${name}" não é suportada pelo motor do MultTerm (use AES ou 3DES, ou o Shrew)`);
+    default: throw new Error(`${what}: a cifra "${name}" não é suportada pelo motor do MultTerm (use AES ou 3DES)`);
   }
 }
 
@@ -51,11 +50,11 @@ export function siteToVpnOptions(text: string, creds: { user?: string; password?
   if (!host) throw new Error('o site não tem gateway');
   const auth = s('auth-method', 'mutual-psk-xauth');
   if (auth !== 'mutual-psk-xauth' && auth !== 'mutual-psk') {
-    throw new Error(`autenticação "${auth}" ainda não é suportada pelo motor do MultTerm (só chave compartilhada, com ou sem usuário e senha); use o Shrew`);
+    throw new Error(`autenticação "${auth}" ainda não é suportada pelo motor do MultTerm (só chave compartilhada, com ou sem usuário e senha)`);
   }
   const psk = Buffer.from(s('auth-mutual-psk'), 'base64');
   if (!psk.length) throw new Error('o site não tem chave compartilhada (PSK)');
-  if (s('phase1-exchange', 'main') !== 'main') throw new Error('o modo aggressive ainda não é suportado pelo motor do MultTerm; use o Shrew');
+  if (s('phase1-exchange', 'main') !== 'main') throw new Error('o modo aggressive ainda não é suportado pelo motor do MultTerm');
   if (s('network-natt-mode', 'enable') === 'disable') throw new Error('o motor do MultTerm exige NAT-T (ESP em UDP); ative o NAT Traversal no site');
   const xauth = auth === 'mutual-psk-xauth';
   if (xauth && (!creds.user || !creds.password)) throw new Error('informe usuário e senha');

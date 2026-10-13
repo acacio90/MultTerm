@@ -24,16 +24,14 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Captura de pacotes sem instalar nada: modo de reserva com o `pktmon` do Windows, com filtros
   de IP, porta e protocolo, uma confirmação do UAC por captura e o mesmo `.pcapng` no fim;
   com os dois disponíveis, um seletor escolhe o motor. (#15)
-- VPN pelo Shrew Soft VPN Client instalado: lista e importa sites, conecta com usuário e senha
-  sem expor a senha, mostra estado, log, erros traduzidos e as redes acessíveis (com atalho
-  para o scanner de rede), indicador na barra superior e desconexão ao sair; campo opcional
-  `vpn` na sessão conecta a VPN antes de abri-la. (#16)
-- Editor de sites da VPN no próprio MultTerm: criar, editar, renomear, excluir e exportar
-  (.vpn), com padrões fortes para sites novos, a PSK fora da interface e preservação das
-  opções que o editor não conhece. (#17)
-- VPN sem instalar nada: motor IPsec próprio (IKEv1 Main Mode com PSK e XAuth, Mode Config,
+- VPN IPsec sem instalar nada: motor próprio (IKEv1 Main Mode com PSK e XAuth, Mode Config,
   Quick Mode com PFS, ESP em UDP com NAT-T, DPD e renovação de chaves) com adaptador Wintun num
-  processo auxiliar elevado (UAC por conexão); seletor de motor MultTerm/Shrew no painel. (#18)
+  processo auxiliar elevado (UAC por conexão); mostra estado, log, erros traduzidos e as redes
+  acessíveis (com atalho para o scanner de rede), indicador na barra superior e desconexão ao
+  sair; campo opcional `vpn` na sessão conecta a VPN antes de abri-la. (#16, #18, #19)
+- Editor de sites da VPN: criar, editar, renomear, excluir, importar e exportar (.vpn), com
+  padrões fortes para sites novos, a PSK fora da interface e preservação das opções que o
+  editor não conhece. (#17)
 - Exportar sessões (todas, pela barra, ou uma pasta com subpastas, pelo menu de contexto) para
   um YAML que a importação lê.
 - Menu de contexto nas pastas da árvore: nova subpasta, nova sessão aqui, renomear (move

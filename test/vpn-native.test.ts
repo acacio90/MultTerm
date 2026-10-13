@@ -15,7 +15,7 @@ const SITE = [
   'n:client-dns-used:1', 'n:client-dns-auto:1', 'n:policy-list-auto:1', 's:ident-client-type:address', '',
 ].join('\n');
 
-test('site do Shrew vira a configuração do motor', () => {
+test('site de VPN vira a configuração do motor', () => {
   const o = siteToVpnOptions(SITE, { user: 'ana', password: 'x' });
   assert.equal(o.ike.host, 'vpn.example.org');
   assert.equal(o.ike.psk.toString(), 'chave');
@@ -49,7 +49,7 @@ test('opções "auto", redes manuais, DNS fixo e identificação', () => {
 
 test('o que o motor ainda não suporta é recusado com mensagem clara', () => {
   const cases: [string, RegExp][] = [
-    [SITE.replace('mutual-psk-xauth', 'hybrid-rsa-xauth'), /use o Shrew/],
+    [SITE.replace('mutual-psk-xauth', 'hybrid-rsa-xauth'), /só chave compartilhada/],
     [SITE.replace('s:phase1-exchange:main', 's:phase1-exchange:aggressive'), /aggressive/],
     [SITE.replace('s:network-natt-mode:enable', 's:network-natt-mode:disable'), /NAT-T/],
     [SITE.replace('s:phase1-cipher:aes', 's:phase1-cipher:blowfish'), /blowfish/],

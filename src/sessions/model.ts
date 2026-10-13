@@ -1,4 +1,4 @@
-import { isSafeSiteName } from '../network/shrew.ts';
+import { isSafeSiteName } from '../vpn/sites.ts';
 
 export type SessionType = 'ssh' | 'rdp';
 
@@ -17,7 +17,7 @@ export interface Session {
   identityFile?: string;
   /** Endereço MAC para Wake-on-LAN, normalizado como "aa:bb:cc:dd:ee:ff". */
   mac?: string;
-  /** Site do Shrew Soft VPN que precisa estar conectado para alcançar o host. */
+  /** Site de VPN que precisa estar conectado para alcançar o host. */
   vpn?: string;
   tags?: string[];
 }

@@ -923,7 +923,7 @@ $('vpn-indicator').addEventListener('click', () => openToolTab('vpn'));
 api.vpnInfo().then((info) => {
   vpnStatus = info.status ?? null;
   renderVpnIndicator();
-  // Sugestões do campo VPN do formulário: os sites do Shrew.
+  // Sugestões do campo VPN do formulário: os sites de VPN.
   $('vpn-sites').replaceChildren(...info.sites.map((s) => Object.assign(document.createElement('option'), { value: s.name })));
 }, () => {});
 

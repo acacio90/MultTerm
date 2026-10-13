@@ -15,8 +15,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
-- **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth) ou pelo Shrew Soft VPN Client,
-  com editor de sites, indicador na barra e sessões que conectam a VPN antes de abrir
+- **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
+  na barra e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -39,7 +39,7 @@ sessions:
     host: web-01.example.org
     user: deploy
     identityFile: ~/.ssh/id_ed25519
-    vpn: Matriz          # opcional: site do Shrew Soft VPN conectado antes de abrir
+    vpn: Matriz          # opcional: site de VPN conectado antes de abrir
   - name: ad-01
     folder: Servidores/Infraestrutura
     type: rdp
@@ -101,36 +101,29 @@ sem a opção "restringir a administradores"; o modo pktmon pede a elevação s�
 
 ### VPN
 
-**Ferramentas → VPN** conecta a VPNs IPsec/IKEv1 (os mesmos sites do Shrew Soft VPN Client) por
-um de dois motores — o seletor **Motor** só aparece quando os dois estão disponíveis:
+**Ferramentas → VPN** conecta a VPNs IPsec/IKEv1 sem instalar nada: o próprio MultTerm negocia
+o IKEv1 (Main Mode, chave compartilhada com ou sem usuário e senha/XAuth, Mode Config) e cifra o
+tráfego (ESP em UDP 4500/NAT-T). O adaptador "MultTerm VPN" usa o [Wintun](https://www.wintun.net)
+que acompanha o instalador; criá-lo exige administrador, então o Windows pede confirmação (UAC) a
+cada conexão — só o processo do túnel roda elevado, o MultTerm não. IP, rotas e DNS ficam só na
+memória e somem ao desconectar.
 
-- **MultTerm (sem instalar nada)**: o próprio app negocia o IKEv1 (Main Mode, chave compartilhada
-  com ou sem usuário e senha/XAuth, Mode Config) e cifra o tráfego (ESP em UDP 4500/NAT-T). O
-  adaptador "MultTerm VPN" usa o [Wintun](https://www.wintun.net) que acompanha o instalador;
-  criá-lo exige administrador, então o Windows pede confirmação (UAC) a cada conexão — só o
-  processo do túnel roda elevado, o MultTerm não. IP, rotas e DNS ficam só na memória e somem ao
-  desconectar. Limites atuais: sem certificados, sem modo aggressive, NAT-T sempre ligado, IPv4.
-- **Shrew Soft VPN Client** instalado ([shrew.net](https://www.shrew.net)): o MultTerm abre o
-  `ipsecc.exe` com o site, oculta a janela, preenche usuário e senha pelos campos (a senha não
-  aparece na linha de comando nem é gravada), clica em conectar e acompanha o estado e o log.
-
-- Lista os sites do Shrew (do usuário e de todos os usuários) e importa arquivos `.vpn`
-  exportados pelo VPN Access Manager.
-- **Novo site / Editar / Exportar… / Excluir**: cria e edita sites sem depender de `.vpn` nem
-  do VPN Access Manager — gateway, autenticação (PSK, usuário lembrado, identificações),
-  cliente (endereço, DNS), NAT-T, fragmentação, fases 1 e 2 e redes da VPN em CIDR. Um site
-  novo já vem com AES-256, SHA-2 256 e DH 14. A chave compartilhada nunca aparece na tela (em
-  branco mantém a atual) e opções que o editor não mostra, como certificados, são preservadas.
-  Exportar grava o `.vpn`, que o Shrew e o MultTerm importam. Editar um site de todos os
-  usuários cria uma cópia sua.
-- Mostra o estado (conectando/conectada), o log do cliente e o motivo das falhas (gateway sem
-  resposta, usuário ou senha recusados, configuração incompleta, serviço do Shrew parado).
+- **Novo site / Editar / Exportar… / Excluir / Importar site (.vpn)…**: gateway, autenticação
+  (PSK, usuário lembrado, identificações), cliente (endereço, DNS), NAT-T, fragmentação, fases 1
+  e 2 e redes da VPN em CIDR. Um site novo já vem com AES-256, SHA-2 256 e DH 14. A chave
+  compartilhada nunca aparece na tela (em branco mantém a atual) e opções que o editor não
+  mostra são preservadas. Os sites ficam em `%APPDATA%\multterm\vpn-sites` no formato `.vpn`
+  (o mesmo de outros clientes IPsec); na primeira vez, sites de um cliente IPsec instalado antes
+  são copiados para lá.
+- Mostra o estado (conectando/conectada), o log da negociação e o motivo das falhas (gateway sem
+  resposta, chave ou senha recusadas, propostas que não conferem). O registro completo fica em
+  `%TEMP%\multterm-vpn.log`.
 - Conectada, mostra o IP recebido e as redes roteadas pelo túnel, com atalho para o scanner de
   rede — o caminho para descobrir os ativos do outro lado.
 - A conexão é uma só e não depende da aba: o indicador **VPN:** na barra superior mostra o
   estado e abre a aba. Sair do MultTerm desconecta a VPN.
-- Uma sessão com o campo **VPN (Shrew)** preenchido abre a VPN primeiro e se conecta assim que
-  ela sobe.
+- Uma sessão com o campo **VPN** preenchido abre a VPN primeiro e se conecta assim que ela sobe.
+- Limites atuais: só chave compartilhada (sem certificados), Main Mode, NAT-T sempre ligado, IPv4.
 
 ### Exportar sessões
 

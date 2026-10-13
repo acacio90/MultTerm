@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { HELPER_FLAG, type HelperStart } from '../vpn/helper.ts';
 import type { NativeVpnOptions } from '../vpn/site-config.ts';
 import type { NetSetup, TunnelStats } from '../vpn/tunnel.ts';
-import type { VpnStatus } from '../network/shrew.ts';
+import type { VpnStatus } from '../vpn/sites.ts';
 
 /*
  * VPN pelo motor do próprio MultTerm. O túnel roda num processo auxiliar elevado (o próprio
@@ -158,9 +158,6 @@ export class NativeVpnConnection extends EventEmitter {
         break;
     }
   }
-
-  /** Sem janela externa no motor do MultTerm. */
-  showWindow() {}
 
   async disconnect(): Promise<void> {
     if (this.closing) return this.done;

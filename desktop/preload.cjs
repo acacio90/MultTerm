@@ -33,12 +33,11 @@ contextBridge.exposeInMainWorld('multterm', {
   localPorts: () => ipcRenderer.invoke('tools:local-ports'),
   saveCsv: (name, csv) => ipcRenderer.invoke('tools:save-csv', name, csv),
 
-  // VPN (Shrew Soft VPN Client).
+  // VPN (motor IPsec do MultTerm).
   vpnInfo: () => ipcRenderer.invoke('vpn:info'),
   vpnImport: () => ipcRenderer.invoke('vpn:import'),
   vpnConnect: (req) => ipcRenderer.invoke('vpn:connect', req),
   vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),
-  vpnShowWindow: (show) => ipcRenderer.send('vpn:show-window', show),
   vpnNetworks: () => ipcRenderer.invoke('vpn:networks'),
   vpnSiteSchema: () => ipcRenderer.invoke('vpn:site-schema'),
   vpnSiteGet: (name) => ipcRenderer.invoke('vpn:site-get', name),
