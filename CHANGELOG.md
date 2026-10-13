@@ -15,6 +15,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   formatados; credenciais só em memória. (#14)
 - Scanner de rede busca o nome pelo `sysName` via SNMP quando não há DNS reverso, com a
   coluna **Fonte** (DNS/SNMP).
+- Menu de contexto nas pastas da árvore: nova subpasta, nova sessão aqui, renomear (move
+  sessões e subpastas) e excluir pasta vazia; na área vazia, nova pasta na raiz.
 
 ### Corrigido
 

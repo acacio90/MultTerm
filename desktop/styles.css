@@ -315,3 +315,19 @@ pre.dns-result:empty { display: none; }
 .secret { display: flex; align-items: center; gap: 8px; }
 .secret input { flex: 1; }
 table.results td.wrap { white-space: normal; word-break: break-word; }
+
+/* ---------- pastas: menu de contexto e diálogo de nome ---------- */
+
+.context-menu { position: fixed; z-index: 20; }
+.tree li.pending .label { font-style: italic; color: var(--muted); }
+.tree li.pending .label::after { content: " (vazia)"; font-size: 11px; }
+dialog#name-dialog {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+dialog#name-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.form-error { margin: 0; color: var(--danger); font-size: 12px; }
+.form-error:empty { display: none; }

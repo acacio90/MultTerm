@@ -78,6 +78,20 @@
     </section>
   </main>
 
+  <div id="tree-menu" class="menu context-menu" role="menu" hidden></div>
+
+  <dialog id="name-dialog" aria-labelledby="name-title">
+    <form id="name-form" method="dialog" class="small-dialog">
+      <h2 id="name-title">Nova pasta</h2>
+      <label><span id="name-label">Nome</span> <input name="folderName" required autocomplete="off"></label>
+      <p id="name-error" class="form-error" aria-live="polite"></p>
+      <div class="actions">
+        <button type="submit" class="primary">OK</button>
+        <button type="button" id="name-cancel">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="diag-dialog" aria-labelledby="diag-title">
     <form id="diag-form" method="dialog" class="small-dialog">
       <h2 id="diag-title">Ping</h2>

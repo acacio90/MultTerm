@@ -50,6 +50,9 @@ a variável `MULTTERM_SESSIONS`.
 ## Uso
 
 - **Duplo clique** numa sessão abre uma aba de terminal (SSH) ou o cliente RDP.
+- **Botão direito numa pasta**: Nova subpasta, Nova sessão aqui, Renomear (move as sessões e
+  subpastas) e Excluir (só pastas vazias). Na área vazia da árvore: Nova pasta. Uma pasta nova
+  é gravada no arquivo quando uma sessão é salva dentro dela.
 - Selecionar texto copia; botão direito cola (ou Ctrl+Shift+C / Ctrl+Shift+V).
 - Botão do meio do mouse fecha a aba; quando a sessão termina, **R** reconecta.
 - Chave `.ppk` (PuTTY): o app usa a versão OpenSSH com o mesmo nome ao lado, se existir.

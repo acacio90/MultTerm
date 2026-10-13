@@ -15,6 +15,12 @@ const state = {
   collapsed: new Set(readCollapsed()),
 };
 
+// Pastas criadas pelo menu de contexto que ainda não têm sessão: aparecem na árvore e são
+// gravadas no arquivo quando uma sessão é salva dentro delas (só existem nesta execução).
+const pendingFolders = new Set();
+const isUnder = (folder, path) => folder === path || folder.startsWith(`${path}/`);
+const hasSessions = (path) => state.sessions.some((s) => isUnder(s.folder, path));
+
 function readCollapsed() {
   try {
     return JSON.parse(localStorage.getItem('collapsed') ?? '[]');
@@ -58,7 +64,7 @@ function matches(s) {
 
 // ---------- árvore ----------
 
-function buildTree(sessions) {
+function buildTree(sessions, extraFolders = []) {
   const folders = new Map([['', { folders: new Set(), sessions: [] }]]);
   const ensure = (path) => {
     if (folders.has(path)) return folders.get(path);
@@ -68,6 +74,7 @@ function buildTree(sessions) {
     return node;
   };
   for (const s of sessions) ensure(s.folder).sessions.push(s);
+  for (const f of extraFolders) ensure(f);
   return folders;
 }
 
@@ -95,7 +102,7 @@ function treeItem({ depth, label, cls, twisty = '', badge = '' }) {
 
 function renderTree() {
   const visible = state.sessions.filter(matches);
-  const tree = buildTree(visible);
+  const tree = buildTree(visible, state.filter ? [] : [...pendingFolders]);
   const items = [];
 
   const walk = (path, depth) => {
@@ -106,11 +113,13 @@ function renderTree() {
       const li = treeItem({
         depth,
         label: folder.split('/').pop(),
-        cls: 'folder',
+        cls: hasSessions(folder) ? 'folder' : 'folder pending',
         twisty: open ? '▾' : '▸',
       });
       li.setAttribute('role', 'treeitem');
       li.setAttribute('aria-expanded', String(open));
+      li.dataset.folder = folder;
+      li.addEventListener('contextmenu', (e) => openFolderMenu(e, folder));
       li.addEventListener('click', () => {
         if (state.collapsed.has(folder)) state.collapsed.delete(folder);
         else state.collapsed.add(folder);
@@ -200,6 +209,8 @@ function select(key) {
 function apply(snapshot) {
   state.path = snapshot.path;
   state.sessions = snapshot.sessions;
+  // Pasta pendente que ganhou sessão passa a existir no arquivo.
+  for (const p of [...pendingFolders]) if (hasSessions(p)) pendingFolders.delete(p);
   if (state.selected && !state.sessions.some((s) => keyOf(s) === state.selected)) {
     state.selected = state.editing = null;
     form.hidden = true;
@@ -602,6 +613,171 @@ $('btn-issues').addEventListener('click', () => api.openRepo('/issues'));
 $('btn-show-sessions').addEventListener('click', () => api.showSessionsFile());
 api.onUpdateStatus(renderUpdate);
 api.updateStatus().then(renderUpdate);
+
+// ---------- pastas: menu de contexto ----------
+
+const joinFolder = (parent, name) => (parent ? `${parent}/${name}` : name);
+const folderExists = (path) => pendingFolders.has(path) || hasSessions(path);
+
+function folderNameError(name) {
+  if (!name) return 'informe um nome';
+  if (/[\\/]/.test(name)) return 'o nome não pode ter / nem \\ (crie um nível de cada vez)';
+  if (name.length > 100) return 'nome longo demais (máximo 100 caracteres)';
+  return '';
+}
+
+/** Diálogo de nome (o Electron não oferece window.prompt). Resolve null se cancelado. */
+function askName(title, label, value = '') {
+  const dialog = $('name-dialog');
+  const nameForm = $('name-form');
+  const input = nameForm.folderName;
+  $('name-title').textContent = title;
+  $('name-label').textContent = label;
+  $('name-error').textContent = '';
+  input.value = value;
+  return new Promise((resolve) => {
+    const done = (result) => {
+      nameForm.onsubmit = null;
+      $('name-cancel').onclick = null;
+      dialog.oncancel = null;
+      dialog.close();
+      resolve(result);
+    };
+    nameForm.onsubmit = (e) => {
+      e.preventDefault();
+      const name = input.value.trim();
+      const error = folderNameError(name);
+      if (error) $('name-error').textContent = error;
+      else done(name);
+    };
+    $('name-cancel').onclick = () => done(null);
+    dialog.oncancel = (e) => {
+      e.preventDefault();
+      done(null);
+    };
+    dialog.showModal();
+    input.select();
+  });
+}
+
+const treeMenu = $('tree-menu');
+const hideTreeMenu = () => {
+  treeMenu.hidden = true;
+};
+
+/** Botão direito numa pasta (ou na área vazia da árvore, folder = ''). */
+function openFolderMenu(e, folder) {
+  e.preventDefault();
+  e.stopPropagation();
+  const items = folder
+    ? [['subfolder', 'Nova subpasta…'], ['session', 'Nova sessão aqui'], ['rename', 'Renomear…'], ['delete', 'Excluir pasta']]
+    : [['subfolder', 'Nova pasta…'], ['session', 'Nova sessão na raiz']];
+  treeMenu.replaceChildren(...items.map(([action, label]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.dataset.action = action;
+    b.textContent = label;
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      hideTreeMenu();
+      folderAction(action, folder);
+    });
+    return b;
+  }));
+  treeMenu.hidden = false;
+  treeMenu.style.left = `${Math.min(e.clientX, window.innerWidth - treeMenu.offsetWidth - 8)}px`;
+  treeMenu.style.top = `${Math.min(e.clientY, window.innerHeight - treeMenu.offsetHeight - 8)}px`;
+}
+
+$('tree').addEventListener('contextmenu', (e) => {
+  if (!e.target.closest('li')) openFolderMenu(e, '');
+});
+document.addEventListener('click', hideTreeMenu);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideTreeMenu();
+});
+window.addEventListener('blur', hideTreeMenu);
+
+function expandFolder(path) {
+  for (let p = path; p; p = parentOf(p)) state.collapsed.delete(p);
+  writeCollapsed();
+}
+
+async function folderAction(action, folder) {
+  showEditor();
+  clearMessages();
+
+  if (action === 'session') {
+    state.selected = state.editing = null;
+    renderTree();
+    showForm(null);
+    form.folder.value = folder;
+    form.name.focus();
+    return;
+  }
+
+  if (action === 'subfolder') {
+    const name = await askName(folder ? `Nova subpasta em "${folder}"` : 'Nova pasta', 'Nome da pasta');
+    if (!name) return;
+    const path = joinFolder(folder, name);
+    if (folderExists(path)) {
+      message(`A pasta "${path}" já existe.`, 'warn');
+      return;
+    }
+    pendingFolders.add(path);
+    expandFolder(folder);
+    renderTree();
+    message(`Pasta "${path}" criada. Ela é gravada no arquivo quando você salvar uma sessão dentro dela (botão direito → Nova sessão aqui).`);
+    return;
+  }
+
+  if (action === 'rename') {
+    const oldName = folder.split('/').pop();
+    const name = await askName(`Renomear "${folder}"`, 'Novo nome', oldName);
+    if (!name || name === oldName) return;
+    const target = joinFolder(parentOf(folder), name);
+    if (folderExists(target)) {
+      message(`Já existe a pasta "${target}"; escolha outro nome.`, 'error');
+      return;
+    }
+    const move = (f) => (isUnder(f, folder) ? target + f.slice(folder.length) : f);
+    const affected = state.sessions.filter((s) => isUnder(s.folder, folder)).length;
+    try {
+      if (affected) apply(await api.save(state.sessions.map((s) => ({ ...s, folder: move(s.folder) }))));
+    } catch (err) {
+      message(cleanError(err), 'error');
+      return;
+    }
+    for (const p of [...pendingFolders]) {
+      if (isUnder(p, folder)) {
+        pendingFolders.delete(p);
+        pendingFolders.add(move(p));
+      }
+    }
+    for (const c of [...state.collapsed]) {
+      if (isUnder(c, folder)) {
+        state.collapsed.delete(c);
+        state.collapsed.add(move(c));
+      }
+    }
+    writeCollapsed();
+    renderTree();
+    message(`Pasta renomeada para "${target}" (${affected} sessão(ões) movida(s)).`);
+    return;
+  }
+
+  if (action === 'delete') {
+    const count = state.sessions.filter((s) => isUnder(s.folder, folder)).length;
+    if (count) {
+      message(`A pasta "${folder}" tem ${count} sessão(ões). Mova ou exclua as sessões antes de excluir a pasta.`, 'error');
+      return;
+    }
+    for (const p of [...pendingFolders]) if (isUnder(p, folder)) pendingFolders.delete(p);
+    renderTree();
+    message(`Pasta "${folder}" excluída.`);
+  }
+}
 
 // ---------- ferramentas de rede ----------
 
