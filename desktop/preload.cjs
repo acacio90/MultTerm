@@ -33,6 +33,14 @@ contextBridge.exposeInMainWorld('multterm', {
   localPorts: () => ipcRenderer.invoke('tools:local-ports'),
   saveCsv: (name, csv) => ipcRenderer.invoke('tools:save-csv', name, csv),
 
+  // Servidores locais (TFTP, HTTP...).
+  serversList: () => ipcRenderer.invoke('servers:list'),
+  serversStart: (kind, config) => ipcRenderer.invoke('servers:start', kind, config),
+  serversStop: (kind) => ipcRenderer.invoke('servers:stop', kind),
+  serversClearLog: (kind) => ipcRenderer.invoke('servers:clear-log', kind),
+  serversChooseDir: (current) => ipcRenderer.invoke('servers:choose-dir', current),
+  onServersEvent: (cb) => ipcRenderer.on('servers:event', (_e, ev) => cb(ev)),
+
   // VPN (motor IPsec do MultTerm).
   vpnInfo: () => ipcRenderer.invoke('vpn:info'),
   vpnImport: () => ipcRenderer.invoke('vpn:import'),

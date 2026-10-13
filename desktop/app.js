@@ -885,8 +885,8 @@ function newSessionFrom({ name, host, type }) {
 }
 
 function openToolTab(kind, target) {
-  // Uma aba de VPN só (a conexão é única).
-  if (kind === 'vpn') for (const t of tabsById.values()) if (t.kind === 'vpn') closeTab(t);
+  // Uma aba de VPN e uma de servidores (o estado é único).
+  if (kind === 'vpn' || kind === 'servers') for (const t of tabsById.values()) if (t.kind === kind) closeTab(t);
   const tab = createTab({ title: TOOL_TITLES[kind], panelClass: 'tool-panel' });
   tab.kind = kind;
   const session = selectedSession();
@@ -898,7 +898,7 @@ function openToolTab(kind, target) {
   };
   const hooks = buildToolPanel(kind, ctx, tab);
   Object.assign(tab, {
-    onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus, onVpnStatus: hooks.onVpnStatus,
+    onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus, onVpnStatus: hooks.onVpnStatus, onServersEvent: hooks.onServersEvent,
   });
   showTab(tab);
 }
@@ -920,6 +920,9 @@ api.onVpnStatus((s) => {
   for (const t of tabsById.values()) t.onVpnStatus?.(s);
 });
 $('vpn-indicator').addEventListener('click', () => openToolTab('vpn'));
+api.onServersEvent((ev) => {
+  for (const t of tabsById.values()) t.onServersEvent?.(ev);
+});
 api.vpnInfo().then((info) => {
   vpnStatus = info.status ?? null;
   renderVpnIndicator();

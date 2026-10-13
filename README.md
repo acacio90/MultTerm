@@ -15,6 +15,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
+- **Servidores locais** TFTP e HTTP para trocar arquivos com equipamentos
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
   na barra e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
@@ -98,6 +99,21 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
 
 Nenhuma ferramenta exige rodar o app como administrador (a captura usa o Npcap no modo padrão,
 sem a opção "restringir a administradores"; o modo pktmon pede a elevação só durante a captura).
+
+### Servidores
+
+**Ferramentas → Servidores** inicia e para servidores locais, cada um com porta, pasta raiz,
+"parar depois de N segundos" (1 hora por padrão) e log com horário; as configurações ficam
+lembradas e todos param ao sair do MultTerm. Os arquivos ficam em `Documentos\MultTerm\Servidor`
+(ou na pasta escolhida) e nenhum servidor sai da pasta raiz.
+
+- **TFTP** (porta 69): baixar e enviar firmware e configurações de equipamentos, com negociação
+  de bloco (até 64 KB), tamanho e timeout, arquivos grandes, opção de bloquear envio ou
+  sobrescrita e aviso do Windows a cada transferência.
+- **HTTP** (porta 8080): serve a pasta só para leitura, com listagem opcional, `index.html` e
+  retomada de download.
+
+Na primeira vez, o Firewall do Windows pergunta se o MultTerm pode receber conexões na rede.
 
 ### VPN
 

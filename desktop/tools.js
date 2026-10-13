@@ -568,6 +568,150 @@ function capturePanel(ctx, tab) {
   };
 }
 
+// ---------- servidores locais ----------
+
+function serversPanel(ctx) {
+  const body = el('div', { className: 'servers' });
+  const status = statusLine();
+  const rows = new Map();
+  let servers = [];
+  let selected = null;
+  let detail = null;
+  let ticker = null;
+
+  const remaining = (state) => {
+    if (!state?.stopAt) return '';
+    const s = Math.max(0, Math.round((state.stopAt - Date.now()) / 1000));
+    return ` · para em ${s} s`;
+  };
+  const stateText = (srv) => (srv.state ? `rodando na porta ${srv.state.port}${remaining(srv.state)}` : 'parado');
+
+  function renderRow(srv) {
+    const row = rows.get(srv.kind);
+    row.badge.textContent = stateText(srv);
+    row.badge.className = `server-state ${srv.state ? 'on' : 'off'}`;
+    row.start.disabled = !!srv.state;
+    row.stop.disabled = !srv.state;
+    row.node.classList.toggle('selected', selected === srv.kind);
+  }
+
+  async function start(srv) {
+    status.textContent = '';
+    try {
+      const config = detail?.kind === srv.kind ? detail.read() : srv.config;
+      srv.config = config;
+      await ctx.api.serversStart(srv.kind, config);
+    } catch (err) {
+      status.textContent = `${srv.title}: ${ctx.cleanError(err)}`;
+    }
+  }
+
+  function renderDetail(srv) {
+    const inputs = new Map();
+    const fields = srv.fields.map((f) => {
+      const value = srv.config[f.key];
+      if (f.type === 'bool') {
+        const input = el('input', { type: 'checkbox', name: f.key, checked: value !== false });
+        inputs.set(f.key, input);
+        return el('label', { className: 'check' }, input, f.label);
+      }
+      if (f.type === 'dir') {
+        const input = el('input', { name: f.key, value: value ?? '', autocomplete: 'off' });
+        const pick = el('button', { type: 'button', textContent: 'Escolher…' });
+        pick.addEventListener('click', async () => {
+          const dir = await ctx.api.serversChooseDir(input.value);
+          if (dir) input.value = dir;
+        });
+        inputs.set(f.key, input);
+        return el('label', { className: 'wide' }, f.label, el('span', { className: 'dir-pick' }, input, pick));
+      }
+      const input = el('input', {
+        name: f.key, value: value ?? '', autocomplete: 'off',
+        ...(f.type === 'number' ? { type: 'number', min: f.min, max: f.max } : {}),
+        ...(f.hint ? { title: f.hint } : {}),
+      });
+      inputs.set(f.key, input);
+      return field(f.label, input);
+    });
+    const logBox = el('pre', { className: 'dns-result server-log', textContent: srv.log.join('\n') });
+    const clear = el('button', { type: 'button', className: 'link', textContent: 'limpar' });
+    clear.addEventListener('click', async () => {
+      await ctx.api.serversClearLog(srv.kind);
+      srv.log = [];
+      logBox.textContent = '';
+    });
+    const node = el('div', { className: 'server-detail' },
+      el('h3', { textContent: `Servidor ${srv.title}` }),
+      el('p', { className: 'muted', textContent: srv.description }),
+      el('div', { className: 'tool-form' }, ...fields),
+      el('p', { className: 'muted', textContent: 'As alterações valem na próxima vez que o servidor for iniciado.' }),
+      el('div', { className: 'server-log-head' }, el('strong', { textContent: 'Saída do servidor' }), clear),
+      logBox,
+    );
+    detail = {
+      kind: srv.kind,
+      read: () => Object.fromEntries([...inputs].map(([k, input]) => [k, input.type === 'checkbox' ? input.checked : input.type === 'number' ? (input.value === '' ? '' : Number(input.value)) : input.value])),
+      append: (line) => {
+        logBox.textContent += `${logBox.textContent ? '\n' : ''}${line}`;
+        logBox.scrollTop = logBox.scrollHeight;
+      },
+    };
+    return node;
+  }
+
+  function select(kind) {
+    selected = kind;
+    const srv = servers.find((s) => s.kind === kind);
+    for (const s of servers) renderRow(s);
+    body.querySelector('.server-detail')?.replaceWith(renderDetail(srv));
+  }
+
+  async function load() {
+    servers = await ctx.api.serversList();
+    const list = el('div', { className: 'server-list' });
+    for (const srv of servers) {
+      const badge = el('span', { className: 'server-state' });
+      const startBtn = el('button', { type: 'button', className: 'primary', textContent: 'Iniciar' });
+      const stopBtn = el('button', { type: 'button', textContent: 'Parar' });
+      const name = el('button', { type: 'button', className: 'server-name', textContent: srv.title });
+      const node = el('div', { className: 'server-row' }, name, badge, el('span', { className: 'row-actions' }, startBtn, stopBtn));
+      node.dataset.kind = srv.kind;
+      name.addEventListener('click', () => select(srv.kind));
+      startBtn.addEventListener('click', () => {
+        if (selected !== srv.kind) select(srv.kind);
+        void start(srv);
+      });
+      stopBtn.addEventListener('click', () => ctx.api.serversStop(srv.kind));
+      rows.set(srv.kind, { node, badge, start: startBtn, stop: stopBtn });
+      list.append(node);
+    }
+    body.replaceChildren(list, el('div', { className: 'server-detail' }));
+    select(servers[0].kind);
+    ticker = setInterval(() => {
+      for (const s of servers) if (s.state?.stopAt) renderRow(s);
+    }, 1000);
+  }
+  load().catch((err) => {
+    status.textContent = ctx.cleanError(err);
+  });
+
+  return {
+    title: 'Servidores',
+    content: [body, status],
+    onServersEvent: (ev) => {
+      const srv = servers.find((s) => s.kind === ev.kind);
+      if (!srv) return;
+      srv.state = ev.state;
+      if (ev.line) {
+        srv.log.push(ev.line);
+        if (detail?.kind === ev.kind) detail.append(ev.line);
+      }
+      renderRow(srv);
+    },
+    onClose: () => clearInterval(ticker),
+  };
+}
+
 // ---------- VPN (motor IPsec do MultTerm) ----------
 
 const VPN_STATES = { connecting: 'Conectando…', connected: 'Conectada', disconnecting: 'Desconectando…', off: 'Desconectada' };
@@ -1034,7 +1178,7 @@ function localPortsPanel(ctx, tab) {
   };
 }
 
-const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel, vpn: vpnPanel };
+const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel, vpn: vpnPanel, servers: serversPanel };
 
 /** Cria o painel da ferramenta `kind` dentro de `tab.panel`; devolve os ganchos da aba. */
 export function buildToolPanel(kind, ctx, tab) {
@@ -1045,4 +1189,4 @@ export function buildToolPanel(kind, ctx, tab) {
   return p;
 }
 
-export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes', vpn: 'VPN' };
+export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes', vpn: 'VPN', servers: 'Servidores' };

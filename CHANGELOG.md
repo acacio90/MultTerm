@@ -24,6 +24,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Captura de pacotes sem instalar nada: modo de reserva com o `pktmon` do Windows, com filtros
   de IP, porta e protocolo, uma confirmação do UAC por captura e o mesmo `.pcapng` no fim;
   com os dois disponíveis, um seletor escolhe o motor. (#15)
+- Servidores locais em Ferramentas → Servidores (iniciar/parar, porta, pasta raiz, parada
+  automática, log e configurações lembradas): TFTP com opções blksize/tsize/timeout e arquivos
+  grandes, e HTTP de arquivos com listagem e Range. (#20, #21, #22)
 - VPN IPsec sem instalar nada: motor próprio (IKEv1 Main Mode com PSK e XAuth, Mode Config,
   Quick Mode com PFS, ESP em UDP com NAT-T, DPD e renovação de chaves) com adaptador Wintun num
   processo auxiliar elevado (UAC por conexão); mostra estado, log, erros traduzidos e as redes
