@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('multterm', {
   dnsQuery: (name, type, server) => ipcRenderer.invoke('tools:dns', name, type, server),
   snmp: (id, req) => ipcRenderer.invoke('tools:snmp', id, req),
   wol: (req) => ipcRenderer.invoke('tools:wol', req),
+  captureInfo: () => ipcRenderer.invoke('capture:info'),
+  captureStart: (id, req) => ipcRenderer.invoke('capture:start', id, req),
+  captureOpen: (file) => ipcRenderer.invoke('capture:open', file),
+  captureShow: (file) => ipcRenderer.send('capture:show', file),
   localPorts: () => ipcRenderer.invoke('tools:local-ports'),
   saveCsv: (name, csv) => ipcRenderer.invoke('tools:save-csv', name, csv),
 

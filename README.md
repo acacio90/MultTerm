@@ -14,7 +14,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
-  portas, scanner de rede, portas abertas locais e Wake-on-LAN
+  portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -84,8 +84,13 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
 
 - **Wake-on-LAN** — envia o pacote mágico para um MAC (broadcast e porta configuráveis); com o
   campo **MAC** preenchido na sessão, liga a máquina pelo botão direito.
+- **Captura de pacotes** — escolhe a interface, um filtro de captura (BPF, ex.: `host 10.0.0.5`)
+  e limites opcionais; mostra a contagem ao vivo e grava `.pcapng` em
+  `DocumentosMultTermCapturas`, com atalho para abrir no Wireshark. Requer o **Wireshark com
+  o Npcap** instalados (o app usa o `dumpcap`); sem eles, a ferramenta explica como instalar.
 
-Nenhuma ferramenta exige rodar o app como administrador.
+Nenhuma ferramenta exige rodar o app como administrador (a captura usa o Npcap no modo padrão,
+sem a opção "restringir a administradores").
 
 ### Exportar sessões
 

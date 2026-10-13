@@ -1,7 +1,10 @@
-import { dialog, ipcMain, type WebContents } from 'electron';
-import { writeFile } from 'node:fs/promises';
+import { app, dialog, ipcMain, shell, type WebContents } from 'electron';
+import { execFile, spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { captureFileName, findCaptureTools, parseInterfaces, runCapture, validateCapture } from '../network/capture.ts';
 import { diagCommand, validateDiag } from '../network/diag.ts';
 import { dnsQuery } from '../network/dns.ts';
 import { parseTargets, scanNetwork } from '../network/hosts.ts';
@@ -61,6 +64,24 @@ function netscanSnmp(raw: unknown): SnmpRequest | undefined {
     operation: 'get',
     oids: 'sysName',
   });
+}
+
+// MULTTERM_PROGRAM_FILES (separado por ";") troca as pastas onde o Wireshark é procurado (testes).
+const captureTools = () => findCaptureTools({
+  programFiles: process.env.MULTTERM_PROGRAM_FILES?.split(';')
+    ?? [process.env.ProgramFiles ?? '', process.env['ProgramFiles(x86)'] ?? ''],
+  fileExists: existsSync,
+});
+// MULTTERM_CAPTURES_DIR muda a pasta (testes isolados).
+const capturesDir = () => process.env.MULTTERM_CAPTURES_DIR || join(app.getPath('documents'), 'MultTerm', 'Capturas');
+
+/** Só abre/mostra arquivos .pcapng que estejam na pasta de capturas. */
+function captureFile(file: unknown): string {
+  const path = typeof file === 'string' ? resolve(file) : '';
+  if (!path.endsWith('.pcapng') || dirname(path) !== resolve(capturesDir()) || !existsSync(path)) {
+    throw new Error('arquivo de captura inválido');
+  }
+  return path;
 }
 
 export function registerToolsIpc(): void {
@@ -127,6 +148,44 @@ export function registerToolsIpc(): void {
       },
     }));
   });
+
+  // Captura de pacotes (dumpcap/Npcap). Arquivos em Documentos/MultTerm/Capturas.
+  ipcMain.handle('capture:info', async () => {
+    const tools = captureTools();
+    if (!tools.dumpcap) return { ...tools, interfaces: [] };
+    const interfaces = await new Promise<ReturnType<typeof parseInterfaces>>((done, fail) => {
+      execFile(tools.dumpcap!, ['-D'], { timeout: 15_000, windowsHide: true }, (err, stdout, stderr) => {
+        if (err) fail(new Error(`não foi possível listar as interfaces: ${(stderr || err.message).trim()}`));
+        else done(parseInterfaces(stdout));
+      });
+    });
+    return { ...tools, interfaces, folder: capturesDir() };
+  });
+
+  ipcMain.handle('capture:start', async (e, id: unknown, raw: unknown) => {
+    const { dumpcap } = captureTools();
+    if (!dumpcap) throw new Error('dumpcap não encontrado: instale o Wireshark (com o Npcap)');
+    const req = validateCapture(raw);
+    await mkdir(capturesDir(), { recursive: true });
+    const file = join(capturesDir(), captureFileName());
+    return runJob(e.sender, id, (signal) => runCapture(dumpcap, req, file, {
+      signal,
+      onPackets: (n) => {
+        if (!e.sender.isDestroyed()) e.sender.send('tools:progress', id, n, 0);
+      },
+    }));
+  });
+
+  ipcMain.handle('capture:open', async (_e, file: unknown) => {
+    const path = captureFile(file);
+    const { wireshark } = captureTools();
+    if (wireshark) spawn(wireshark, [path], { detached: true, stdio: 'ignore' }).unref();
+    else {
+      const err = await shell.openPath(path);
+      if (err) throw new Error(err);
+    }
+  });
+  ipcMain.on('capture:show', (_e, file: unknown) => shell.showItemInFolder(captureFile(file)));
 
   ipcMain.handle('tools:wol', async (_e, raw: unknown) => {
     const req = validateWol(raw);

@@ -415,6 +415,126 @@ function snmpPanel(ctx, tab) {
   };
 }
 
+// ---------- captura de pacotes ----------
+
+function capturePanel(ctx, tab) {
+  const body = el('div');
+  const status = statusLine();
+  let running = false;
+  let started = 0;
+  let packets = 0;
+  let timer = null;
+
+  const elapsed = () => {
+    const s = Math.floor((Date.now() - started) / 1000);
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  };
+  const showRunning = () => {
+    status.textContent = `Capturando… ${packets} pacote(s) · ${elapsed()}`;
+  };
+
+  function renderMissing() {
+    const again = el('button', { type: 'button', textContent: 'Verificar de novo' });
+    again.addEventListener('click', load);
+    body.replaceChildren(
+      el('p', {
+        textContent: 'Para capturar pacotes, instale o Wireshark (wireshark.org) marcando a instalação do Npcap. ' +
+          'O MultTerm usa o dumpcap do Wireshark e, com o Npcap no modo padrão, não precisa rodar como administrador.',
+      }),
+      el('div', { className: 'actions' }, again),
+    );
+  }
+
+  function renderForm(info) {
+    const iface = el('select', { name: 'iface' },
+      ...info.interfaces.map((i) => el('option', { value: i.device, textContent: i.name })));
+    const filter = el('input', { name: 'filter', placeholder: 'opcional (BPF): host 10.0.0.5 and port 22', autocomplete: 'off' });
+    const maxPackets = el('input', { name: 'maxPackets', type: 'number', min: 1, placeholder: 'sem limite' });
+    const maxSeconds = el('input', { name: 'maxSeconds', type: 'number', min: 1, placeholder: 'sem limite' });
+    const start = el('button', { type: 'submit', className: 'primary', textContent: 'Iniciar' });
+    const stop = el('button', { type: 'button', textContent: 'Parar', disabled: true });
+    const result = el('div', { className: 'actions' });
+    stop.addEventListener('click', () => ctx.api.cancelTool(tab.id));
+
+    const form = el('form', { className: 'tool-form' },
+      field('Interface', iface), el('label', { className: 'wide' }, 'Filtro', filter),
+      field('Parar após (pacotes)', maxPackets), field('Parar após (segundos)', maxSeconds),
+      el('div', { className: 'actions' }, start, stop),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      result.replaceChildren();
+      running = true;
+      packets = 0;
+      started = Date.now();
+      start.disabled = true;
+      stop.disabled = false;
+      showRunning();
+      timer = setInterval(showRunning, 1000);
+      try {
+        const { results } = await ctx.api.captureStart(tab.id, {
+          iface: iface.value, filter: filter.value, maxPackets: maxPackets.value, maxSeconds: maxSeconds.value,
+        });
+        status.textContent = `${results.packets} pacote(s) em ${elapsed()} salvos em ${results.file}`;
+        const open = el('button', { type: 'button', className: 'primary', textContent: info.wireshark ? 'Abrir no Wireshark' : 'Abrir' });
+        const show = el('button', { type: 'button', textContent: 'Mostrar na pasta' });
+        open.addEventListener('click', () => ctx.api.captureOpen(results.file).catch((err) => {
+          status.textContent = ctx.cleanError(err);
+        }));
+        show.addEventListener('click', () => ctx.api.captureShow(results.file));
+        result.replaceChildren(open, show);
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+      clearInterval(timer);
+      running = false;
+      start.disabled = false;
+      stop.disabled = true;
+    });
+
+    body.replaceChildren(
+      form,
+      el('p', {
+        className: 'muted',
+        textContent: `Grava em ${info.folder} (formato pcapng). O filtro usa a sintaxe de captura do Wireshark/BPF, ` +
+          'por exemplo: "host 10.0.0.5", "port 161", "tcp and not port 22".',
+      }),
+      result,
+    );
+    iface.focus();
+  }
+
+  async function load() {
+    status.textContent = 'Procurando o Wireshark…';
+    try {
+      const info = await ctx.api.captureInfo();
+      status.textContent = '';
+      if (!info.dumpcap) renderMissing();
+      else if (!info.interfaces.length) {
+        renderMissing();
+        status.textContent = 'O dumpcap não listou nenhuma interface (o Npcap está instalado e ativo?).';
+      } else renderForm(info);
+    } catch (err) {
+      status.textContent = ctx.cleanError(err);
+    }
+  }
+  load();
+
+  return {
+    title: 'Captura de pacotes',
+    content: [body, status],
+    onProgress: (n) => {
+      if (!running) return;
+      packets = n;
+      showRunning();
+    },
+    onClose: () => {
+      clearInterval(timer);
+      ctx.api.cancelTool(tab.id); // para a captura ao fechar a aba
+    },
+  };
+}
+
 // ---------- Wake-on-LAN ----------
 
 function wolPanel(ctx) {
@@ -573,7 +693,7 @@ function localPortsPanel(ctx, tab) {
   };
 }
 
-const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel };
+const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel };
 
 /** Cria o painel da ferramenta `kind` dentro de `tab.panel`; devolve os ganchos da aba. */
 export function buildToolPanel(kind, ctx, tab) {
@@ -584,4 +704,4 @@ export function buildToolPanel(kind, ctx, tab) {
   return p;
 }
 
-export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN' };
+export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes' };

@@ -15,7 +15,7 @@ export interface LaunchedApp {
  * Abre o app real com um arquivo de sessões e uma pasta de dados próprios do teste:
  * nada (pastas recolhidas, config, caches) vaza entre testes nem para o perfil do usuário.
  */
-export async function launchApp(sessionsYaml: string): Promise<LaunchedApp> {
+export async function launchApp(sessionsYaml: string, extraEnv: Record<string, string> = {}): Promise<LaunchedApp> {
   const dir = await mkdtemp(join(tmpdir(), 'multterm-ui-'));
   const sessionsFile = join(dir, 'sessions.yaml');
   await writeFile(sessionsFile, sessionsYaml);
@@ -23,7 +23,7 @@ export async function launchApp(sessionsYaml: string): Promise<LaunchedApp> {
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
   const app = await electron.launch({
     args: ['.'],
-    env: { ...env, MULTTERM_SESSIONS: sessionsFile, MULTTERM_USER_DATA: join(dir, 'userdata'), MULTTERM_UPDATE_URL: '' },
+    env: { ...env, MULTTERM_SESSIONS: sessionsFile, MULTTERM_USER_DATA: join(dir, 'userdata'), MULTTERM_UPDATE_URL: '', ...extraEnv },
   });
   const page = await app.firstWindow();
   expect(await app.evaluate(({ app: a }) => a.getPath('userData'))).toBe(join(dir, 'userdata'));

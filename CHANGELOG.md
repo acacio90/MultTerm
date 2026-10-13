@@ -18,6 +18,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Wake-on-LAN: campo **MAC** opcional nas sessões (validado e normalizado), ferramenta avulsa
   e ação **Ligar** no novo menu de contexto das sessões, que também traz Conectar, Ping,
   Traceroute, Scanner de portas e Consulta SNMP com o host da sessão. (#10)
+- Captura de pacotes com o `dumpcap` do Wireshark (Npcap): interface, filtro BPF e limites,
+  contagem ao vivo, arquivo `.pcapng` e atalho para abrir no Wireshark; sem Wireshark, a
+  ferramenta orienta a instalação. (#8)
 - Exportar sessões (todas, pela barra, ou uma pasta com subpastas, pelo menu de contexto) para
   um YAML que a importação lê.
 - Menu de contexto nas pastas da árvore: nova subpasta, nova sessão aqui, renomear (move
