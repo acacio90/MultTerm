@@ -16,7 +16,8 @@ import {
 } from '../sessions/launch.ts';
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
 import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
-import { loadSessionFile, mergeSessions, readSessionFile, saveSessionFile, validateSessions } from '../sessions/store.ts';
+import { readImportFile } from '../sessions/import.ts';
+import { loadSessionFile, mergeSessions, saveSessionFile, validateSessions } from '../sessions/store.ts';
 
 const appRoot = app.getAppPath();
 const configPath = () => join(app.getPath('userData'), 'config.json');
@@ -93,13 +94,16 @@ function registerIpc(): void {
     const result = await dialog.showOpenDialog({
       title: 'Importar sessões',
       defaultPath: dirname(sessionsPath),
-      filters: [{ name: 'Sessões YAML', extensions: ['yaml', 'yml'] }],
+      filters: [
+        { name: 'Sessões ou inventário do Ansible', extensions: ['yaml', 'yml', 'ini', 'cfg', 'hosts'] },
+        { name: 'Todos os arquivos', extensions: ['*'] },
+      ],
       properties: ['openFile'],
     });
     if (result.canceled || !result.filePaths[0]) return null;
-    const imported = await readSessionFile(result.filePaths[0]);
+    const { format, sessions: imported, warnings } = await readImportFile(result.filePaths[0]);
     const { merged, added, skipped } = mergeSessions(await loadSessionFile(sessionsPath), imported);
-    return { ...(await persist(merged)), added: added.length, skipped: skipped.length };
+    return { ...(await persist(merged)), format, added: added.length, skipped: skipped.length, warnings };
   });
 
   ipcMain.handle('session:connect', async (_e, raw: unknown) => {

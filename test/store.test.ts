@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { groupByFolder, loadSessionFile, mergeSessions, parseSessions, readSessionFile, saveSessionFile, serializeSessions, validateSessions } from '../src/sessions/store.ts';
+import { groupByFolder, loadSessionFile, mergeSessions, parseSessions, saveSessionFile, serializeSessions, validateSessions } from '../src/sessions/store.ts';
 
 const A: Session = { name: 'ZABBIX', folder: 'Servidores/Monitoramento', type: 'ssh', host: 'zabbix.example.org', port: 22, user: 'pedro' };
 const B: Session = { name: 'ANSIBLE', folder: 'Servidores/Infraestrutura', type: 'ssh', host: 'ansible.example.org', port: 2222 };
@@ -79,19 +79,4 @@ test('host e usuário não podem virar opções do ssh', () => {
   assert.throws(() => validateSessions([{ name: 'a', host: 'h', user: '-oX' }], 'ui'), /"user" inválido/);
   assert.throws(() => validateSessions([{ name: 'a', host: 'h', user: 'a@b' }], 'ui'), /"user" inválido/);
   assert.equal(validateSessions([{ name: 'a', host: 'h', user: 'DOMINIO\\pedro' }], 'ui')[0].user, 'DOMINIO\\pedro');
-});
-
-test('readSessionFile: importa YAML existente e falha se o arquivo não existe', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'multterm-'));
-  try {
-    const file = join(dir, 'outro.yaml');
-    await saveSessionFile(file, [A, B]);
-    const imported = await readSessionFile(file);
-    const { added, skipped } = mergeSessions([A], imported);
-    assert.deepEqual(added.map((s) => s.name), ['ANSIBLE']);
-    assert.deepEqual(skipped.map((s) => s.name), ['ZABBIX']);
-    await assert.rejects(readSessionFile(join(dir, 'nao-existe.yaml')), /ENOENT/);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
 });

@@ -4,6 +4,14 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa
 [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+
+- Importação de inventário do Ansible (INI ou YAML): grupos viram pastas, hosts viram sessões
+  SSH (ou RDP para `winrm`/`psrp`); detecção automática do formato em **Importar sessões…**
+  e em `multterm import` (com `--folder` para a pasta raiz). (#4)
+
 ## [0.1.0] - 2026-10-12
 
 Primeira versão.
@@ -25,4 +33,5 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.1.0...develop
 [0.1.0]: https://github.com/acacio90/MultTerm/releases/tag/v0.1.0

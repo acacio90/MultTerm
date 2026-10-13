@@ -454,7 +454,9 @@ $('btn-import').addEventListener('click', async () => {
     const result = await api.importSessions();
     if (!result) return;
     apply(result);
-    message(`${result.added} sessões importadas, ${result.skipped} já existiam.`);
+    const origem = result.format === 'ansible' ? ' do inventário do Ansible' : '';
+    message(`${result.added} sessões importadas${origem}, ${result.skipped} já existiam.`);
+    for (const w of result.warnings) message(w, 'warn');
   } catch (err) {
     message(cleanError(err), 'error');
   }

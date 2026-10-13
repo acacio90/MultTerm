@@ -73,11 +73,6 @@ export async function loadSessionFile(path: string): Promise<Session[]> {
   return parseSessions(text, path);
 }
 
-/** Lê um arquivo de sessões para importar; ao contrário de loadSessionFile, exige que ele exista. */
-export async function readSessionFile(path: string): Promise<Session[]> {
-  return parseSessions(await readFile(path, 'utf8'), path);
-}
-
 export async function saveSessionFile(path: string, sessions: Session[]): Promise<void> {
   await writeFile(path, serializeSessions(sessions), 'utf8');
 }

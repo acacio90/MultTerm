@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { effectivePort, SessionError, type Session } from './sessions/model.ts';
-import { groupByFolder, loadSessionFile, mergeSessions, readSessionFile, saveSessionFile, serializeSessions } from './sessions/store.ts';
+import { readImportFile } from './sessions/import.ts';
+import { groupByFolder, loadSessionFile, mergeSessions, saveSessionFile, serializeSessions } from './sessions/store.ts';
 
 const USAGE = `uso: multterm <comando> [opções]
 
 comandos:
   list                         lista as sessões agrupadas por pasta
   validate                     valida o arquivo de sessões
-  import <arquivo.yaml>        importa sessões de outro arquivo YAML (mantém as existentes)
+  import <arquivo>             importa sessões YAML ou inventário do Ansible (INI/YAML), mantendo as existentes
 
 opções:
   --file <caminho>   arquivo de sessões (padrão: $MULTTERM_SESSIONS ou ./sessions.yaml)
+  --folder <pasta>   (import) pasta raiz para as sessões importadas
   --dry-run          (import) mostra o resultado sem gravar
 `;
 
@@ -27,6 +29,7 @@ async function main(argv: string[]): Promise<number> {
     options: {
       file: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
+      folder: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -57,10 +60,12 @@ async function main(argv: string[]): Promise<number> {
     case 'import': {
       const source = rest[0];
       if (!source) {
-        process.stderr.write('informe o arquivo de sessões (.yaml) a importar\n');
+        process.stderr.write('informe o arquivo a importar (sessões YAML ou inventário do Ansible)\n');
         return 1;
       }
-      const imported = await readSessionFile(source);
+      const { format, sessions: imported, warnings } = await readImportFile(source, values.folder ?? '');
+      console.error(`formato: ${format === 'ansible' ? 'inventário do Ansible' : 'sessões do MultTerm'}`);
+      for (const w of warnings) console.warn(`aviso: ${w}`);
 
       const existing = await loadSessionFile(file);
       const { merged, added, skipped } = mergeSessions(existing, imported);

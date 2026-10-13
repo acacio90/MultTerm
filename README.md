@@ -9,7 +9,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - **Terminal SSH embutido em abas** (xterm.js + node-pty), usando o OpenSSH do sistema
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - RDP pelo cliente do sistema (`mstsc` no Windows)
-- Importação de sessões de outro arquivo YAML (mescla, mantendo as existentes)
+- Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -52,6 +52,18 @@ a variável `MULTTERM_SESSIONS`.
 - **Janela externa** abre a sessão no Windows Terminal.
 - **F1** ou o botão **Ajuda** abre a tela de ajuda.
 
+### Importar sessões
+
+**Importar sessões…** (ou `multterm import <arquivo>`) detecta o formato do arquivo e mescla
+com as sessões existentes (mesma pasta + nome não é sobrescrito):
+
+- **Sessões do MultTerm** (YAML com `sessions:`).
+- **Inventário do Ansible** (INI ou YAML): cada grupo vira uma pasta (grupos filhos viram
+  subpastas) e cada host uma sessão SSH, usando `ansible_host`, `ansible_port`,
+  `ansible_user` e `ansible_ssh_private_key_file` (variáveis do host valem sobre as do grupo).
+  Hosts com `ansible_connection=winrm`/`psrp` viram sessões RDP; faixas como `web[01:03]`
+  são expandidas; valores com template Jinja são ignorados com aviso.
+
 ### Login sem senha (agente SSH)
 
 1. PowerShell como administrador:
@@ -73,6 +85,7 @@ npm test
 npm run typecheck
 npm run multterm -- list
 npm run multterm -- import outro.yaml --dry-run
+npm run multterm -- import inventario.ini --folder Ansible --dry-run
 ```
 
 ### Commits
