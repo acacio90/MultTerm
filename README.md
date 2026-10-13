@@ -86,7 +86,7 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
   campo **MAC** preenchido na sessão, liga a máquina pelo botão direito.
 - **Captura de pacotes** — escolhe a interface, um filtro de captura (BPF, ex.: `host 10.0.0.5`)
   e limites opcionais; mostra a contagem ao vivo e grava `.pcapng` em
-  `DocumentosMultTermCapturas`, com atalho para abrir no Wireshark. Requer o **Wireshark com
+  `Documentos\MultTerm\Capturas`, com atalho para abrir no Wireshark. Requer o **Wireshark com
   o Npcap** instalados (o app usa o `dumpcap`); sem eles, a ferramenta explica como instalar.
 
 Nenhuma ferramenta exige rodar o app como administrador (a captura usa o Npcap no modo padrão,
