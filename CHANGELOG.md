@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.3.0] - 2026-10-13
+
 ### Adicionado
 
 - Menu **Ferramentas** com ferramentas de rede, cada uma numa aba: ping e traceroute num
@@ -92,6 +94,7 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.2.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.3.0...develop
+[0.3.0]: https://github.com/acacio90/MultTerm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/acacio90/MultTerm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/acacio90/MultTerm/releases/tag/v0.1.0
