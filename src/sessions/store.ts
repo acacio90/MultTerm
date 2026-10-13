@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parse, stringify } from 'yaml';
-import { DEFAULT_PORTS, SessionError, sessionKey, validateSession, type Session } from './model.ts';
+import { DEFAULT_PORTS, normalizeFolder, SessionError, sessionKey, validateSession, type Session } from './model.ts';
 
 export const FILE_VERSION = 1;
 
@@ -109,4 +109,17 @@ export function groupByFolder(sessions: Session[]): Map<string, Session[]> {
     groups.set(s.folder, list);
   }
   return groups;
+}
+
+/** Sessões de uma pasta e das subpastas (pasta vazia = todas). */
+export function sessionsInFolder(sessions: Session[], folder: string): Session[] {
+  const path = normalizeFolder(folder);
+  return path ? sessions.filter((s) => s.folder === path || s.folder.startsWith(`${path}/`)) : [...sessions];
+}
+
+/** Nome sugerido para o arquivo exportado: multterm-sessoes-2026-10-13.yaml / multterm-Servidores-Banco-….yaml */
+export function exportFileName(folder: string, date = new Date()): string {
+  const day = date.toISOString().slice(0, 10);
+  const slug = normalizeFolder(folder).replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '');
+  return `multterm-${slug || 'sessoes'}-${day}.yaml`;
 }

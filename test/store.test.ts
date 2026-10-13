@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { groupByFolder, loadSessionFile, mergeSessions, parseSessions, saveSessionFile, serializeSessions, validateSessions } from '../src/sessions/store.ts';
+import { exportFileName, groupByFolder, loadSessionFile, mergeSessions, parseSessions, saveSessionFile, serializeSessions, sessionsInFolder, validateSessions } from '../src/sessions/store.ts';
 
 const A: Session = { name: 'ZABBIX', folder: 'Servidores/Monitoramento', type: 'ssh', host: 'zabbix.example.org', port: 22, user: 'pedro' };
 const B: Session = { name: 'ANSIBLE', folder: 'Servidores/Infraestrutura', type: 'ssh', host: 'ansible.example.org', port: 2222 };
@@ -79,4 +79,14 @@ test('host e usuário não podem virar opções do ssh', () => {
   assert.throws(() => validateSessions([{ name: 'a', host: 'h', user: '-oX' }], 'ui'), /"user" inválido/);
   assert.throws(() => validateSessions([{ name: 'a', host: 'h', user: 'a@b' }], 'ui'), /"user" inválido/);
   assert.equal(validateSessions([{ name: 'a', host: 'h', user: 'DOMINIO\\pedro' }], 'ui')[0].user, 'DOMINIO\\pedro');
+});
+
+test('sessionsInFolder e exportFileName', () => {
+  assert.deepEqual(sessionsInFolder([A, B, C], 'Servidores').map((s) => s.name).sort(), ['ANSIBLE', 'ZABBIX']);
+  assert.deepEqual(sessionsInFolder([A, B, C], 'Servidores/Monitoramento').map((s) => s.name), ['ZABBIX']);
+  assert.deepEqual(sessionsInFolder([A, B, C], 'Servid'), []);
+  assert.equal(sessionsInFolder([A, B, C], '').length, 3);
+  const day = new Date('2026-10-13T12:00:00Z');
+  assert.equal(exportFileName('', day), 'multterm-sessoes-2026-10-13.yaml');
+  assert.equal(exportFileName('Servidores/Produção', day), 'multterm-Servidores-Produção-2026-10-13.yaml');
 });

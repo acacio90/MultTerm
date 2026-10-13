@@ -18,7 +18,7 @@ import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installU
 import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { readImportFile } from '../sessions/import.ts';
-import { loadSessionFile, mergeSessions, saveSessionFile, validateSessions } from '../sessions/store.ts';
+import { exportFileName, loadSessionFile, mergeSessions, saveSessionFile, sessionsInFolder, validateSessions } from '../sessions/store.ts';
 
 // Pasta de dados alternativa (testes isolados, perfis separados). Precisa vir antes do "ready".
 if (process.env.MULTTERM_USER_DATA) app.setPath('userData', resolve(process.env.MULTTERM_USER_DATA));
@@ -92,6 +92,22 @@ function registerIpc(): void {
     await mkdir(app.getPath('userData'), { recursive: true });
     await writeFile(configPath(), JSON.stringify({ sessionsFile: sessionsPath }, null, 2), 'utf8');
     return snapshot();
+  });
+
+  // Exporta todas as sessões, ou só uma pasta (com subpastas), no mesmo YAML que a importação lê.
+  ipcMain.handle('sessions:export', async (_e, folder: unknown) => {
+    const scope = typeof folder === 'string' ? folder : '';
+    const sessions = sessionsInFolder(await loadSessionFile(sessionsPath), scope);
+    if (sessions.length === 0) throw new Error(scope ? `a pasta "${scope}" não tem sessões para exportar` : 'não há sessões para exportar');
+    const result = await dialog.showSaveDialog({
+      title: scope ? `Exportar a pasta "${scope}"` : 'Exportar sessões',
+      defaultPath: join(app.getPath('documents'), exportFileName(scope)),
+      filters: [{ name: 'Sessões YAML', extensions: ['yaml', 'yml'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    if (resolve(result.filePath) === resolve(sessionsPath)) throw new Error('escolha outro arquivo: este é o arquivo de sessões em uso');
+    await saveSessionFile(result.filePath, sessions);
+    return { path: result.filePath, count: sessions.length };
   });
 
   ipcMain.handle('sessions:import', async () => {

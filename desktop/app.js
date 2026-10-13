@@ -614,6 +614,22 @@ $('btn-show-sessions').addEventListener('click', () => api.showSessionsFile());
 api.onUpdateStatus(renderUpdate);
 api.updateStatus().then(renderUpdate);
 
+// ---------- exportar ----------
+
+/** Exporta todas as sessões ou só uma pasta (com subpastas) para um YAML que a importação lê. */
+async function exportSessions(folder = '') {
+  showEditor();
+  clearMessages();
+  try {
+    const result = await api.exportSessions(folder);
+    if (result) message(`${result.count} sessão(ões) exportada(s) para ${result.path}`);
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+$('btn-export').addEventListener('click', () => exportSessions());
+
 // ---------- pastas: menu de contexto ----------
 
 const joinFolder = (parent, name) => (parent ? `${parent}/${name}` : name);
@@ -670,8 +686,8 @@ function openFolderMenu(e, folder) {
   e.preventDefault();
   e.stopPropagation();
   const items = folder
-    ? [['subfolder', 'Nova subpasta…'], ['session', 'Nova sessão aqui'], ['rename', 'Renomear…'], ['delete', 'Excluir pasta']]
-    : [['subfolder', 'Nova pasta…'], ['session', 'Nova sessão na raiz']];
+    ? [['subfolder', 'Nova subpasta…'], ['session', 'Nova sessão aqui'], ['rename', 'Renomear…'], ['export', 'Exportar pasta…'], ['delete', 'Excluir pasta']]
+    : [['subfolder', 'Nova pasta…'], ['session', 'Nova sessão na raiz'], ['export', 'Exportar sessões…']];
   treeMenu.replaceChildren(...items.map(([action, label]) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -714,6 +730,11 @@ async function folderAction(action, folder) {
     showForm(null);
     form.folder.value = folder;
     form.name.focus();
+    return;
+  }
+
+  if (action === 'export') {
+    await exportSessions(folder);
     return;
   }
 

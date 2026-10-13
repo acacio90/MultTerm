@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { readImportFile } from '../src/sessions/import.ts';
 import { launchApp, type LaunchedApp } from './fixture.ts';
 
 const SESSIONS = `version: 1
@@ -43,7 +45,7 @@ async function nameDialog(value: string) {
 
 test('nova subpasta aparece vazia e é gravada ao salvar uma sessão dentro dela', async () => {
   await folder('Servidores').click({ button: 'right' });
-  await expect(page.locator('#tree-menu button')).toHaveText(['Nova subpasta…', 'Nova sessão aqui', 'Renomear…', 'Excluir pasta']);
+  await expect(page.locator('#tree-menu button')).toHaveText(['Nova subpasta…', 'Nova sessão aqui', 'Renomear…', 'Exportar pasta…', 'Excluir pasta']);
   await menuItem('subfolder').click();
   await nameDialog('Banco');
   await expect(folder('Banco')).toHaveClass(/pending/);
@@ -99,7 +101,7 @@ test('excluir só remove pasta vazia', async () => {
 
 test('botão direito na área vazia cria pasta na raiz; nome com barra é recusado', async () => {
   await page.locator('#tree').click({ button: 'right', position: { x: 60, y: 300 } });
-  await expect(page.locator('#tree-menu button')).toHaveText(['Nova pasta…', 'Nova sessão na raiz']);
+  await expect(page.locator('#tree-menu button')).toHaveText(['Nova pasta…', 'Nova sessão na raiz', 'Exportar sessões…']);
   await menuItem('subfolder').click();
   await page.fill('#name-dialog [name=folderName]', 'A/B');
   await page.click('#name-dialog button[type=submit]');
@@ -107,4 +109,38 @@ test('botão direito na área vazia cria pasta na raiz; nome com barra é recusa
   await nameDialog('Laboratório');
   await expect(folder('Laboratório')).toHaveClass(/pending/);
   await page.keyboard.press('Escape');
+});
+
+test.describe('exportar', () => {
+  async function stubSave(path: string) {
+    await ctx.app.evaluate(({ dialog }, target) => {
+      dialog.showSaveDialog = (async () => ({ canceled: false, filePath: target })) as typeof dialog.showSaveDialog;
+    }, path);
+  }
+
+  test('exporta todas as sessões num YAML importável', async () => {
+    const out = join(ctx.dir, 'backup.yaml');
+    await stubSave(out);
+    await page.click('#btn-export');
+    await expect(page.locator('#messages')).toHaveText(`3 sessão(ões) exportada(s) para ${out}`);
+    const { format, sessions } = await readImportFile(out);
+    expect(format).toBe('multterm');
+    expect(sessions.map((s) => s.name).sort()).toEqual(['ad-01', 'web-01', 'web-02']);
+  });
+
+  test('exporta só uma pasta (com subpastas) pelo menu de contexto', async () => {
+    const out = join(ctx.dir, 'producao.yaml');
+    await stubSave(out);
+    await folder('Produção').click({ button: 'right' });
+    await menuItem('export').click();
+    await expect(page.locator('#messages')).toHaveText(`2 sessão(ões) exportada(s) para ${out}`);
+    const { sessions } = await readImportFile(out);
+    expect(sessions.map((s) => s.folder).sort()).toEqual(['Servidores/Produção', 'Servidores/Produção/Web']);
+  });
+
+  test('não sobrescreve o arquivo de sessões em uso', async () => {
+    await stubSave(ctx.sessionsFile);
+    await page.click('#btn-export');
+    await expect(page.locator('#messages .error')).toContainText('este é o arquivo de sessões em uso');
+  });
 });

@@ -12,6 +12,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - RDP pelo cliente do sistema (`mstsc` no Windows)
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
+- Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede e portas abertas locais
 - Tela de ajuda e atualização automática pelas releases do GitHub
@@ -80,6 +81,16 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
   (Windows), com filtro e atualização automática.
 
 Nenhuma ferramenta exige rodar o app como administrador.
+
+### Exportar sessões
+
+**Exportar sessões…** (barra superior) grava todas as sessões num YAML; **Exportar pasta…**
+(botão direito numa pasta) grava só a pasta e as subpastas, com os caminhos completos. O
+arquivo é o mesmo formato que **Importar sessões…** lê — serve de backup e para levar as
+sessões a outra máquina. Não há senhas no arquivo (o app não guarda senhas).
+
+**Abrir arquivo…** é diferente: troca o arquivo de sessões que o app usa (por exemplo, um
+`sessions.yaml` versionado no git), e a escolha é lembrada.
 
 ### Importar sessões
 

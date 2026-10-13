@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('multterm', {
   save: (sessions) => ipcRenderer.invoke('sessions:save', sessions),
   chooseFile: () => ipcRenderer.invoke('sessions:choose-file'),
   importSessions: () => ipcRenderer.invoke('sessions:import'),
+  exportSessions: (folder) => ipcRenderer.invoke('sessions:export', folder),
   connect: (session) => ipcRenderer.invoke('session:connect', session),
 
   termOpen: (id, session, cols, rows) => ipcRenderer.invoke('term:open', id, session, cols, rows),
