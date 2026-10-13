@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('multterm', {
   onToolProgress: (cb) => ipcRenderer.on('tools:progress', (_e, id, done, total) => cb(id, done, total)),
   dnsQuery: (name, type, server) => ipcRenderer.invoke('tools:dns', name, type, server),
   snmp: (id, req) => ipcRenderer.invoke('tools:snmp', id, req),
+  wol: (req) => ipcRenderer.invoke('tools:wol', req),
   localPorts: () => ipcRenderer.invoke('tools:local-ports'),
   saveCsv: (name, csv) => ipcRenderer.invoke('tools:save-csv', name, csv),
 

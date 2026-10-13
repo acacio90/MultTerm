@@ -26,6 +26,7 @@
         <button type="button" role="menuitem" data-tool="portscan">Scanner de portas</button>
         <button type="button" role="menuitem" data-tool="netscan">Scanner de rede</button>
         <button type="button" role="menuitem" data-tool="localports">Portas abertas locais</button>
+        <button type="button" role="menuitem" data-tool="wol">Wake-on-LAN</button>
       </div>
     </div>
     <span class="spacer"></span>
@@ -61,6 +62,7 @@
             <label>Porta <input name="port" type="number" min="1" max="65535"></label>
             <label>Usuário <input name="user"></label>
             <label class="ssh-only wide">Chave privada <input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"></label>
+            <label>MAC (Wake-on-LAN) <input name="mac" placeholder="opcional, ex.: aa:bb:cc:dd:ee:ff" autocomplete="off"></label>
             <label class="wide">Tags <input name="tags" placeholder="separadas por vírgula"></label>
           </div>
           <datalist id="folders"></datalist>

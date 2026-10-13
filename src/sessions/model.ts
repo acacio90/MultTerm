@@ -13,7 +13,16 @@ export interface Session {
   port?: number;
   user?: string;
   identityFile?: string;
+  /** Endereço MAC para Wake-on-LAN, normalizado como "aa:bb:cc:dd:ee:ff". */
+  mac?: string;
   tags?: string[];
+}
+
+/** Aceita aa:bb:cc:dd:ee:ff, AA-BB-…, aabb.ccdd.eeff (Cisco) ou 12 dígitos hex; devolve "aa:bb:cc:dd:ee:ff". */
+export function normalizeMac(text: string): string | undefined {
+  const hex = text.trim().toLowerCase();
+  if (!/^(?:[0-9a-f]{2}([:-]?)(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4})$/.test(hex)) return undefined;
+  return hex.replace(/[^0-9a-f]/g, '').match(/../g)!.join(':');
 }
 
 export class SessionError extends Error {
@@ -105,10 +114,14 @@ export function validateSession(raw: unknown, where: string): Session {
   };
   const user = checkUser(optionalString(obj, 'user', where), where);
   const identityFile = optionalString(obj, 'identityFile', where);
+  const macText = optionalString(obj, 'mac', where);
+  const mac = macText === undefined ? undefined : normalizeMac(macText);
+  if (macText !== undefined && !mac) throw new SessionError(`${where}: "mac" inválido (${macText})`);
   // Campos opcionais ausentes ficam fora do objeto (comparação e IPC mais limpos).
   if (port !== undefined) session.port = port;
   if (user !== undefined) session.user = user;
   if (identityFile !== undefined) session.identityFile = identityFile;
+  if (mac !== undefined) session.mac = mac;
   if (tags !== undefined) session.tags = tags;
   return session;
 }

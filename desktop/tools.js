@@ -415,6 +415,45 @@ function snmpPanel(ctx, tab) {
   };
 }
 
+// ---------- Wake-on-LAN ----------
+
+function wolPanel(ctx) {
+  const withMac = (ctx.sessions ?? []).filter((s) => s.mac);
+  const pick = el('select', { name: 'session' },
+    el('option', { value: '', textContent: withMac.length ? '— escolher —' : '(nenhuma sessão com MAC)' }),
+    ...withMac.map((s, i) => el('option', { value: String(i), textContent: `${s.folder ? `${s.folder}/` : ''}${s.name} (${s.mac})` })));
+  const mac = el('input', { name: 'mac', required: true, value: ctx.mac ?? '', placeholder: 'aa:bb:cc:dd:ee:ff', autocomplete: 'off' });
+  const address = el('input', { name: 'address', value: '255.255.255.255', autocomplete: 'off' });
+  const port = el('input', { name: 'port', type: 'number', min: 1, max: 65535, value: 9 });
+  const run = el('button', { type: 'submit', className: 'primary', textContent: 'Enviar' });
+  const status = statusLine();
+  pick.addEventListener('change', () => {
+    const s = withMac[Number(pick.value)];
+    if (s) mac.value = s.mac;
+  });
+
+  const form = el('form', { className: 'tool-form' },
+    field('Sessão', pick), field('MAC', mac), field('Broadcast', address), field('Porta UDP', port),
+    el('div', { className: 'actions' }, run),
+  );
+  const hint = el('p', {
+    className: 'muted',
+    textContent: 'Envia o pacote mágico por UDP. 255.255.255.255 alcança a rede local; para outra sub-rede use o broadcast dela (ex.: 10.0.5.255), se o roteador permitir. A máquina precisa ter Wake-on-LAN ativo na BIOS/placa de rede. Cadastre o MAC na sessão para ligá-la pelo botão direito.',
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    run.disabled = true;
+    try {
+      const sent = await ctx.api.wol({ mac: mac.value, address: address.value, port: port.value });
+      status.textContent = `Pacote mágico enviado para ${sent.mac} via ${sent.address}:${sent.port}.`;
+    } catch (err) {
+      status.textContent = ctx.cleanError(err);
+    }
+    run.disabled = false;
+  });
+  return { title: 'Wake-on-LAN', content: [form, hint, status], focus: () => mac.focus() };
+}
+
 // ---------- DNS ----------
 
 const DNS_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'SRV'];
@@ -534,7 +573,7 @@ function localPortsPanel(ctx, tab) {
   };
 }
 
-const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel };
+const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel };
 
 /** Cria o painel da ferramenta `kind` dentro de `tab.panel`; devolve os ganchos da aba. */
 export function buildToolPanel(kind, ctx, tab) {
@@ -545,4 +584,4 @@ export function buildToolPanel(kind, ctx, tab) {
   return p;
 }
 
-export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais' };
+export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN' };

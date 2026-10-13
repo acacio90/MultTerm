@@ -136,6 +136,7 @@ function renderTree() {
       li.title = `${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? DEFAULT_PORTS[s.type]}`;
       li.addEventListener('click', () => select(key));
       li.addEventListener('dblclick', () => connect(s));
+      li.addEventListener('contextmenu', (e) => openSessionMenu(e, s));
       li.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') connect(s);
       });
@@ -170,6 +171,7 @@ function showForm(session) {
   form.port.value = session?.port ?? '';
   form.user.value = session?.user ?? '';
   form.identityFile.value = session?.identityFile ?? '';
+  form.mac.value = session?.mac ?? '';
   form.tags.value = (session?.tags ?? []).join(', ');
   $('btn-connect').disabled = !session;
   $('btn-external').disabled = !session;
@@ -194,6 +196,7 @@ function readForm() {
   if (form.port.value) session.port = Number(form.port.value);
   if (form.user.value.trim()) session.user = form.user.value.trim();
   if (form.type.value === 'ssh' && form.identityFile.value.trim()) session.identityFile = form.identityFile.value.trim();
+  if (form.mac.value.trim()) session.mac = form.mac.value.trim();
   if (tags.length) session.tags = tags;
   return session;
 }
@@ -800,6 +803,51 @@ async function folderAction(action, folder) {
   }
 }
 
+// ---------- sessões: menu de contexto ----------
+
+/** Liga a máquina da sessão por Wake-on-LAN (broadcast local). */
+async function wakeSession(session) {
+  showEditor();
+  clearMessages();
+  try {
+    const sent = await api.wol({ mac: session.mac });
+    message(`Pacote Wake-on-LAN enviado para ${session.name} (${sent.mac}, ${sent.address}:${sent.port}).`);
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+function openSessionMenu(e, session) {
+  e.preventDefault();
+  e.stopPropagation();
+  const items = [
+    ['connect', 'Conectar', () => connect(session)],
+    ...(session.type === 'ssh' ? [['external', 'Janela externa', () => connect(session, { external: true })]] : []),
+    ...(session.mac ? [['wol', 'Ligar (Wake-on-LAN)', () => wakeSession(session)]] : []),
+    ['ping', 'Ping…', () => openDiagDialog('ping', session.host)],
+    ['traceroute', 'Traceroute…', () => openDiagDialog('traceroute', session.host)],
+    ['portscan', 'Scanner de portas', () => openToolTab('portscan', session)],
+    ['snmp', 'Consulta SNMP', () => openToolTab('snmp', session)],
+    ['edit', 'Editar', () => select(keyOf(session))],
+  ];
+  treeMenu.replaceChildren(...items.map(([action, label, run]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.dataset.action = action;
+    b.textContent = label;
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      hideTreeMenu();
+      run();
+    });
+    return b;
+  }));
+  treeMenu.hidden = false;
+  treeMenu.style.left = `${Math.min(e.clientX, window.innerWidth - treeMenu.offsetWidth - 8)}px`;
+  treeMenu.style.top = `${Math.min(e.clientY, window.innerHeight - treeMenu.offsetHeight - 8)}px`;
+}
+
 // ---------- ferramentas de rede ----------
 
 const selectedSession = () => state.sessions.find((s) => keyOf(s) === state.selected);
@@ -825,10 +873,14 @@ function newSessionFrom({ name, host, type }) {
   form.name.focus();
 }
 
-function openToolTab(kind) {
+function openToolTab(kind, target) {
   const tab = createTab({ title: TOOL_TITLES[kind], panelClass: 'tool-panel' });
   const session = selectedSession();
-  const ctx = { api, cleanError, host: session?.host, network: guessNetwork(session?.host), newSession: newSessionFrom };
+  const host = target?.host ?? session?.host;
+  const ctx = {
+    api, cleanError, host, network: guessNetwork(host), newSession: newSessionFrom,
+    mac: target?.mac ?? session?.mac, sessions: state.sessions,
+  };
   const hooks = buildToolPanel(kind, ctx, tab);
   Object.assign(tab, { onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus });
   showTab(tab);
@@ -842,11 +894,11 @@ const diagDialog = $('diag-dialog');
 const diagForm = $('diag-form');
 let diagKind = 'ping';
 
-function openDiagDialog(kind) {
+function openDiagDialog(kind, host) {
   diagKind = kind;
   $('diag-title').textContent = kind === 'ping' ? 'Ping' : 'Traceroute';
   $('diag-count-label').hidden = kind !== 'ping';
-  diagForm.host.value = selectedSession()?.host ?? diagForm.host.value;
+  diagForm.host.value = host ?? selectedSession()?.host ?? diagForm.host.value;
   diagForm.count.value = '';
   diagDialog.showModal();
   diagForm.host.select();

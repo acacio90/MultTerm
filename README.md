@@ -14,7 +14,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
 - Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
-  portas, scanner de rede e portas abertas locais
+  portas, scanner de rede, portas abertas locais e Wake-on-LAN
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -51,6 +51,8 @@ a variável `MULTTERM_SESSIONS`.
 ## Uso
 
 - **Duplo clique** numa sessão abre uma aba de terminal (SSH) ou o cliente RDP.
+- **Botão direito numa sessão**: Conectar, Janela externa, Ligar (Wake-on-LAN, se a sessão
+  tem MAC), Ping, Traceroute, Scanner de portas, Consulta SNMP e Editar.
 - **Botão direito numa pasta**: Nova subpasta, Nova sessão aqui, Renomear (move as sessões e
   subpastas) e Excluir (só pastas vazias). Na área vazia da árvore: Nova pasta. Uma pasta nova
   é gravada no arquivo quando uma sessão é salva dentro dela.
@@ -79,6 +81,9 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
   consultados pelo `sysName`. A coluna **Fonte** indica a origem do nome.
 - **Portas abertas locais** — conexões e portas em escuta desta máquina com o processo dono
   (Windows), com filtro e atualização automática.
+
+- **Wake-on-LAN** — envia o pacote mágico para um MAC (broadcast e porta configuráveis); com o
+  campo **MAC** preenchido na sessão, liga a máquina pelo botão direito.
 
 Nenhuma ferramenta exige rodar o app como administrador.
 

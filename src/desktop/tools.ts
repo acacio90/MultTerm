@@ -8,6 +8,7 @@ import { parseTargets, scanNetwork } from '../network/hosts.ts';
 import { listConnections } from '../network/local-ports.ts';
 import { parsePorts, scanPorts } from '../network/ports.ts';
 import { runSnmp, validateSnmpRequest, type SnmpRequest } from '../network/snmp.ts';
+import { sendWol, validateWol } from '../network/wol.ts';
 import { isSafeHost } from '../sessions/model.ts';
 import { openTerminal } from './terminals.ts';
 
@@ -127,7 +128,13 @@ export function registerToolsIpc(): void {
     }));
   });
 
-  ipcMain.handle('tools:dns',(_e, name: unknown, type: unknown, server: unknown) =>
+  ipcMain.handle('tools:wol', async (_e, raw: unknown) => {
+    const req = validateWol(raw);
+    await sendWol(req);
+    return req;
+  });
+
+  ipcMain.handle('tools:dns', (_e, name: unknown, type: unknown, server: unknown) =>
     dnsQuery(String(name ?? ''), String(type ?? 'A'), typeof server === 'string' ? server : undefined));
 
   ipcMain.handle('tools:local-ports', () => listConnections());
