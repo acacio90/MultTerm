@@ -88,9 +88,13 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
   e limites opcionais; mostra a contagem ao vivo e grava `.pcapng` em
   `Documentos\MultTerm\Capturas`, com atalho para abrir no Wireshark. Requer o **Wireshark com
   o Npcap** instalados (o app usa o `dumpcap`); sem eles, a ferramenta explica como instalar.
+  Sem o Wireshark, a captura usa o **pktmon** do Windows (10 1809+ / 11): filtros de IP, porta
+  e protocolo em todas as placas de rede, mostra o tamanho capturado ao vivo e converte para
+  `.pcapng` ao parar. O pktmon exige administrador: o Windows pede confirmação (UAC) a cada
+  captura, só para ela (o app continua sem privilégios).
 
 Nenhuma ferramenta exige rodar o app como administrador (a captura usa o Npcap no modo padrão,
-sem a opção "restringir a administradores").
+sem a opção "restringir a administradores"; o modo pktmon pede a elevação só durante a captura).
 
 ### Exportar sessões
 

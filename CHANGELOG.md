@@ -21,6 +21,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Captura de pacotes com o `dumpcap` do Wireshark (Npcap): interface, filtro BPF e limites,
   contagem ao vivo, arquivo `.pcapng` e atalho para abrir no Wireshark; sem Wireshark, a
   ferramenta orienta a instalação. (#8)
+- Captura de pacotes sem instalar nada: modo de reserva com o `pktmon` do Windows, com filtros
+  de IP, porta e protocolo, uma confirmação do UAC por captura e o mesmo `.pcapng` no fim;
+  com os dois disponíveis, um seletor escolhe o motor. (#15)
 - Exportar sessões (todas, pela barra, ou uma pasta com subpastas, pelo menu de contexto) para
   um YAML que a importação lê.
 - Menu de contexto nas pastas da árvore: nova subpasta, nova sessão aqui, renomear (move

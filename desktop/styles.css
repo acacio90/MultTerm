@@ -282,6 +282,7 @@ dialog#diag-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .tool-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
 .tool-form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); min-width: 160px; }
 .tool-form label.check { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.tool-form label[hidden] { display: none; }
 .tool-form label.check input { width: auto; }
 .tool-form .actions { margin-top: 0; }
 .tool-body .muted { color: var(--muted); font-size: 12px; margin: 8px 0 0; }

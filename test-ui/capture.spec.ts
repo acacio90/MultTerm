@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,11 +27,11 @@ async function openCapture(extraEnv: Record<string, string> = {}) {
   return ctx.page.locator('.panel:not([hidden])').last();
 }
 
-test('sem Wireshark, orienta a instalação', async () => {
-  // Procurar o Wireshark numa pasta vazia simula uma máquina sem ele.
+test('sem Wireshark nem pktmon, orienta a instalação', async () => {
+  // Procurar numa pasta vazia simula uma máquina sem Wireshark e sem pktmon.
   const empty = await mkdtemp(join(tmpdir(), 'multterm-pf-'));
   try {
-    const panel = await openCapture({ MULTTERM_PROGRAM_FILES: empty });
+    const panel = await openCapture({ MULTTERM_PROGRAM_FILES: empty, MULTTERM_SYSTEM_ROOT: empty });
     await expect(panel).toContainText('instale o Wireshark');
     await expect(panel.locator('button', { hasText: 'Verificar de novo' })).toBeVisible();
   } finally {
@@ -67,4 +67,52 @@ test('filtro inválido mostra erro traduzido', async () => {
   await panel.locator('[name=filter]').fill('port and lixo');
   await panel.locator('button[type=submit]').click();
   await expect(panel.locator('.tool-status')).toContainText('filtro de captura inválido');
+});
+
+/** Pasta do Windows falsa só com o PktMon.exe (vazio: o teste não chega a executá-lo). */
+async function fakeSystemRoot() {
+  const root = await mkdtemp(join(tmpdir(), 'multterm-win-'));
+  await mkdir(join(root, 'System32'));
+  await writeFile(join(root, 'System32', 'PktMon.exe'), '');
+  return root;
+}
+
+test('sem Wireshark, usa o pktmon com filtros simples', async () => {
+  const empty = await mkdtemp(join(tmpdir(), 'multterm-pf-'));
+  const root = await fakeSystemRoot();
+  try {
+    const panel = await openCapture({ MULTTERM_PROGRAM_FILES: empty, MULTTERM_SYSTEM_ROOT: root });
+    await expect(panel.locator('.tool-status')).toContainText('usando o pktmon do Windows');
+    await expect(panel.locator('[name=backend]')).toBeHidden(); // um só motor: sem seletor
+    await expect(panel.locator('[name=ip]')).toBeVisible();
+    await expect(panel.locator('[name=protocol]')).toBeVisible();
+    await expect(panel.locator('[name=filter]')).toBeHidden();
+    await expect(panel).toContainText('exige administrador');
+    // A validação acontece antes de pedir a elevação.
+    await panel.locator('[name=ip]').fill('10.0.0.999');
+    await panel.locator('button[type=submit]').click();
+    await expect(panel.locator('.tool-status')).toContainText('IP inválido no filtro');
+    await expect(panel.locator('button[type=submit]')).toBeEnabled();
+  } finally {
+    await rm(empty, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('com Wireshark e pktmon, o seletor troca os campos', async () => {
+  test.skip(!HAS_WIRESHARK, 'Wireshark/Npcap não instalados nesta máquina');
+  const root = await fakeSystemRoot();
+  try {
+    const panel = await openCapture({ MULTTERM_SYSTEM_ROOT: root });
+    const backend = panel.locator('[name=backend]');
+    await expect(backend).toHaveValue('dumpcap');
+    await expect(panel.locator('[name=filter]')).toBeVisible();
+    await expect(panel.locator('[name=ip]')).toBeHidden();
+    await backend.selectOption('pktmon');
+    await expect(panel.locator('[name=filter]')).toBeHidden();
+    await expect(panel.locator('[name=iface]')).toBeHidden();
+    await expect(panel.locator('[name=port]')).toBeVisible();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

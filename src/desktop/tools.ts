@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { captureFileName, findCaptureTools, parseInterfaces, runCapture, validateCapture } from '../network/capture.ts';
+import { findPktmon, runPktmonCapture, validatePktmonRequest } from '../network/pktmon.ts';
 import { diagCommand, validateDiag } from '../network/diag.ts';
 import { dnsQuery } from '../network/dns.ts';
 import { parseTargets, scanNetwork } from '../network/hosts.ts';
@@ -70,6 +71,11 @@ function netscanSnmp(raw: unknown): SnmpRequest | undefined {
 const captureTools = () => findCaptureTools({
   programFiles: process.env.MULTTERM_PROGRAM_FILES?.split(';')
     ?? [process.env.ProgramFiles ?? '', process.env['ProgramFiles(x86)'] ?? ''],
+  fileExists: existsSync,
+});
+// MULTTERM_SYSTEM_ROOT troca a pasta do Windows onde o pktmon é procurado (testes).
+const pktmonPath = () => findPktmon({
+  systemRoot: process.env.MULTTERM_SYSTEM_ROOT ?? process.env.SystemRoot,
   fileExists: existsSync,
 });
 // MULTTERM_CAPTURES_DIR muda a pasta (testes isolados).
@@ -149,10 +155,11 @@ export function registerToolsIpc(): void {
     }));
   });
 
-  // Captura de pacotes (dumpcap/Npcap). Arquivos em Documentos/MultTerm/Capturas.
+  // Captura de pacotes: dumpcap/Npcap ou, na falta deles, o pktmon do Windows (elevado).
+  // Arquivos em Documentos/MultTerm/Capturas.
   ipcMain.handle('capture:info', async () => {
-    const tools = captureTools();
-    if (!tools.dumpcap) return { ...tools, interfaces: [] };
+    const tools = { ...captureTools(), pktmon: pktmonPath() };
+    if (!tools.dumpcap) return { ...tools, interfaces: [], folder: capturesDir() };
     const interfaces = await new Promise<ReturnType<typeof parseInterfaces>>((done, fail) => {
       execFile(tools.dumpcap!, ['-D'], { timeout: 15_000, windowsHide: true }, (err, stdout, stderr) => {
         if (err) fail(new Error(`não foi possível listar as interfaces: ${(stderr || err.message).trim()}`));
@@ -163,6 +170,19 @@ export function registerToolsIpc(): void {
   });
 
   ipcMain.handle('capture:start', async (e, id: unknown, raw: unknown) => {
+    if ((raw as { backend?: unknown } | null)?.backend === 'pktmon') {
+      const pktmon = pktmonPath();
+      if (!pktmon) throw new Error('pktmon não encontrado (requer Windows 10 1809 ou mais novo)');
+      const request = validatePktmonRequest(raw);
+      await mkdir(capturesDir(), { recursive: true });
+      const file = join(capturesDir(), captureFileName());
+      return runJob(e.sender, id, (signal) => runPktmonCapture({
+        pktmon, file, workDir: capturesDir(), request, signal,
+        onBytes: (n) => {
+          if (!e.sender.isDestroyed()) e.sender.send('tools:progress', id, n, -1);
+        },
+      }));
+    }
     const { dumpcap } = captureTools();
     if (!dumpcap) throw new Error('dumpcap não encontrado: instale o Wireshark (com o Npcap)');
     const req = validateCapture(raw);

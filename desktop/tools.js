@@ -422,7 +422,7 @@ function capturePanel(ctx, tab) {
   const status = statusLine();
   let running = false;
   let started = 0;
-  let packets = 0;
+  let progress = '';
   let timer = null;
 
   const elapsed = () => {
@@ -430,8 +430,9 @@ function capturePanel(ctx, tab) {
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   };
   const showRunning = () => {
-    status.textContent = `Capturando… ${packets} pacote(s) · ${elapsed()}`;
+    status.textContent = `Capturando… ${progress}${progress ? ' · ' : ''}${elapsed()}`;
   };
+  const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 
   function renderMissing() {
     const again = el('button', { type: 'button', textContent: 'Verificar de novo' });
@@ -446,35 +447,68 @@ function capturePanel(ctx, tab) {
   }
 
   function renderForm(info) {
+    const engines = [];
+    if (info.dumpcap && info.interfaces.length) engines.push(['dumpcap', 'Wireshark (dumpcap)']);
+    if (info.pktmon) engines.push(['pktmon', 'pktmon do Windows (pede administrador)']);
+    const engine = el('select', { name: 'backend' }, ...engines.map(([value, label]) => el('option', { value, textContent: label })));
+
+    // dumpcap: interface + filtro BPF.
     const iface = el('select', { name: 'iface' },
       ...info.interfaces.map((i) => el('option', { value: i.device, textContent: i.name })));
     const filter = el('input', { name: 'filter', placeholder: 'opcional (BPF): host 10.0.0.5 and port 22', autocomplete: 'off' });
     const maxPackets = el('input', { name: 'maxPackets', type: 'number', min: 1, placeholder: 'sem limite' });
+    // pktmon: filtros simples, todas as placas de rede.
+    const ip = el('input', { name: 'ip', placeholder: 'opcional: 10.0.0.5', autocomplete: 'off' });
+    const port = el('input', { name: 'port', type: 'number', min: 1, max: 65535, placeholder: 'qualquer' });
+    const protocol = select('protocol', [['', 'qualquer'], ['TCP', 'TCP'], ['UDP', 'UDP'], ['ICMP', 'ICMP']]);
     const maxSeconds = el('input', { name: 'maxSeconds', type: 'number', min: 1, placeholder: 'sem limite' });
+
     const start = el('button', { type: 'submit', className: 'primary', textContent: 'Iniciar' });
     const stop = el('button', { type: 'button', textContent: 'Parar', disabled: true });
     const result = el('div', { className: 'actions' });
+    const note = el('p', { className: 'muted' });
     stop.addEventListener('click', () => ctx.api.cancelTool(tab.id));
 
+    const dumpcapFields = [field('Interface', iface), el('label', { className: 'wide' }, 'Filtro', filter), field('Parar após (pacotes)', maxPackets)];
+    const pktmonFields = [field('IP', ip), field('Porta', port), field('Protocolo', protocol)];
     const form = el('form', { className: 'tool-form' },
-      field('Interface', iface), el('label', { className: 'wide' }, 'Filtro', filter),
-      field('Parar após (pacotes)', maxPackets), field('Parar após (segundos)', maxSeconds),
+      ...(engines.length > 1 ? [field('Motor', engine)] : []),
+      ...dumpcapFields, ...pktmonFields, field('Parar após (segundos)', maxSeconds),
       el('div', { className: 'actions' }, start, stop),
     );
+    const isPktmon = () => engine.value === 'pktmon';
+    const switchEngine = () => {
+      for (const f of dumpcapFields) f.hidden = isPktmon();
+      for (const f of pktmonFields) f.hidden = !isPktmon();
+      note.textContent = isPktmon()
+        ? `Grava em ${info.folder} (formato pcapng). O pktmon captura em todas as placas de rede e exige administrador: ` +
+          'o Windows pede confirmação (UAC) a cada captura. Os filtros são opcionais e se combinam.'
+        : `Grava em ${info.folder} (formato pcapng). O filtro usa a sintaxe de captura do Wireshark/BPF, ` +
+          'por exemplo: "host 10.0.0.5", "port 161", "tcp and not port 22".';
+    };
+    engine.addEventListener('change', switchEngine);
+    switchEngine();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       result.replaceChildren();
+      const pktmon = isPktmon();
       running = true;
-      packets = 0;
+      progress = pktmon ? '' : '0 pacote(s)';
       started = Date.now();
       start.disabled = true;
       stop.disabled = false;
-      showRunning();
-      timer = setInterval(showRunning, 1000);
+      engine.disabled = true;
+      if (pktmon) status.textContent = 'Aguardando a confirmação do administrador (UAC)…';
+      else showRunning();
+      timer = setInterval(() => {
+        if (!pktmon || progress) showRunning();
+      }, 1000);
       try {
-        const { results } = await ctx.api.captureStart(tab.id, {
-          iface: iface.value, filter: filter.value, maxPackets: maxPackets.value, maxSeconds: maxSeconds.value,
-        });
+        const req = pktmon
+          ? { backend: 'pktmon', ip: ip.value, port: port.value, protocol: protocol.value, maxSeconds: maxSeconds.value }
+          : { backend: 'dumpcap', iface: iface.value, filter: filter.value, maxPackets: maxPackets.value, maxSeconds: maxSeconds.value };
+        const { results } = await ctx.api.captureStart(tab.id, req);
         status.textContent = `${results.packets} pacote(s) em ${elapsed()} salvos em ${results.file}`;
         const open = el('button', { type: 'button', className: 'primary', textContent: info.wireshark ? 'Abrir no Wireshark' : 'Abrir' });
         const show = el('button', { type: 'button', textContent: 'Mostrar na pasta' });
@@ -490,18 +524,11 @@ function capturePanel(ctx, tab) {
       running = false;
       start.disabled = false;
       stop.disabled = true;
+      engine.disabled = false;
     });
 
-    body.replaceChildren(
-      form,
-      el('p', {
-        className: 'muted',
-        textContent: `Grava em ${info.folder} (formato pcapng). O filtro usa a sintaxe de captura do Wireshark/BPF, ` +
-          'por exemplo: "host 10.0.0.5", "port 161", "tcp and not port 22".',
-      }),
-      result,
-    );
-    iface.focus();
+    body.replaceChildren(form, note, result);
+    (isPktmon() ? ip : iface).focus();
   }
 
   async function load() {
@@ -509,11 +536,16 @@ function capturePanel(ctx, tab) {
     try {
       const info = await ctx.api.captureInfo();
       status.textContent = '';
-      if (!info.dumpcap) renderMissing();
-      else if (!info.interfaces.length) {
+      if (info.dumpcap && info.interfaces.length) renderForm(info);
+      else if (info.pktmon) {
+        renderForm(info);
+        status.textContent = info.dumpcap
+          ? 'O dumpcap não listou nenhuma interface (o Npcap está ativo?); usando o pktmon do Windows.'
+          : 'Wireshark não encontrado: usando o pktmon do Windows. Instale o Wireshark com o Npcap para capturar sem administrador.';
+      } else {
         renderMissing();
-        status.textContent = 'O dumpcap não listou nenhuma interface (o Npcap está instalado e ativo?).';
-      } else renderForm(info);
+        if (info.dumpcap) status.textContent = 'O dumpcap não listou nenhuma interface (o Npcap está instalado e ativo?).';
+      }
     } catch (err) {
       status.textContent = ctx.cleanError(err);
     }
@@ -523,9 +555,10 @@ function capturePanel(ctx, tab) {
   return {
     title: 'Captura de pacotes',
     content: [body, status],
-    onProgress: (n) => {
+    // dumpcap informa pacotes; pktmon (total -1), o tamanho do arquivo de rastreamento.
+    onProgress: (n, total) => {
       if (!running) return;
-      packets = n;
+      progress = total === -1 ? `${size(n)} capturados` : `${n} pacote(s)`;
       showRunning();
     },
     onClose: () => {
