@@ -1,7 +1,7 @@
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { launchApp, type LaunchedApp } from './fixture.ts';
 
 // Sessões de teste: "recusada" aponta para uma porta fechada (o ssh termina na hora).
 const SESSIONS = `version: 1
@@ -22,31 +22,20 @@ sessions:
     host: 10.0.0.9
 `;
 
-let dir: string;
-let sessionsFile: string;
+let ctx: LaunchedApp;
 let app: ElectronApplication;
 let page: Page;
+let dir: string;
+let sessionsFile: string;
 
 test.beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'multterm-ui-'));
-  sessionsFile = join(dir, 'sessions.yaml');
-  await writeFile(sessionsFile, SESSIONS);
-  const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
-  app = await electron.launch({
-    args: ['.'],
-    // Pasta de dados própria por teste: nada (pastas recolhidas, config, caches) vaza entre
-    // testes nem para o perfil real do usuário.
-    env: { ...env, MULTTERM_SESSIONS: sessionsFile, MULTTERM_USER_DATA: join(dir, 'userdata'), MULTTERM_UPDATE_URL: '' },
-  });
-  page = await app.firstWindow();
+  ctx = await launchApp(SESSIONS);
+  ({ app, page, dir, sessionsFile } = ctx);
   await expect(page.locator('#status-count')).toHaveText('3 sessões · sem limite');
-  expect(await app.evaluate(({ app: a }) => a.getPath('userData'))).toBe(join(dir, 'userdata'));
 });
 
 test.afterEach(async () => {
-  await app?.close();
-  await rm(dir, { recursive: true, force: true });
+  await ctx?.close();
 });
 
 const session = (name: string) => page.locator('#tree li.session', { hasText: name });
