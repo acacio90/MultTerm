@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.2.0] - 2026-10-12
+
 ### Adicionado
 
 - Importação de inventário do Ansible (INI ou YAML): grupos viram pastas, hosts viram sessões
@@ -37,5 +39,6 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.1.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.2.0...develop
+[0.2.0]: https://github.com/acacio90/MultTerm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/acacio90/MultTerm/releases/tag/v0.1.0
