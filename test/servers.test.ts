@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveInRoot } from '../src/servers/common.ts';
@@ -20,7 +20,7 @@ const curl = (args: string[]) => new Promise<{ code: number; out: string; err: s
 async function tmp() {
   const root = await mkdtemp(join(tmpdir(), 'multterm-srv-'));
   await mkdir(join(root, 'sub'));
-  return root;
+  return realpath(root); // o tmpdir pode vir com nome curto (8.3), como no CI
 }
 
 test('resolveInRoot não deixa sair da raiz', async () => {
