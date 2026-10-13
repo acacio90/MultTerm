@@ -24,7 +24,8 @@
     "release": "npm run build && node scripts/release.mjs",
     "prepare": "node scripts/install-hooks.mjs",
     "icon": "node scripts/electron.mjs scripts/render-icon.mjs",
-    "test:ui": "npm run build && playwright test"
+    "test:ui": "npm run build && playwright test",
+    "test:ipsec": "node scripts/ipsec-gateway.mjs"
   },
   "build": {
     "appId": "io.github.acacio90.multterm",
