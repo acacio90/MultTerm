@@ -848,50 +848,15 @@ $('terminals').hidden = true;
 
 // ---------- barra de ferramentas ----------
 
-$('btn-new').addEventListener('click', () => {
+function newSession() {
   state.selected = state.editing = null;
   clearMessages();
   renderTree();
   showEditor();
   showForm(null);
   form.name.focus();
-});
-
-/** Botão com menu suspenso (Importar/Exportar): fecha ao escolher, clicar fora ou Esc. */
-function dropdown(buttonId, menuId, run) {
-  const button = $(buttonId);
-  const menu = $(menuId);
-  const set = (open) => {
-    menu.hidden = !open;
-    button.setAttribute('aria-expanded', String(open));
-  };
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    for (const other of document.querySelectorAll('.toolbar .menu')) if (other !== menu) other.hidden = true;
-    set(menu.hidden);
-  });
-  menu.addEventListener('click', (e) => {
-    const what = e.target.closest('[data-what]')?.dataset.what;
-    if (!what) return;
-    set(false);
-    run(what);
-  });
-  document.addEventListener('click', () => set(false));
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') set(false);
-  });
 }
-
-dropdown('btn-import', 'import-menu', (what) => {
-  if (what === 'sessions') void importSessions();
-  else if (what === 'vpn') void importVpnSite();
-  else if (what === 'backup') void importBackup();
-});
-dropdown('btn-export', 'export-menu', (what) => {
-  if (what === 'sessions') void exportSessions();
-  else if (what === 'vpn') void exportVpnSites();
-  else if (what === 'backup') void exportBackup();
-});
+$('btn-new').addEventListener('click', newSession);
 
 async function importVpnSite() {
   showEditor();
@@ -958,7 +923,9 @@ async function importSessions() {
   }
 }
 
-$('btn-file').addEventListener('click', async () => {
+/** Troca o arquivo de sessões em uso (ex.: um sessions.yaml versionado no git). */
+async function chooseSessionsFile() {
+  showEditor();
   clearMessages();
   try {
     const result = await api.chooseFile();
@@ -966,9 +933,7 @@ $('btn-file').addEventListener('click', async () => {
   } catch (err) {
     message(cleanError(err), 'error');
   }
-});
-
-$('btn-reload').addEventListener('click', () => load());
+}
 
 $('search').addEventListener('input', (e) => {
   state.filter = e.target.value.trim();
@@ -1461,13 +1426,65 @@ $('btn-tools').addEventListener('click', (e) => {
   e.stopPropagation();
   setToolsMenu(toolsMenu.hidden);
 });
+function runTool(kind) {
+  if (kind === 'ping' || kind === 'traceroute') openDiagDialog(kind);
+  else if (kind.startsWith('local-')) openLocalTab(kind.slice(6));
+  else openToolTab(kind);
+}
 toolsMenu.addEventListener('click', (e) => {
   const kind = e.target.closest('[data-tool]')?.dataset.tool;
   if (!kind) return;
   setToolsMenu(false);
-  if (kind === 'ping' || kind === 'traceroute') openDiagDialog(kind);
-  else if (kind.startsWith('local-')) openLocalTab(kind.slice(6));
-  else openToolTab(kind);
+  runTool(kind);
+});
+
+// ---------- menu do topo ----------
+
+/** Sessão selecionada na árvore, ou aviso para escolher uma. */
+function withSession(run) {
+  const session = selectedSession();
+  if (session) return run(session);
+  showEditor();
+  clearMessages();
+  message('Selecione uma sessão na árvore primeiro.', 'warn');
+}
+
+const MENU_COMMANDS = {
+  'new-session': newSession,
+  'new-folder': () => folderAction('subfolder', ''),
+  'open-file': chooseSessionsFile,
+  reload: () => load(),
+  'import-sessions': importSessions,
+  'import-vpn': importVpnSite,
+  'import-backup': importBackup,
+  'export-sessions': () => exportSessions(),
+  'export-vpn': exportVpnSites,
+  'export-backup': exportBackup,
+  connect: () => withSession((s) => connect(s)),
+  external: () => withSession((s) => connect(s, { external: true })),
+  wol: () => withSession((s) => {
+    if (s.mac) return wakeSession(s);
+    showEditor();
+    clearMessages();
+    message(`A sessão "${s.name}" não tem endereço MAC; preencha o campo MAC para usar o Wake-on-LAN.`, 'warn');
+  }),
+  edit: () => withSession((s) => select(keyOf(s))),
+  delete: () => withSession((s) => {
+    select(keyOf(s));
+    return remove();
+  }),
+  'wol-tool': () => openToolTab('wol'),
+  'toggle-sidebar': () => document.body.classList.toggle('no-sidebar'),
+  help: openHelp,
+  'check-updates': async () => {
+    await openHelp();
+    renderUpdate(await api.checkUpdates());
+  },
+};
+api.onMenuCommand((command) => {
+  if (api.isDetached) return;
+  const run = MENU_COMMANDS[command] ?? (() => runTool(command));
+  void run();
 });
 document.addEventListener('click', () => setToolsMenu(false));
 document.addEventListener('keydown', (e) => {

@@ -53,10 +53,23 @@ sessions:
 
 A gravação é determinística (ordenada por pasta e nome, campos em ordem fixa) para gerar
 diffs limpos. No app, o arquivo padrão fica em `%APPDATA%\MultTerm\sessions.yaml`; use
-**Abrir arquivo…** para apontar para um arquivo versionado (a escolha é lembrada) ou defina
+**Arquivo → Abrir arquivo de sessões…** para apontar para um arquivo versionado (a escolha é lembrada) ou defina
 a variável `MULTTERM_SESSIONS`.
 
 ## Uso
+
+A barra superior tem só o que se usa toda hora: **+ Nova sessão** e **Ferramentas** à esquerda;
+**VPN**, **Agente** e **Ajuda** à direita. O resto fica no menu do topo:
+
+- **Arquivo**: nova sessão, nova pasta, abrir/recarregar o arquivo de sessões, **Importar** e
+  **Exportar** (sessões, sites de VPN ou backup completo) e sair.
+- **Sessão**: conectar, janela externa, Wake-on-LAN, editar e excluir a sessão selecionada.
+- **Ferramentas**: terminal local, ferramentas de rede, servidores, VPN e agente.
+- **Exibir**: mostrar/ocultar a barra lateral, zoom (Ctrl + / Ctrl - / Ctrl 0) e tela cheia (F11).
+- **Ajuda**: ajuda (F1), verificar atualizações, página do projeto e sobre.
+
+O menu quase não tem atalhos de teclado de propósito: eles valeriam antes do terminal e
+roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B, F5...).
 
 - **Duplo clique** numa sessão abre uma aba: terminal (SSH) ou área de trabalho remota (RDP).
 - **Botão direito numa sessão**: Conectar, Janela externa, Ligar (Wake-on-LAN, se a sessão
@@ -199,7 +212,7 @@ memória e somem ao desconectar.
 
 ### Exportar e importar
 
-Os botões **Exportar** e **Importar** da barra superior abrem um menu para escolher o quê:
+Os menus **Arquivo → Exportar** e **Arquivo → Importar** oferecem:
 
 - **Sessões** (abaixo).
 - **Sites de VPN**: exporta todos os sites, um `.vpn` por site, numa pasta; importa um `.vpn`.
@@ -212,17 +225,17 @@ Os botões **Exportar** e **Importar** da barra superior abrem um menu para esco
 
 ### Exportar sessões
 
-**Exportar → Sessões…** grava todas as sessões num YAML; **Exportar pasta…**
+**Arquivo → Exportar → Sessões…** grava todas as sessões num YAML; **Exportar pasta…**
 (botão direito numa pasta) grava só a pasta e as subpastas, com os caminhos completos. O
-arquivo é o mesmo formato que **Importar → Sessões…** lê — serve de backup e para levar as
+arquivo é o mesmo formato que **Arquivo → Importar → Sessões…** lê — serve de backup e para levar as
 sessões a outra máquina. Não há senhas no arquivo (o app não guarda senhas).
 
-**Abrir arquivo…** é diferente: troca o arquivo de sessões que o app usa (por exemplo, um
+**Arquivo → Abrir arquivo de sessões…** é diferente: troca o arquivo de sessões que o app usa (por exemplo, um
 `sessions.yaml` versionado no git), e a escolha é lembrada.
 
 ### Importar sessões
 
-**Importar → Sessões…** (ou `multterm import <arquivo>`) detecta o formato do arquivo e mescla
+**Arquivo → Importar → Sessões…** (ou `multterm import <arquivo>`) detecta o formato do arquivo e mescla
 com as sessões existentes (mesma pasta + nome não é sobrescrito):
 
 - **Sessões do MultTerm** (YAML com `sessions:`).

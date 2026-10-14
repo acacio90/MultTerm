@@ -8,6 +8,12 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ### Alterado
 
+- Menu do topo em português e útil: **Arquivo** (nova sessão/pasta, abrir/recarregar o arquivo de
+  sessões, importar, exportar), **Sessão** (conectar, janela externa, Wake-on-LAN, editar,
+  excluir), **Ferramentas**, **Exibir** (barra lateral, zoom, tela cheia) e **Ajuda** (atualizações,
+  página do projeto, sobre). A barra superior ficou só com Nova sessão, Ferramentas, VPN, Agente e
+  Ajuda. Sem atalhos que roubem teclas do terminal; o "Recarregar" do menu padrão, que derrubava
+  as sessões abertas, saiu. (#39)
 - A VPN ganhou um botão próprio na barra superior, ao lado do **Agente** (antes ficava no menu
   Ferramentas). Ele mostra o estado: `VPN: <site>` com um ponto colorido quando ligada. (#38)
 

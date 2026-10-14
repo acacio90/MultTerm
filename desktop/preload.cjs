@@ -4,6 +4,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 const adoptQueue = [];
 let adoptCb = null;
 ipcRenderer.on('term:adopt', (_e, offer) => (adoptCb ? adoptCb(offer) : adoptQueue.push(offer)));
+// O mesmo para os comandos do menu do topo, que podem chegar antes de a página terminar de abrir.
+const menuQueue = [];
+let menuCb = null;
+ipcRenderer.on('menu:command', (_e, command) => (menuCb ? menuCb(command) : menuQueue.push(command)));
 
 // Única ponte entre a interface e o processo principal.
 contextBridge.exposeInMainWorld('multterm', {
@@ -34,6 +38,11 @@ contextBridge.exposeInMainWorld('multterm', {
   rdpClose: (id) => ipcRenderer.invoke('rdp:close', id),
   onRdpReady: (cb) => ipcRenderer.on('rdp:ready', (_e, id) => cb(id)),
   onRdpExit: (cb) => ipcRenderer.on('rdp:exit', (_e, id, code, end) => cb(id, code, end)),
+  // Comandos do menu do topo (Arquivo, Sessão, Ferramentas...).
+  onMenuCommand: (cb) => {
+    menuCb = cb;
+    for (const command of menuQueue.splice(0)) cb(command);
+  },
   onTermReleased: (cb) => ipcRenderer.on('term:released', (_e, id) => cb(id)),
   termInput: (id, data) => ipcRenderer.send('term:input', id, data),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),

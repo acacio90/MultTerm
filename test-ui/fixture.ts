@@ -38,3 +38,13 @@ export async function launchApp(sessionsYaml: string, extraEnv: Record<string, s
     },
   };
 }
+
+/** Clica num item do menu do topo pelo id (o mesmo caminho do clique do usuário). */
+export async function clickMenu(app: ElectronApplication, id: string): Promise<void> {
+  const found = await app.evaluate(({ Menu }, itemId) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+    item?.click();
+    return !!item;
+  }, id);
+  expect(found, `item de menu "${id}"`).toBe(true);
+}

@@ -1,7 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { clickMenu, launchApp, type LaunchedApp } from './fixture.ts';
 
 // Sessões de teste: "recusada" aponta para uma porta fechada (o ssh termina na hora).
 const SESSIONS = `version: 1
@@ -123,8 +123,7 @@ test('importa inventário do Ansible pelo botão (diálogo substituído no teste
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as typeof dialog.showOpenDialog;
   }, inventory);
 
-  await page.click('#btn-import');
-  await page.click('#import-menu [data-what=sessions]');
+  await clickMenu(app, 'import-sessions');
   await expect(page.locator('#messages')).toContainText('3 sessões importadas do inventário do Ansible');
   await expect(page.locator('#status-count')).toHaveText('6 sessões · sem limite');
   await expect(session('web02.example.org')).toHaveCount(1);

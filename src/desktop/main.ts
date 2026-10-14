@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, webContents } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -21,6 +21,7 @@ import { exportVpnSites, importVpnSites, registerVpnIpc } from './vpn.ts';
 import { exportServerConfigs, importServerConfigs, registerServersIpc } from './servers.ts';
 import { agentLaunch, exportAgentPrefs, importAgentPrefs, registerAgentIpc } from './agent.ts';
 import { closeRdpOf, registerRdpIpc } from './rdp.ts';
+import { buildAppMenu } from './menu.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
@@ -311,6 +312,8 @@ async function createWindow(opts: { detached?: boolean; title?: string } = {}): 
     closeRdpOf(contents);
     cancelJobsOf(contents);
   });
+  // Janela de aba destacada: só as abas, sem o menu do topo.
+  if (opts.detached) win.removeMenu();
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
@@ -381,6 +384,33 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerAgentIpc();
   registerDetachIpc();
   registerRdpIpc();
+  Menu.setApplicationMenu(buildAppMenu({
+    // Os comandos agem na janela principal (abre de novo se só restaram janelas destacadas).
+    send: async (command) => {
+      const target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : await createWindow();
+      if (target.isMinimized()) target.restore();
+      target.focus();
+      target.webContents.send('menu:command', command);
+    },
+    openProject: () => void shell.openExternal(REPO_URL),
+    about: () => {
+      const parent = BrowserWindow.getFocusedWindow() ?? mainWindow;
+      const opts = {
+        type: 'info' as const,
+        title: 'Sobre o MultTerm',
+        message: `MultTerm ${app.getVersion()}`,
+        detail: `Gerenciador de sessões SSH/RDP com terminal em abas, VPN, servidores locais e agente MCP.\n\n` +
+          `Licença GPL-3.0. Inclui o FreeRDP (Apache 2.0) e o Wintun.\n${REPO_URL}\n\n` +
+          `Electron ${process.versions.electron} · Chromium ${process.versions.chrome} · Node ${process.versions.node}`,
+        buttons: ['OK', 'Página do projeto'],
+        defaultId: 0,
+        noLink: true,
+      };
+      void (parent ? dialog.showMessageBox(parent, opts) : dialog.showMessageBox(opts)).then((r) => {
+        if (r.response === 1) void shell.openExternal(REPO_URL);
+      });
+    },
+  }));
   initUpdates();
   await createWindow();
   app.on('activate', () => {

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readImportFile } from '../src/sessions/import.ts';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { clickMenu, launchApp, type LaunchedApp } from './fixture.ts';
 
 const SESSIONS = `version: 1
 sessions:
@@ -121,8 +121,7 @@ test.describe('exportar', () => {
   test('exporta todas as sessões num YAML importável', async () => {
     const out = join(ctx.dir, 'backup.yaml');
     await stubSave(out);
-    await page.click('#btn-export');
-    await page.click('#export-menu [data-what=sessions]');
+    await clickMenu(ctx.app, 'export-sessions');
     await expect(page.locator('#messages')).toHaveText(`3 sessão(ões) exportada(s) para ${out}`);
     const { format, sessions } = await readImportFile(out);
     expect(format).toBe('multterm');
@@ -141,8 +140,7 @@ test.describe('exportar', () => {
 
   test('não sobrescreve o arquivo de sessões em uso', async () => {
     await stubSave(ctx.sessionsFile);
-    await page.click('#btn-export');
-    await page.click('#export-menu [data-what=sessions]');
+    await clickMenu(ctx.app, 'export-sessions');
     await expect(page.locator('#messages .error')).toContainText('este é o arquivo de sessões em uso');
   });
 });
