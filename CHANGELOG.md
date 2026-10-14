@@ -6,6 +6,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- Layout da área de abas: uma aba, duas lado a lado ou duas empilhadas, escolhido pelos ícones
+  no canto da barra de abas e lembrado entre as execuções. (#44)
+
 ## [0.5.0] - 2026-10-14
 
 ### Adicionado

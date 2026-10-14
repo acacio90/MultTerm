@@ -351,33 +351,114 @@ const tabsById = new Map();
 let tabSeq = 0;
 let activeTab = null; // null = aba "Sessão"
 
+/*
+ * Layout da área de abas: uma aba, duas lado a lado ou duas empilhadas. Na tela dividida cada
+ * metade mostra uma aba; clicar numa aba a coloca na metade em foco e clicar dentro de uma metade
+ * passa o foco para ela.
+ */
+const LAYOUTS = ['single', 'cols', 'rows'];
+let layout = readLayout();
+let panes = [null, null]; // id da aba em cada metade
+let focusedPane = 0;
+const paneCount = () => (layout === 'single' ? 1 : 2);
+
+function readLayout() {
+  try {
+    const saved = localStorage.getItem('tabLayout');
+    return LAYOUTS.includes(saved) ? saved : 'single';
+  } catch {
+    return 'single';
+  }
+}
+
+/** Mostra as abas das metades (na ordem certa), o destaque da metade em foco e as metades vazias. */
+function renderPanes() {
+  const n = paneCount();
+  const visible = panes.slice(0, n);
+  const area = $('terminals');
+  area.classList.toggle('layout-cols', layout === 'cols');
+  area.classList.toggle('layout-rows', layout === 'rows');
+  for (const t of tabsById.values()) {
+    const at = visible.indexOf(t.id);
+    t.panel.hidden = at < 0;
+    t.panel.style.order = at < 0 ? '' : String(at);
+    t.panel.classList.toggle('pane-focus', n > 1 && at === focusedPane);
+    t.button.classList.toggle('active', activeTab !== null && at === focusedPane);
+    t.button.classList.toggle('in-pane', n > 1 && at >= 0 && at !== focusedPane);
+  }
+  for (let i = 0; i < 2; i++) {
+    let empty = document.getElementById(`pane-empty-${i}`);
+    const needed = n > 1 && i < n && !tabsById.has(visible[i]);
+    if (!needed) {
+      empty?.remove();
+      continue;
+    }
+    if (!empty) {
+      empty = Object.assign(document.createElement('div'), { id: `pane-empty-${i}`, className: 'pane-empty' });
+      empty.textContent = 'Clique numa aba para mostrá-la aqui.';
+      empty.addEventListener('mousedown', () => {
+        focusedPane = i;
+        renderPanes();
+      });
+      area.append(empty);
+    }
+    empty.style.order = String(i);
+    empty.classList.toggle('pane-focus', i === focusedPane);
+  }
+  for (const b of document.querySelectorAll('#layout-picker [data-layout]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.layout === layout));
+  }
+}
+
+function setLayout(next) {
+  if (!LAYOUTS.includes(next)) return;
+  layout = next;
+  try {
+    localStorage.setItem('tabLayout', layout);
+  } catch {
+    // sem armazenamento: o layout vale só até fechar
+  }
+  if (paneCount() === 1) {
+    panes = [panes[focusedPane] ?? panes[0], null];
+    focusedPane = 0;
+  } else if (!tabsById.has(panes[1]) || panes[1] === panes[0]) {
+    // A segunda metade começa com a aba aberta mais recente que não está na primeira.
+    const other = [...tabsById.values()].reverse().find((t) => t.id !== panes[0]);
+    panes[1] = other?.id ?? null;
+  }
+  const focused = tabsById.get(panes[focusedPane]);
+  if (activeTab && focused) showTab(focused);
+  else renderPanes();
+}
+
 function showEditor() {
   activeTab = null;
   $('tab-editor').classList.add('active');
   $('panel-editor').hidden = false;
   $('terminals').hidden = true;
   for (const t of tabsById.values()) {
-    t.button.classList.remove('active');
+    t.button.classList.remove('active', 'in-pane');
     t.panel.hidden = true;
   }
 }
 
 function showTab(tab) {
+  // Já está numa metade: ela ganha o foco. Senão, entra na metade em foco.
+  const at = panes.slice(0, paneCount()).indexOf(tab.id);
+  if (at >= 0) focusedPane = at;
+  else panes[focusedPane] = tab.id;
   activeTab = tab;
   $('tab-editor').classList.remove('active');
   $('panel-editor').hidden = true;
   $('terminals').hidden = false;
-  for (const t of tabsById.values()) {
-    t.button.classList.toggle('active', t === tab);
-    t.panel.hidden = t !== tab;
-  }
+  renderPanes();
   requestAnimationFrame(() => {
-    if (tab.term) {
-      tab.fit.fit();
-      tab.term.focus();
-    } else {
-      tab.onShow?.();
+    for (const id of panes.slice(0, paneCount())) {
+      const t = tabsById.get(id);
+      if (t?.term) t.fit.fit();
+      else t?.onShow?.();
     }
+    if (tab.term) tab.term.focus();
   });
 }
 
@@ -393,11 +474,19 @@ function closeTab(tab, { keepProcess = false } = {}) {
   tab.button.remove();
   tabsById.delete(tab.id);
   notifyTabsChanged();
+  // A metade da aba fechada passa a mostrar outra aba aberta que não esteja à vista.
+  const at = panes.indexOf(tab.id);
+  if (at >= 0) {
+    const shown = new Set(panes.slice(0, paneCount()));
+    panes[at] = [...tabsById.values()].reverse().find((t) => !shown.has(t.id))?.id ?? null;
+  }
   if (activeTab === tab) {
-    const next = [...tabsById.values()].pop();
+    const next = tabsById.get(panes[focusedPane]) ?? panes.slice(0, paneCount()).map((id) => tabsById.get(id)).find(Boolean);
     if (next) showTab(next);
     else if (api.isDetached) window.close(); // janela destacada sem abas: fecha
     else showEditor();
+  } else if (at >= 0) {
+    renderPanes();
   }
 }
 
@@ -407,6 +496,15 @@ function createTab({ title, tooltip = '', panelClass }) {
   tab.panel = document.createElement('div');
   tab.panel.className = `panel ${panelClass}`;
   $('terminals').append(tab.panel);
+  // Clicar dentro de uma metade da tela dividida passa o foco para ela.
+  tab.panel.addEventListener('mousedown', () => {
+    const at = panes.slice(0, paneCount()).indexOf(tab.id);
+    if (paneCount() > 1 && at >= 0 && (at !== focusedPane || activeTab !== tab)) {
+      focusedPane = at;
+      activeTab = tab;
+      renderPanes();
+    }
+  });
 
   tab.button = document.createElement('button');
   tab.button.type = 'button';
@@ -886,6 +984,11 @@ function offerLegacySsh(tab) {
 }
 
 $('tab-editor').addEventListener('click', showEditor);
+$('layout-picker').addEventListener('click', (e) => {
+  const next = e.target.closest('[data-layout]')?.dataset.layout;
+  if (next) setLayout(next);
+});
+renderPanes();
 $('terminals').hidden = true;
 
 // ---------- barra de ferramentas ----------
