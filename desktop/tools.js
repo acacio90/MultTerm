@@ -677,7 +677,31 @@ function agentPanel(ctx) {
     logBox = el('pre', { className: 'dns-result server-log', textContent: (s.log ?? []).join('\n') });
 
     // Abrir o agente escolhido numa aba local, já apontado para este servidor.
-    const agentSel = select('agent', (s.agents ?? []).map((a) => [a.id, a.label]), s.agent);
+    // Só os agentes encontrados na máquina podem ser escolhidos; os outros aparecem desabilitados.
+    const agents = s.agents ?? [];
+    const agentSel = el('select', { name: 'agent' }, ...agents.map((a) => el('option', {
+      value: a.id,
+      selected: a.id === s.agent,
+      disabled: a.installed === false,
+      textContent: `${a.label}${a.installed === false ? ' (não instalado)' : a.version ? ` ${a.version}` : ''}`,
+    })));
+    const noneInstalled = agents.length > 0 && agents.every((a) => a.installed === false);
+    const redetect = el('button', { type: 'button', textContent: s.detecting ? 'Procurando…' : 'Procurar de novo', disabled: !!s.detecting });
+    redetect.addEventListener('click', async () => {
+      redetect.disabled = true;
+      redetect.textContent = 'Procurando…';
+      try {
+        state = { ...state, ...(await ctx.api.agentDetect()) };
+        render();
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    const agentNote = s.detecting && agents.some((a) => a.installed === null)
+      ? 'Procurando os agentes instalados nesta máquina…'
+      : noneInstalled
+        ? 'Nenhum agente compatível foi encontrado nesta máquina. Instale um (ex.: Claude Code) e clique em Procurar de novo.'
+        : s.agentFallback ? `${s.agentFallback} não foi encontrado nesta máquina; usando ${agents.find((a) => a.id === s.agent)?.label}.` : '';
     agentSel.addEventListener('change', async () => {
       try {
         state = { ...state, ...(await ctx.api.agentSetAgent(agentSel.value)) };
@@ -685,7 +709,7 @@ function agentPanel(ctx) {
         status.textContent = ctx.cleanError(err);
       }
     });
-    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente' });
+    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente', disabled: noneInstalled });
     launch.addEventListener('click', async () => {
       status.textContent = '';
       try {
@@ -705,7 +729,8 @@ function agentPanel(ctx) {
       }),
       el('div', { className: 'actions' }, toggle, el('span', { className: `agent-state ${s.enabled ? 'on' : 'off'}`, textContent: s.enabled ? `ligado em ${s.url}` : 'desligado' })),
       el('h3', { textContent: 'Abrir o agente no MultTerm' }),
-      el('div', { className: 'tool-form' }, field('Agente', agentSel), el('div', { className: 'actions' }, launch)),
+      el('div', { className: 'tool-form' }, field('Agente', agentSel), el('div', { className: 'actions' }, launch, redetect)),
+      ...(agentNote ? [el('p', { className: noneInstalled || s.agentFallback ? 'notice' : 'muted', textContent: agentNote })] : []),
       el('p', {
         className: 'muted',
         textContent: 'O agente abre numa aba de terminal local (PowerShell), já ligado a este servidor, com a conta que você tem ' +

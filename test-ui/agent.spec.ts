@@ -152,7 +152,8 @@ test('terminal local e abrir o agente numa aba com a configuração MCP', async 
   const panel = page.locator('.panel:not([hidden])').last();
   await panel.locator('[name=port]').fill(String(await freePort()));
   await panel.locator('button', { hasText: 'Trocar porta' }).click();
-  await expect(panel.locator('select[name=agent] option')).toHaveText(['Claude Code']);
+  // Com a versão, se o agente estiver instalado nesta máquina.
+  await expect(panel.locator('select[name=agent] option')).toHaveText([/^Claude Code/]);
   await panel.locator('select[name=agent]').selectOption('claude');
   await panel.locator('button', { hasText: 'Abrir o agente' }).click();
   const agentTab = page.locator('#tabs .tab', { hasText: /^Agente/ }).filter({ hasNot: page.locator('.nada') }).last();
