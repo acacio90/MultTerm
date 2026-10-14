@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, webContents } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -311,10 +311,23 @@ function agentStatus(sshAdd: string): Promise<AgentStatus> {
 // Janela principal (com a árvore de sessões); as demais são abas destacadas.
 let mainWindow: BrowserWindow | undefined;
 
-async function createWindow(opts: { detached?: boolean; title?: string } = {}): Promise<BrowserWindow> {
+/** Posição de uma janela nova perto de um ponto da tela, sem sair da área útil do monitor. */
+function windowNear(point: { x: number; y: number } | undefined, width: number, height: number) {
+  if (!point) return {};
+  const area = screen.getDisplayNearestPoint(point).workArea;
+  // A aba fica mais ou menos sob o ponteiro (a barra de abas está perto do topo da janela).
+  const x = Math.min(Math.max(point.x - 80, area.x), area.x + area.width - width);
+  const y = Math.min(Math.max(point.y - 60, area.y), area.y + area.height - height);
+  return { x: Math.round(x), y: Math.round(y) };
+}
+
+async function createWindow(opts: { detached?: boolean; title?: string; near?: { x: number; y: number } } = {}): Promise<BrowserWindow> {
+  const width = opts.detached ? 900 : 1100;
+  const height = opts.detached ? 560 : 700;
   const win = new BrowserWindow({
-    width: opts.detached ? 900 : 1100,
-    height: opts.detached ? 560 : 700,
+    width,
+    height,
+    ...windowNear(opts.near, width, height),
     minWidth: 720,
     minHeight: 420,
     icon: join(appRoot, 'desktop', 'icon.png'),
@@ -373,8 +386,12 @@ function offerTab(from: Electron.WebContents, id: number, meta: unknown, target:
 function registerDetachIpc() {
   ipcMain.handle('term:detach', async (e, id: unknown, meta: unknown) => {
     if (!Number.isInteger(id)) throw new Error('aba inválida');
-    const title = typeof (meta as { title?: unknown })?.title === 'string' ? (meta as { title: string }).title.slice(0, 80) : undefined;
-    const win = await createWindow({ detached: true, title });
+    const m = (typeof meta === 'object' && meta !== null ? meta : {}) as { title?: unknown; position?: { x?: unknown; y?: unknown } };
+    const title = typeof m.title === 'string' ? m.title.slice(0, 80) : undefined;
+    // Aba arrastada para fora: a janela abre onde ela foi solta.
+    const p = m.position;
+    const near = p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: Number(p.x), y: Number(p.y) } : undefined;
+    const win = await createWindow({ detached: true, title, near });
     offerTab(e.sender, id as number, meta, win);
   });
   ipcMain.handle('term:reattach', async (e, id: unknown, meta: unknown) => {

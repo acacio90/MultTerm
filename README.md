@@ -85,6 +85,8 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
 - **Janela externa** abre a sessão no Windows Terminal.
 - **Ordem das abas**: arraste uma aba para outra posição, use o botão direito na aba (**Mover
   para a esquerda/direita/início/fim**) ou **Ctrl+Shift+PageUp/PageDown** na aba ativa.
+- **Arrastar uma aba de terminal para fora da barra de abas** a destaca numa janela própria, aberta
+  onde a aba foi solta (soltar perto da barra não destaca).
 - **Layout da área de abas** (ícones no canto direito da barra de abas): uma aba, duas lado a
   lado ou duas empilhadas. Na tela dividida, clicar numa aba a coloca na metade em foco (com
   borda destacada) e clicar dentro de uma metade passa o foco para ela. O layout fica lembrado.

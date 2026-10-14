@@ -529,12 +529,19 @@ function createTab({ title, tooltip = '', panelClass }) {
     draggedTab = tab;
     tab.button.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', tab.title);
+    // Tipo próprio, não texto: um campo de texto (como o do terminal) aceitaria a aba e digitaria
+    // o título dela no shell; assim, soltar fora da barra fica sem destino e a aba é destacada.
+    e.dataTransfer.setData('application/x-multterm-tab', String(tab.id));
   });
-  tab.button.addEventListener('dragend', () => {
+  tab.button.addEventListener('dragend', (e) => {
     draggedTab = null;
     tab.button.classList.remove('dragging');
     clearDropMarks();
+    // Solta fora da barra de abas (e de qualquer área que aceite a aba): vai para uma janela própria.
+    if (e.dataTransfer.dropEffect === 'none' && tab.term && droppedAwayFromTabBar(e)) {
+      api.termDetach(tab.id, { ...tabMeta(tab), position: { x: e.screenX, y: e.screenY } })
+        .catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`));
+    }
   });
   tab.button.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -566,6 +573,16 @@ function moveTab(tab, index) {
   for (const t of order) tabsById.set(t.id, t);
   notifyTabsChanged();
   tab.button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+/** A aba foi solta longe da barra de abas (com uma margem, para não destacar sem querer)? */
+function droppedAwayFromTabBar(e) {
+  if (!e.screenX && !e.screenY && !e.clientX && !e.clientY) return false; // posição desconhecida
+  const r = document.querySelector('.tabbar').getBoundingClientRect();
+  const margin = 40;
+  const inside = e.clientX >= r.left - margin && e.clientX <= r.right + margin
+    && e.clientY >= r.top - margin && e.clientY <= r.bottom + margin;
+  return !inside;
 }
 
 function clearDropMarks() {
