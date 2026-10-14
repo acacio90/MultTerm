@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, type WebContents } from 'electron';
+import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { McpServer, type ShareMode, type SharedTerminal } from '../agent/mcp.ts';
@@ -7,6 +9,7 @@ import { startAgentHttp, type AgentHttp } from '../agent/http.ts';
 import { timestamp } from '../servers/common.ts';
 import { onTerminalMoved, terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
 import { AGENTS, agentLaunchCommand, DEFAULT_AGENT } from './local-terminal.ts';
+import { chooseAgent, knownAgentPaths, parseVersion, parseWhere, pickExecutable, type AgentDetection } from './agent-detect.ts';
 
 /*
  * Agente MCP: servidor local (HTTP em 127.0.0.1 + ponte stdio) que expõe só as abas de terminal
@@ -86,7 +89,16 @@ function status(viewer?: WebContents) {
     stdio: stdioCommand(),
     shares: [...shares.values()].filter((s) => !viewer || s.owner === viewer).map((s) => ({ tab: s.tab, mode: s.mode, title: s.title })),
     agent: currentAgent(),
-    agents: Object.entries(AGENTS).map(([id, a]) => ({ id, label: a.label })),
+    // Escolha gravada que não está instalada: usando outro (a interface avisa).
+    agentFallback: agentChoice().fallback ? AGENTS[prefs.agent ?? DEFAULT_AGENT]?.label : undefined,
+    detecting: detecting !== undefined,
+    agents: Object.entries(AGENTS).map(([id, a]) => ({
+      id,
+      label: a.label,
+      // null = ainda procurando; com MULTTERM_AGENT_COMMAND (testes) o agente conta como instalado.
+      installed: process.env.MULTTERM_AGENT_COMMAND ? true : detected ? detected[id]?.installed ?? false : null,
+      version: detected?.[id]?.version,
+    })),
     mcpConfig: mcpConfigFile(),
   };
 }
@@ -195,15 +207,72 @@ export async function importAgentPrefs(raw: { port?: number; agent?: string }): 
   broadcast();
 }
 
-const currentAgent = () => (prefs.agent && Object.hasOwn(AGENTS, prefs.agent) ? prefs.agent : DEFAULT_AGENT);
+// ---------- agentes instalados ----------
+
+let detected: Record<string, AgentDetection> | undefined;
+let detecting: Promise<void> | undefined;
+
+const run = (file: string, args: string[], env?: NodeJS.ProcessEnv) => new Promise<string>((resolve) => {
+  execFile(file, args, { timeout: 4000, windowsHide: true, env }, (err, stdout) => resolve(err ? '' : String(stdout)));
+});
+
+/**
+ * Procura cada agente do catálogo no PATH (where.exe) e nos caminhos de instalação conhecidos e lê
+ * a versão dos .exe ("--version", sem shell). MULTTERM_AGENT_SEARCH_PATH troca o PATH da busca e
+ * ignora os caminhos conhecidos (testes).
+ */
+// Pelo caminho completo: o PATH da busca pode não incluir o System32 (e evita outro where.exe no PATH).
+const whereExe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'where.exe');
+
+export function detectAgents(): Promise<void> {
+  detecting ??= (async () => {
+    const searchPath = process.env.MULTTERM_AGENT_SEARCH_PATH;
+    const env = searchPath !== undefined ? { ...process.env, PATH: searchPath } : process.env;
+    const result: Record<string, AgentDetection> = {};
+    for (const [id, a] of Object.entries(AGENTS)) {
+      const candidates = parseWhere(await run(whereExe, [a.exe], env));
+      if (searchPath === undefined) {
+        candidates.push(...knownAgentPaths(a.exe, { userProfile: process.env.USERPROFILE, appData: process.env.APPDATA }).filter((p) => existsSync(p)));
+      }
+      const path = pickExecutable(candidates);
+      const version = path && /\.exe$/i.test(path) ? parseVersion(await run(path, ['--version'])) : undefined;
+      result[id] = { installed: !!path, ...(path ? { path } : {}), ...(version ? { version } : {}) };
+    }
+    detected = result;
+  })().finally(() => {
+    detecting = undefined;
+    broadcast();
+  });
+  return detecting;
+}
+
+const agentChoice = () => chooseAgent(
+  prefs.agent && Object.hasOwn(AGENTS, prefs.agent) ? prefs.agent : DEFAULT_AGENT,
+  Object.keys(AGENTS),
+  process.env.MULTTERM_AGENT_COMMAND ? undefined : detected,
+);
+const currentAgent = () => agentChoice().agent;
 
 /**
  * Liga o servidor (se preciso) e devolve a linha de comando do agente escolhido numa aba local.
  * MULTTERM_AGENT_COMMAND troca o comando (testes).
  */
 export async function agentLaunch(): Promise<{ file: string; args: string[] }> {
+  if (process.env.MULTTERM_AGENT_COMMAND) {
+    await enable();
+    return agentLaunchCommand(process.env.MULTTERM_AGENT_COMMAND, mcpConfigFile());
+  }
+  if (!detected) await detectAgents();
+  const id = currentAgent();
+  const agent = AGENTS[id];
+  const found = detected?.[id];
+  if (!found?.installed || !found.path) {
+    throw new Error(`${agent.label} não foi encontrado nesta máquina; instale-o e clique em Procurar de novo`);
+  }
   await enable();
-  return agentLaunchCommand(process.env.MULTTERM_AGENT_COMMAND || AGENTS[currentAgent()].command, mcpConfigFile());
+  // O caminho encontrado (pode não estar no PATH, ex.: instalador que põe em ~/.local/bin).
+  const exe = `& '${found.path.replace(/'/g, "''")}'`;
+  return agentLaunchCommand(agent.command.split('{exe}').join(exe), mcpConfigFile());
 }
 
 // A aba mudou de janela (destacar/devolver): o compartilhamento vai junto.
@@ -216,6 +285,7 @@ onTerminalMoved((from, to, owner, id) => {
 });
 
 export function registerAgentIpc(): void {
+  void detectAgents();
   const ready = (async () => {
     prefs = JSON.parse(await readFile(prefsFile(), 'utf8').catch(() => '{}'));
     token = loadToken();
@@ -248,6 +318,11 @@ export function registerAgentIpc(): void {
     prefs.agent = id;
     await savePrefs();
     broadcast();
+    return status(_e.sender);
+  });
+  ipcMain.handle('agent:detect', async (_e) => {
+    detected = undefined;
+    await detectAgents();
     return status(_e.sender);
   });
   ipcMain.handle('agent:new-token', async (_e) => {

@@ -149,9 +149,11 @@ abertos. O MultTerm não fala com nenhum serviço de IA: ele só expõe ferramen
   A tela do agente mostra a configuração pronta para colar: **stdio** (o próprio executável do
   MultTerm faz a ponte) ou **HTTP** (endereço e token).
 - Tudo o que o agente lê ou envia fica no registro de atividade.
-- **Abrir o agente no MultTerm**: escolha o agente na lista (por enquanto, Claude Code) e clique
-  em **Abrir o agente** — ele abre numa aba de terminal local, já ligado ao servidor, com a conta
-  que você tem nele nesta máquina (o agente precisa estar instalado).
+- **Abrir o agente no MultTerm**: escolha o agente na lista e clique em **Abrir o agente** — ele
+  abre numa aba de terminal local, já ligado ao servidor, com a conta que você tem nele nesta
+  máquina. A lista mostra os agentes encontrados na máquina (no PATH e nos caminhos de instalação
+  comuns), com a versão; os não instalados aparecem desabilitados, e **Procurar de novo** refaz a
+  busca depois de instalar um. Por enquanto o catálogo tem o Claude Code.
 
 ### Terminal local
 

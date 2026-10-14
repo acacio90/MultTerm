@@ -21,6 +21,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Excluir sessão pelo botão direito (e várias selecionadas de uma vez), com uma confirmação
   própria que mostra nome, pasta e host, começa com o foco em Cancelar e avisa se há aba aberta. A
   mesma confirmação vale no formulário e em Sessão → Excluir. (#47)
+- Agente: a lista mostra só os agentes instalados na máquina (PATH e caminhos de instalação
+  comuns), com a versão; os não encontrados aparecem desabilitados, há **Procurar de novo**, e
+  **Abrir o agente** fica bloqueado quando não há nenhum. O agente abre pelo caminho encontrado. (#43)
 
 ## [0.5.0] - 2026-10-14
 
