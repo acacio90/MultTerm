@@ -318,11 +318,13 @@ function closeTab(tab) {
   if (tab.term) {
     if (tab.running) api.termClose(tab.id);
     tab.term.dispose();
+    if (tab.agentMode && tab.agentMode !== 'off') void api.agentShare(tab.id, 'off', tab.title);
   }
   tab.onClose?.();
   tab.panel.remove();
   tab.button.remove();
   tabsById.delete(tab.id);
+  notifyTabsChanged();
   if (activeTab === tab) {
     const next = [...tabsById.values()].pop();
     if (next) showTab(next);
@@ -332,7 +334,7 @@ function closeTab(tab) {
 
 /** Cria e registra uma aba (botão + painel) de qualquer tipo. */
 function createTab({ title, tooltip = '', panelClass }) {
-  const tab = { id: ++tabSeq };
+  const tab = { id: ++tabSeq, title, tooltip };
   tab.panel = document.createElement('div');
   tab.panel.className = `panel ${panelClass}`;
   $('terminals').append(tab.panel);
@@ -356,7 +358,13 @@ function createTab({ title, tooltip = '', panelClass }) {
   });
   $('tabs').append(tab.button);
   tabsById.set(tab.id, tab);
+  setTimeout(notifyTabsChanged, 0); // depois que a aba de terminal ganha o term
   return tab;
+}
+
+/** Painéis que listam as abas (ex.: o do agente) se atualizam. */
+function notifyTabsChanged() {
+  for (const t of tabsById.values()) t.onTabsChanged?.();
 }
 
 function pasteInto(tab) {
@@ -886,7 +894,7 @@ function newSessionFrom({ name, host, type }) {
 
 function openToolTab(kind, target) {
   // Uma aba de VPN e uma de servidores (o estado é único).
-  if (kind === 'vpn' || kind === 'servers') for (const t of tabsById.values()) if (t.kind === kind) closeTab(t);
+  if (kind === 'vpn' || kind === 'servers' || kind === 'agent') for (const t of tabsById.values()) if (t.kind === kind) closeTab(t);
   const tab = createTab({ title: TOOL_TITLES[kind], panelClass: 'tool-panel' });
   tab.kind = kind;
   const session = selectedSession();
@@ -894,11 +902,12 @@ function openToolTab(kind, target) {
   const ctx = {
     api, cleanError, host, network: target?.network ?? guessNetwork(host), newSession: newSessionFrom,
     mac: target?.mac ?? session?.mac, sessions: state.sessions, openTool: openToolTab,
+    terminalTabs: () => [...tabsById.values()].filter((t) => t.term).map((t) => ({ id: t.id, title: t.title, detail: t.tooltip || undefined })),
     vpnSite: target?.vpnSite ?? session?.vpn, vpnNotice: target?.vpnNotice, vpnThen: target?.vpnThen,
   };
   const hooks = buildToolPanel(kind, ctx, tab);
   Object.assign(tab, {
-    onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus, onVpnStatus: hooks.onVpnStatus, onServersEvent: hooks.onServersEvent,
+    onResult: hooks.onResult, onProgress: hooks.onProgress, onClose: hooks.onClose, onShow: hooks.focus, onVpnStatus: hooks.onVpnStatus, onServersEvent: hooks.onServersEvent, onAgentEvent: hooks.onAgentEvent, onTabsChanged: hooks.onTabsChanged,
   });
   showTab(tab);
 }
@@ -923,6 +932,25 @@ $('vpn-indicator').addEventListener('click', () => openToolTab('vpn'));
 api.onServersEvent((ev) => {
   for (const t of tabsById.values()) t.onServersEvent?.(ev);
 });
+
+// Agente MCP: indicador no botão e marca nas abas compartilhadas.
+function renderAgent(s) {
+  $('agent-badge').hidden = !s.enabled;
+  const modes = new Map((s.shares ?? []).map((x) => [x.tab, x.mode]));
+  for (const t of tabsById.values()) {
+    if (!t.term) continue;
+    t.agentMode = modes.get(t.id) ?? 'off';
+    t.button.classList.toggle('agent-shared', t.agentMode !== 'off');
+    t.button.classList.toggle('agent-control', t.agentMode === 'approve' || t.agentMode === 'auto');
+    t.button.title = t.agentMode === 'off' ? t.tooltip : `${t.tooltip ? `${t.tooltip} · ` : ''}compartilhada com o agente (${{ read: 'somente leitura', approve: 'aprovar cada envio', auto: 'controle livre' }[t.agentMode]})`;
+  }
+}
+api.onAgentEvent((ev) => {
+  renderAgent(ev);
+  for (const t of tabsById.values()) t.onAgentEvent?.(ev);
+});
+$('btn-agent').addEventListener('click', () => openToolTab('agent'));
+api.agentStatus().then(renderAgent, () => {});
 api.vpnInfo().then((info) => {
   vpnStatus = info.status ?? null;
   renderVpnIndicator();

@@ -19,6 +19,7 @@ import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTer
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { registerVpnIpc } from './vpn.ts';
 import { registerServersIpc } from './servers.ts';
+import { registerAgentIpc } from './agent.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
@@ -275,6 +276,7 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerToolsIpc();
   registerVpnIpc();
   registerServersIpc();
+  registerAgentIpc();
   initUpdates();
   await createWindow();
   app.on('activate', () => {

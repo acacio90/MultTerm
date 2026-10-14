@@ -17,6 +17,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
 - **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos, Iperf (iperf3)
   para medir banda, SSH/SFTP, Telnet e um agendador de comandos (cron)
+- **Agente MCP**: um agente de IA (configurado por você) lê e opera os terminais que você
+  compartilhar, com aprovação de cada comando
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
   na barra e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
@@ -100,6 +102,24 @@ No menu **Ferramentas** (cada uma abre numa aba; o host da sessão selecionada v
 
 Nenhuma ferramenta exige rodar o app como administrador (a captura usa o Npcap no modo padrão,
 sem a opção "restringir a administradores"; o modo pktmon pede a elevação só durante a captura).
+
+### Agente MCP
+
+O botão **Agente** liga um servidor [MCP](https://modelcontextprotocol.io) local para que um agente
+de IA compatível com MCP — configurado por você, com a sua conta — leia e opere os terminais
+abertos. O MultTerm não fala com nenhum serviço de IA: ele só expõe ferramentas ao agente.
+
+- **Nada é compartilhado por padrão.** Para cada aba de terminal você escolhe: não compartilhar,
+  **somente leitura**, **aprovar cada envio** (o MultTerm mostra exatamente o que será digitado e
+  em qual aba, com Permitir / Permitir sempre nesta aba / Recusar) ou **controle livre**. Abas
+  compartilhadas ganham uma marca (◉); **Parar de compartilhar tudo** corta o acesso na hora.
+- Ferramentas: `list_terminals`, `read_terminal` (a saída como texto, sem cores),
+  `run_command` (digita, aperta Enter e devolve a saída quando ela para), `send_input` e
+  `send_keys` (Enter, Ctrl+C, setas...). Os comandos rodam nos servidores reais das sessões.
+- Conexão só em `127.0.0.1`, com token (guardado cifrado); pedidos de navegador são recusados.
+  A tela do agente mostra a configuração pronta para colar: **stdio** (o próprio executável do
+  MultTerm faz a ponte) ou **HTTP** (endereço e token).
+- Tudo o que o agente lê ou envia fica no registro de atividade.
 
 ### Servidores
 

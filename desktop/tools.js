@@ -568,6 +568,153 @@ function capturePanel(ctx, tab) {
   };
 }
 
+// ---------- agente MCP ----------
+
+const AGENT_MODES = [
+  ['off', 'Não compartilhar'],
+  ['read', 'Somente leitura'],
+  ['approve', 'Aprovar cada envio'],
+  ['auto', 'Controle livre'],
+];
+
+function agentPanel(ctx) {
+  const body = el('div', { className: 'agent' });
+  const status = statusLine();
+  let state = null;
+  let logBox = null;
+  let rendered = false;
+
+  const copyButton = (getText) => {
+    const b = el('button', { type: 'button', textContent: 'Copiar' });
+    b.addEventListener('click', async () => {
+      await ctx.api.clipboardWrite(getText());
+      b.textContent = 'Copiado';
+      setTimeout(() => { b.textContent = 'Copiar'; }, 1500);
+    });
+    return b;
+  };
+
+  function configs(s) {
+    const stdio = { mcpServers: { multterm: s.stdio } };
+    const httpCfg = { mcpServers: { multterm: { type: 'http', url: s.url, headers: { Authorization: `Bearer ${s.token}` } } } };
+    return { stdio: JSON.stringify(stdio, null, 2), http: JSON.stringify(httpCfg, null, 2) };
+  }
+
+  function render() {
+    const s = state;
+    const toggle = el('button', { type: 'button', className: s.enabled ? '' : 'primary', textContent: s.enabled ? 'Desligar o agente' : 'Ligar o agente' });
+    toggle.addEventListener('click', async () => {
+      status.textContent = '';
+      try {
+        state = { ...state, ...(await ctx.api.agentEnable(!s.enabled)) };
+        render();
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    const port = el('input', { name: 'port', type: 'number', min: 1024, max: 65535, value: s.port });
+    const savePort = el('button', { type: 'button', textContent: 'Trocar porta' });
+    savePort.addEventListener('click', async () => {
+      try {
+        state = { ...state, ...(await ctx.api.agentSetPort(Number(port.value))) };
+        render();
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    const newToken = el('button', { type: 'button', textContent: 'Gerar token novo' });
+    newToken.addEventListener('click', async () => {
+      if (!confirm('Gerar um token novo? Agentes configurados com o token atual deixam de conectar até você atualizar a configuração deles.')) return;
+      state = { ...state, ...(await ctx.api.agentNewToken()) };
+      render();
+    });
+
+    const cfg = configs(s);
+    const stdioBox = el('pre', { className: 'dns-result agent-config', textContent: cfg.stdio });
+    const httpBox = el('pre', { className: 'dns-result agent-config', textContent: cfg.http.replace(s.token, '••••••••') });
+    const reveal = el('button', { type: 'button', className: 'link', textContent: 'mostrar o token' });
+    reveal.addEventListener('click', () => {
+      const hidden = httpBox.textContent.includes('••••');
+      httpBox.textContent = hidden ? cfg.http : cfg.http.replace(s.token, '••••••••');
+      reveal.textContent = hidden ? 'ocultar o token' : 'mostrar o token';
+    });
+
+    // Terminais abertos com o modo de compartilhamento de cada um.
+    const terms = ctx.terminalTabs();
+    const shareRows = terms.map((t) => {
+      const current = s.shares.find((x) => x.tab === t.id)?.mode ?? 'off';
+      const sel = select(`share-${t.id}`, AGENT_MODES, current);
+      sel.addEventListener('change', async () => {
+        await ctx.api.agentShare(t.id, sel.value, t.title, t.detail);
+      });
+      return el('tr', {}, el('td', { textContent: t.title }), el('td', { className: 'muted', textContent: t.detail ?? '' }), el('td', {}, sel));
+    });
+    const unshare = el('button', { type: 'button', className: 'danger', textContent: 'Parar de compartilhar tudo', disabled: !s.shares.length });
+    unshare.addEventListener('click', () => ctx.api.agentUnshareAll());
+
+    logBox = el('pre', { className: 'dns-result server-log', textContent: (s.log ?? []).join('\n') });
+
+    // Redesenha sem perder a posição da rolagem.
+    const scroller = body.closest('.panel');
+    const top = scroller?.scrollTop ?? 0;
+    body.replaceChildren(
+      el('p', {
+        textContent: 'Liga um servidor MCP local para um agente de IA (configurado por você, com a sua conta) ler e operar os ' +
+          'terminais que você compartilhar. Só as abas marcadas abaixo ficam visíveis; nada é compartilhado por padrão.',
+      }),
+      el('div', { className: 'actions' }, toggle, el('span', { className: `agent-state ${s.enabled ? 'on' : 'off'}`, textContent: s.enabled ? `ligado em ${s.url}` : 'desligado' })),
+      el('h3', { textContent: 'Terminais compartilhados' }),
+      terms.length
+        ? el('table', { className: 'results agent-shares' }, el('tbody', {}, ...shareRows))
+        : el('p', { className: 'muted', textContent: 'Nenhuma aba de terminal aberta. Abra uma sessão e volte aqui para compartilhá-la.' }),
+      el('p', {
+        className: 'muted',
+        textContent: 'Somente leitura: o agente só lê a saída. Aprovar cada envio: o MultTerm pergunta antes de cada comando ou tecla. ' +
+          'Controle livre: o agente digita sem perguntar — use só quando estiver acompanhando. Os comandos rodam nos servidores reais das sessões.',
+      }),
+      el('div', { className: 'actions' }, unshare),
+      el('h3', { textContent: 'Configuração do agente' }),
+      el('p', { className: 'muted', textContent: 'Agentes que iniciam servidores por linha de comando (stdio):' }),
+      stdioBox, el('div', { className: 'actions' }, copyButton(() => cfg.stdio)),
+      el('p', { className: 'muted', textContent: 'Agentes que conectam por HTTP:' }),
+      httpBox, el('div', { className: 'actions' }, copyButton(() => cfg.http), reveal),
+      el('div', { className: 'tool-form' }, field('Porta', port), el('div', { className: 'actions' }, savePort, newToken)),
+      el('div', { className: 'server-log-head' }, el('strong', { textContent: 'Atividade do agente' })),
+      logBox,
+    );
+    if (scroller) scroller.scrollTop = top;
+    rendered = true;
+  }
+
+  async function load() {
+    try {
+      state = await ctx.api.agentStatus();
+      render();
+    } catch (err) {
+      status.textContent = ctx.cleanError(err);
+    }
+  }
+  load();
+
+  return {
+    title: 'Agente',
+    content: [body, status],
+    onAgentEvent: (ev) => {
+      if (!state) return;
+      const keepLog = state.log ?? [];
+      state = { ...state, ...ev, log: ev.line ? [...keepLog, ev.line] : keepLog };
+      if (ev.line && rendered && logBox) {
+        logBox.textContent += `${logBox.textContent ? '\n' : ''}${ev.line}`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+      if (!ev.line) render();
+    },
+    onTabsChanged: () => {
+      if (state) render();
+    },
+  };
+}
+
 // ---------- servidores locais ----------
 
 function serversPanel(ctx) {
@@ -1195,7 +1342,7 @@ function localPortsPanel(ctx, tab) {
   };
 }
 
-const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel, vpn: vpnPanel, servers: serversPanel };
+const PANELS = { portscan: portScanPanel, netscan: netScanPanel, dns: dnsPanel, snmp: snmpPanel, localports: localPortsPanel, wol: wolPanel, capture: capturePanel, vpn: vpnPanel, servers: serversPanel, agent: agentPanel };
 
 /** Cria o painel da ferramenta `kind` dentro de `tab.panel`; devolve os ganchos da aba. */
 export function buildToolPanel(kind, ctx, tab) {
@@ -1206,4 +1353,4 @@ export function buildToolPanel(kind, ctx, tab) {
   return p;
 }
 
-export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes', vpn: 'VPN', servers: 'Servidores' };
+export const TOOL_TITLES = { portscan: 'Scanner de portas', netscan: 'Scanner de rede', dns: 'Consulta DNS', snmp: 'Consulta SNMP', localports: 'Portas locais', wol: 'Wake-on-LAN', capture: 'Captura de pacotes', vpn: 'VPN', servers: 'Servidores', agent: 'Agente' };

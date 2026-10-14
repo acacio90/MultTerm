@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron';
 import pty from 'node-pty';
+import { OutputBuffer } from '../agent/text.ts';
 
 /**
  * Terminais embutidos: um pseudo-terminal por aba, ligado à janela que o abriu.
@@ -10,6 +11,13 @@ interface Terminal {
   proc: pty.IPty;
   owner: WebContents;
 }
+
+/**
+ * Saída recente de cada terminal (por janela + id da aba), para o agente MCP ler. Sobrevive à
+ * reconexão (mesmo id) e some quando a aba fecha.
+ */
+const outputs = new Map<string, OutputBuffer>();
+const dataListeners = new Set<(key: string) => void>();
 
 const terminals = new Map<string, Terminal>();
 
@@ -46,7 +54,11 @@ export function openTerminal(
   });
   const entry = { proc, owner };
   terminals.set(key, entry);
+  if (!outputs.has(key)) outputs.set(key, new OutputBuffer());
+  const output = outputs.get(key)!;
   proc.onData((data) => {
+    output.push(data);
+    for (const l of dataListeners) l(key);
     if (!owner.isDestroyed()) owner.send('term:data', id, data);
   });
   proc.onExit(({ exitCode }) => {
@@ -69,13 +81,47 @@ export function resizeTerminal(owner: WebContents, id: unknown, cols: unknown, r
 }
 
 export function closeTerminal(owner: WebContents, id: unknown): void {
+  if (validId(id)) outputs.delete(keyOf(owner, id));
   const t = get(owner, id);
   if (!t) return;
   terminals.delete(keyOf(owner, id as number));
   t.proc.kill();
 }
 
+// ---------- acesso para o agente MCP ----------
+
+export const terminalKey = keyOf;
+export const terminalOutput = (key: string) => outputs.get(key);
+export const terminalRunning = (key: string) => terminals.has(key);
+export function writeTerminalByKey(key: string, data: string) {
+  terminals.get(key)?.proc.write(data);
+}
+
+/** Espera a saída do terminal ficar parada por `quietMs`; false se o tempo esgotar antes. */
+export function waitTerminalQuiet(key: string, quietMs: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let quiet: NodeJS.Timeout;
+    const finish = (ok: boolean) => {
+      clearTimeout(quiet);
+      clearTimeout(limit);
+      dataListeners.delete(onData);
+      resolve(ok);
+    };
+    const arm = () => {
+      clearTimeout(quiet);
+      quiet = setTimeout(() => finish(true), quietMs);
+    };
+    const onData = (k: string) => {
+      if (k === key) arm();
+    };
+    const limit = setTimeout(() => finish(false), timeoutMs);
+    dataListeners.add(onData);
+    arm();
+  });
+}
+
 export function closeTerminalsOf(owner: WebContents): void {
+  for (const key of outputs.keys()) if (key.startsWith(`${owner.id}:`)) outputs.delete(key);
   for (const [key, t] of terminals) {
     if (t.owner === owner) {
       terminals.delete(key);

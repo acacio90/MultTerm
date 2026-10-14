@@ -6,6 +6,13 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- Agente MCP: servidor MCP local (HTTP em 127.0.0.1 com token, ou ponte stdio pelo próprio
+  executável) que deixa um agente de IA listar, ler e operar os terminais compartilhados, com
+  permissão por aba (somente leitura, aprovar cada envio ou controle livre), janela de
+  aprovação, marca nas abas, corte imediato e registro de atividade. (#30)
+
 ## [0.3.0] - 2026-10-13
 
 ### Adicionado
