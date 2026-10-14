@@ -17,6 +17,8 @@ permissions:
 env:
   FREERDP_VERSION: 3.32.2
   FREERDP_SHA256: e95a505c0057e4d06a3b120477c421028769deba4db9c639ef3465d050f0955c
+  # Sobe quando muda a configuração do build (o pacote antigo continua disponível).
+  BUILD: 2
 
 jobs:
   build:
@@ -52,6 +54,7 @@ jobs:
           -DWITH_LAME=OFF -DWITH_SOXR=OFF -DWITH_JSON_DISABLED=ON -DWITH_AAD=OFF
           -DWITH_PKCS11=OFF -DWITH_KRB5=OFF -DCHANNEL_URBDRC=OFF -DWITH_WEBVIEW=OFF
           -DWITH_MANPAGES=OFF -DWITH_CCACHE=OFF -DWITH_CLANG_FORMAT=OFF
+          -DWITH_FREERDP_DEPRECATED_COMMANDLINE=ON
 
       - name: Compilar
         run: cmake --build build --config Release --target wfreerdp --parallel
@@ -67,13 +70,13 @@ jobs:
           # Só DLLs do sistema: o MultTerm distribui um único executável.
           $dumpbin = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe | Where-Object FullName -match 'Hostx64\\x64' | Select-Object -First 1
           & $dumpbin.FullName /dependents out/wfreerdp.exe
-          Compress-Archive out/* "freerdp-$env:FREERDP_VERSION-win64.zip"
-          (Get-FileHash "freerdp-$env:FREERDP_VERSION-win64.zip" -Algorithm SHA256).Hash.ToLower()
+          Compress-Archive out/* "freerdp-$env:FREERDP_VERSION-win64-$env:BUILD.zip"
+          (Get-FileHash "freerdp-$env:FREERDP_VERSION-win64-$env:BUILD.zip" -Algorithm SHA256).Hash.ToLower()
 
       - uses: actions/upload-artifact@v4
         with:
           name: freerdp-win64
-          path: freerdp-*-win64.zip
+          path: freerdp-*-win64-*.zip
 
       - name: Publicar na release auxiliar
         shell: pwsh
@@ -85,4 +88,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag -R $env:GITHUB_REPOSITORY --prerelease --target $env:GITHUB_SHA --title "FreeRDP $env:FREERDP_VERSION (componente do MultTerm)" --notes "Cliente RDP (wfreerdp.exe) compilado a partir do código-fonte oficial do FreeRDP $env:FREERDP_VERSION (Apache 2.0) pelo workflow freerdp.yml. Não é uma versão do MultTerm."
           }
-          gh release upload $tag "freerdp-$env:FREERDP_VERSION-win64.zip" -R $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag "freerdp-$env:FREERDP_VERSION-win64-$env:BUILD.zip" -R $env:GITHUB_REPOSITORY --clobber
