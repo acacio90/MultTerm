@@ -6,18 +6,21 @@ import { OutputBuffer } from '../agent/text.ts';
  * Terminais embutidos: um pseudo-terminal por aba, ligado à janela que o abriu.
  * O id é escolhido pela aba e registrado por ela antes da abertura, para que
  * nenhuma saída (nem o fim de um ssh que termina na hora) chegue antes da aba saber dele.
+ * Uma aba pode mudar de janela (destacar/devolver): dono e id são trocados sem reiniciar o processo.
  */
 interface Terminal {
   proc: pty.IPty;
   owner: WebContents;
+  id: number;
 }
 
 /**
- * Saída recente de cada terminal (por janela + id da aba), para o agente MCP ler. Sobrevive à
- * reconexão (mesmo id) e some quando a aba fecha.
+ * Saída recente de cada terminal (por janela + id da aba): o agente MCP lê dela e a janela que
+ * recebe uma aba destacada redesenha a tela com ela. Sobrevive à reconexão (mesmo id).
  */
 const outputs = new Map<string, OutputBuffer>();
 const dataListeners = new Set<(key: string) => void>();
+const moveListeners = new Set<(from: string, to: string, owner: WebContents, id: number) => void>();
 
 const terminals = new Map<string, Terminal>();
 
@@ -52,18 +55,20 @@ export function openTerminal(
     cwd: size.cwd,
     env: ptyEnv(),
   });
-  const entry = { proc, owner };
+  const entry: Terminal = { proc, owner, id };
   terminals.set(key, entry);
   if (!outputs.has(key)) outputs.set(key, new OutputBuffer());
-  const output = outputs.get(key)!;
+  // Dono e id lidos na hora: a aba pode ter mudado de janela.
   proc.onData((data) => {
-    output.push(data);
-    for (const l of dataListeners) l(key);
-    if (!owner.isDestroyed()) owner.send('term:data', id, data);
+    const k = keyOf(entry.owner, entry.id);
+    outputs.get(k)?.push(data);
+    for (const l of dataListeners) l(k);
+    if (!entry.owner.isDestroyed()) entry.owner.send('term:data', entry.id, data);
   });
   proc.onExit(({ exitCode }) => {
-    if (terminals.get(key) === entry) terminals.delete(key);
-    if (!owner.isDestroyed()) owner.send('term:exit', id, exitCode);
+    const k = keyOf(entry.owner, entry.id);
+    if (terminals.get(k) === entry) terminals.delete(k);
+    if (!entry.owner.isDestroyed()) entry.owner.send('term:exit', entry.id, exitCode);
   });
 }
 
@@ -86,6 +91,35 @@ export function closeTerminal(owner: WebContents, id: unknown): void {
   if (!t) return;
   terminals.delete(keyOf(owner, id as number));
   t.proc.kill();
+}
+
+/**
+ * Passa a aba (processo em execução ou só a saída de uma sessão encerrada) para outra janela.
+ * Devolve a saída guardada, para a janela nova redesenhar a tela, e se o processo segue vivo.
+ */
+export function moveTerminal(from: WebContents, fromId: number, to: WebContents, toId: number): { output: string; running: boolean } {
+  const fromKey = keyOf(from, fromId);
+  const toKey = keyOf(to, toId);
+  if (terminals.has(toKey) || outputs.has(toKey)) throw new Error('a janela de destino já usa esse id de aba');
+  const t = terminals.get(fromKey);
+  const out = outputs.get(fromKey);
+  if (!t && !out) throw new Error('a aba não existe mais');
+  if (t) {
+    terminals.delete(fromKey);
+    t.owner = to;
+    t.id = toId;
+    terminals.set(toKey, t);
+  }
+  if (out) {
+    outputs.delete(fromKey);
+    outputs.set(toKey, out);
+  }
+  for (const l of moveListeners) l(fromKey, toKey, to, toId);
+  return { output: out?.since(0) ?? '', running: !!t };
+}
+
+export function onTerminalMoved(cb: (from: string, to: string, owner: WebContents, id: number) => void) {
+  moveListeners.add(cb);
 }
 
 // ---------- acesso para o agente MCP ----------

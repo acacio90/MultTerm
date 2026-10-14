@@ -314,11 +314,12 @@ function showTab(tab) {
   });
 }
 
-function closeTab(tab) {
+function closeTab(tab, { keepProcess = false } = {}) {
   if (tab.term) {
-    if (tab.running) api.termClose(tab.id);
+    // keepProcess: a aba foi para outra janela; o processo (e o compartilhamento) seguem lá.
+    if (tab.running && !keepProcess) api.termClose(tab.id);
     tab.term.dispose();
-    if (tab.agentMode && tab.agentMode !== 'off') void api.agentShare(tab.id, 'off', tab.title);
+    if (!keepProcess && tab.agentMode && tab.agentMode !== 'off') void api.agentShare(tab.id, 'off', tab.title);
   }
   tab.onClose?.();
   tab.panel.remove();
@@ -328,6 +329,7 @@ function closeTab(tab) {
   if (activeTab === tab) {
     const next = [...tabsById.values()].pop();
     if (next) showTab(next);
+    else if (api.isDetached) window.close(); // janela destacada sem abas: fecha
     else showEditor();
   }
 }
@@ -415,9 +417,9 @@ async function startTab(tab) {
  * Aba com terminal embutido. `open(id, cols, rows)` inicia o processo no processo principal
  * (sessão SSH ou ferramenta como ping/traceroute).
  */
-async function openTerminalTab({ title, tooltip, open, endedText = 'sessão encerrada', restartText = 'reconectar' }) {
+async function openTerminalTab({ title, tooltip, open, spec, adopt, endedText = 'sessão encerrada', restartText = 'reconectar' }) {
   const tab = createTab({ title, tooltip, panelClass: 'term-panel' });
-  Object.assign(tab, { open, endedText, restartText, running: false, started: false });
+  Object.assign(tab, { open: open ?? openFor(spec), spec, endedText, restartText, running: false, started: false });
 
   tab.notice = document.createElement('div');
   tab.notice.className = 'term-notice';
@@ -477,19 +479,101 @@ async function openTerminalTab({ title, tooltip, open, endedText = 'sessão ence
   new ResizeObserver(() => {
     if (!tab.panel.hidden) tab.fit.fit();
   }).observe(tab.host);
+  tab.button.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openTabMenu(e, tab);
+  });
 
-  await startTab(tab);
+  if (adopt) await adoptInto(tab, adopt);
+  else await startTab(tab);
   return tab;
 }
+
+/** Recria a função que abre o processo de uma aba (para reconectar em outra janela). */
+function openFor(spec) {
+  if (spec?.type === 'ssh') return (id, cols, rows) => api.termOpen(id, spec.session, cols, rows);
+  if (spec?.type === 'local') return (id, cols, rows) => api.termOpenLocal(id, spec.kind, cols, rows);
+  if (spec?.type === 'diag') return (id, cols, rows) => api.termOpenTool(id, spec.req, cols, rows);
+  return async () => { throw new Error('esta aba não pode ser reaberta aqui'); };
+}
+
+/** Assume um processo que veio de outra janela: redesenha a tela e segue a sessão. */
+async function adoptInto(tab, { fromWc, fromId }) {
+  try {
+    const { output, running } = await api.termAdopt(fromWc, fromId, tab.id);
+    tab.started = true;
+    if (output) tab.term.write(output);
+    tab.running = running;
+    if (running) api.termResize(tab.id, tab.term.cols, tab.term.rows);
+    else markEnded(tab, null);
+  } catch (err) {
+    tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`);
+    markEnded(tab, null);
+  }
+}
+
+/** Dados para recriar a aba em outra janela. */
+const tabMeta = (tab) => ({ title: tab.title, tooltip: tab.tooltip, spec: tab.spec, endedText: tab.endedText, restartText: tab.restartText });
+
+// Menu de contexto da aba de terminal: destacar em janela própria ou devolver à principal.
+let tabMenu = null;
+function openTabMenu(e, tab) {
+  tabMenu?.remove();
+  const item = (label, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      tabMenu?.remove();
+      tabMenu = null;
+      fn();
+    });
+    return b;
+  };
+  tabMenu = document.createElement('div');
+  tabMenu.className = 'menu tab-menu';
+  tabMenu.setAttribute('role', 'menu');
+  tabMenu.append(
+    api.isDetached
+      ? item('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
+      : item('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))),
+    item('Fechar aba', () => closeTab(tab)),
+  );
+  tabMenu.style.left = `${e.clientX}px`;
+  tabMenu.style.top = `${e.clientY}px`;
+  document.body.append(tabMenu);
+  const away = (ev) => {
+    if (tabMenu && !tabMenu.contains(ev.target)) {
+      tabMenu.remove();
+      tabMenu = null;
+      document.removeEventListener('mousedown', away, true);
+    }
+  };
+  document.addEventListener('mousedown', away, true);
+}
+
+// A outra janela assumiu a aba: tira daqui sem encerrar o processo.
+api.onTermReleased((id) => {
+  const tab = tabsById.get(id);
+  if (tab) closeTab(tab, { keepProcess: true });
+});
+// Uma aba chegando de outra janela.
+api.onTermAdopt((offer) => {
+  const meta = offer.meta ?? {};
+  if (api.isDetached) document.title = `${meta.title ?? 'terminal'} — MultTerm`;
+  void openTerminalTab({ title: meta.title ?? 'terminal', tooltip: meta.tooltip ?? '', spec: meta.spec, endedText: meta.endedText, restartText: meta.restartText, adopt: offer });
+});
+if (api.isDetached) document.body.classList.add('detached');
 
 const LOCAL_TITLES = { powershell: 'PowerShell', cmd: 'Prompt de comando', wsl: 'WSL', agent: 'Agente' };
 
 /** Terminal local (PowerShell, cmd, WSL) ou o agente numa aba local. */
 function openLocalTab(kind) {
   return openTerminalTab({
+    spec: { type: 'local', kind },
     title: LOCAL_TITLES[kind] ?? kind,
     tooltip: kind === 'agent' ? 'agente de IA (o shell continua aberto quando ele termina)' : 'terminal local',
-    open: (id, cols, rows) => api.termOpenLocal(id, kind, cols, rows),
     endedText: kind === 'agent' ? 'agente encerrado' : 'terminal encerrado',
     restartText: 'abrir de novo',
   });
@@ -497,9 +581,9 @@ function openLocalTab(kind) {
 
 function openSessionTab(session) {
   return openTerminalTab({
+    spec: { type: 'ssh', session },
     title: session.name,
     tooltip: `${session.user ? `${session.user}@` : ''}${session.host}`,
-    open: (id, cols, rows) => api.termOpen(id, session, cols, rows),
   });
 }
 
@@ -996,7 +1080,7 @@ diagForm.addEventListener('submit', (e) => {
   openTerminalTab({
     title: `${req.kind} ${req.host}`,
     tooltip: req.kind === 'ping' && !req.count ? 'Ctrl+C para parar' : '',
-    open: (id, cols, rows) => api.termOpenTool(id, req, cols, rows),
+    spec: { type: 'diag', req },
     endedText: `${req.kind} encerrado`,
     restartText: 'executar de novo',
   });

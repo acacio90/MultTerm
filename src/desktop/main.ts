@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, webContents } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -15,7 +15,7 @@ import {
   type LaunchPlan,
 } from '../sessions/launch.ts';
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
-import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
+import { closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { registerVpnIpc } from './vpn.ts';
 import { registerServersIpc } from './servers.ts';
@@ -239,14 +239,17 @@ function agentStatus(sshAdd: string): Promise<AgentStatus> {
   });
 }
 
-async function createWindow(): Promise<void> {
+// Janela principal (com a árvore de sessões); as demais são abas destacadas.
+let mainWindow: BrowserWindow | undefined;
+
+async function createWindow(opts: { detached?: boolean; title?: string } = {}): Promise<BrowserWindow> {
   const win = new BrowserWindow({
-    width: 1100,
-    height: 700,
+    width: opts.detached ? 900 : 1100,
+    height: opts.detached ? 560 : 700,
     minWidth: 720,
     minHeight: 420,
     icon: join(appRoot, 'desktop', 'icon.png'),
-    title: 'MultTerm',
+    title: opts.title ? `${opts.title} — MultTerm` : 'MultTerm',
     backgroundColor: '#1e1f22',
     webPreferences: {
       preload: join(appRoot, 'desktop', 'preload.cjs'),
@@ -254,6 +257,10 @@ async function createWindow(): Promise<void> {
       sandbox: true,
       nodeIntegration: false,
     },
+  });
+  if (!opts.detached) mainWindow = win;
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = undefined;
   });
   const contents = win.webContents;
   contents.on('destroyed', () => {
@@ -275,7 +282,46 @@ async function createWindow(): Promise<void> {
     });
   }
 
-  await win.loadFile(join(appRoot, 'desktop', 'index.html'));
+  await win.loadFile(join(appRoot, 'desktop', 'index.html'), opts.detached ? { query: { detached: '1' } } : undefined);
+  return win;
+}
+
+/*
+ * Destacar/devolver abas de terminal: a janela de origem oferece a aba, a de destino a adota
+ * (o processo continua o mesmo; só troca o dono) e só então a origem tira a aba da tela.
+ */
+const offers = new Map<string, number>(); // "janela:aba" de origem → janela de destino
+
+// O destino já carregou (createWindow espera o loadFile); o preload guarda a oferta até o app pedir.
+function offerTab(from: Electron.WebContents, id: number, meta: unknown, target: BrowserWindow) {
+  offers.set(`${from.id}:${id}`, target.webContents.id);
+  target.webContents.send('term:adopt', { fromWc: from.id, fromId: id, meta });
+}
+
+function registerDetachIpc() {
+  ipcMain.handle('term:detach', async (e, id: unknown, meta: unknown) => {
+    if (!Number.isInteger(id)) throw new Error('aba inválida');
+    const title = typeof (meta as { title?: unknown })?.title === 'string' ? (meta as { title: string }).title.slice(0, 80) : undefined;
+    const win = await createWindow({ detached: true, title });
+    offerTab(e.sender, id as number, meta, win);
+  });
+  ipcMain.handle('term:reattach', async (e, id: unknown, meta: unknown) => {
+    if (!Number.isInteger(id)) throw new Error('aba inválida');
+    const target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : await createWindow();
+    target.show();
+    target.focus();
+    offerTab(e.sender, id as number, meta, target);
+  });
+  ipcMain.handle('term:adopt', (e, fromWc: unknown, fromId: unknown, toId: unknown) => {
+    const key = `${fromWc}:${fromId}`;
+    if (offers.get(key) !== e.sender.id || !Number.isInteger(fromId) || !Number.isInteger(toId)) throw new Error('aba não oferecida a esta janela');
+    offers.delete(key);
+    const from = webContents.fromId(fromWc as number);
+    if (!from || from.isDestroyed()) throw new Error('a janela de origem fechou');
+    const moved = moveTerminal(from, fromId as number, e.sender, toId as number);
+    from.send('term:released', fromId);
+    return moved;
+  });
 }
 
 // Processo auxiliar da VPN (elevado): só o túnel, sem janela nem IPC.
@@ -289,6 +335,7 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerVpnIpc();
   registerServersIpc();
   registerAgentIpc();
+  registerDetachIpc();
   initUpdates();
   await createWindow();
   app.on('activate', () => {

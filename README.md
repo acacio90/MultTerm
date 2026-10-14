@@ -130,6 +130,13 @@ abertos. O MultTerm não fala com nenhum serviço de IA: ele só expõe ferramen
 **Ferramentas → Terminal local** abre PowerShell, Prompt de comando ou WSL numa aba, com a mesma
 cópia/cola e reabertura (**R**) das abas SSH.
 
+### Janelas separadas
+
+Clique com o botão direito numa aba de terminal → **Abrir em janela separada** para levá-la a uma
+janela própria (útil para ver duas sessões lado a lado ou em outro monitor). A sessão não é
+reiniciada: a tela é redesenhada e o processo segue. Na janela separada, **Devolver à janela
+principal** traz a aba de volta; o compartilhamento com o agente vai junto.
+
 ### Servidores
 
 **Ferramentas → Servidores** inicia e para servidores locais, cada um com porta, pasta raiz,

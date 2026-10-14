@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { McpServer, type ShareMode, type SharedTerminal } from '../agent/mcp.ts';
 import { startAgentHttp, type AgentHttp } from '../agent/http.ts';
 import { timestamp } from '../servers/common.ts';
-import { terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
+import { onTerminalMoved, terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
 import { agentLaunchCommand } from './local-terminal.ts';
 
 /*
@@ -36,9 +36,10 @@ const DEFAULT_PORT = 47830;
 /** Configuração MCP (stdio) para o comando do agente: o {mcp} do comando aponta para cá. */
 export const mcpConfigFile = () => join(app.getPath('userData'), 'agent-mcp.json');
 
+/** Cada janela recebe só as próprias abas compartilhadas (os ids de aba são por janela). */
 function broadcast(extra: Record<string, unknown> = {}) {
   for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.webContents.isDestroyed()) w.webContents.send('agent:event', { ...status(), ...extra });
+    if (!w.webContents.isDestroyed()) w.webContents.send('agent:event', { ...status(w.webContents), ...extra });
   }
 }
 
@@ -75,7 +76,7 @@ function stdioCommand() {
   return { command: process.execPath, args: [join(base, 'dist', 'agent', 'stdio-main.js'), connectionFile()], env: { ELECTRON_RUN_AS_NODE: '1' } };
 }
 
-function status() {
+function status(viewer?: WebContents) {
   const port = http?.port ?? prefs.port ?? DEFAULT_PORT;
   return {
     enabled: !!http,
@@ -83,7 +84,7 @@ function status() {
     url: `http://127.0.0.1:${port}/mcp`,
     token,
     stdio: stdioCommand(),
-    shares: [...shares.values()].map((s) => ({ tab: s.tab, mode: s.mode, title: s.title })),
+    shares: [...shares.values()].filter((s) => !viewer || s.owner === viewer).map((s) => ({ tab: s.tab, mode: s.mode, title: s.title })),
     agentCommand: prefs.agentCommand ?? '',
     mcpConfig: mcpConfigFile(),
   };
@@ -91,9 +92,9 @@ function status() {
 
 const bridge = {
   list: (): SharedTerminal[] => [...shares.values()].filter((s) => !s.owner.isDestroyed()).map((s) => ({
-    id: String(s.tab), title: s.title, detail: s.detail, mode: s.mode, running: terminalRunning(s.key),
+    id: s.key, title: s.title, detail: s.detail, mode: s.mode, running: terminalRunning(s.key),
   })),
-  find: (id: string) => [...shares.values()].find((s) => String(s.tab) === id),
+  find: (id: string) => shares.get(id),
   tail(id: string, lines: number) {
     const s = this.find(id);
     return s ? terminalOutput(s.key)?.tail(lines) ?? '' : '';
@@ -186,6 +187,15 @@ export async function agentLaunch(): Promise<{ file: string; args: string[] }> {
   return agentLaunchCommand(prefs.agentCommand ?? '', mcpConfigFile());
 }
 
+// A aba mudou de janela (destacar/devolver): o compartilhamento vai junto.
+onTerminalMoved((from, to, owner, id) => {
+  const s = shares.get(from);
+  if (!s) return;
+  shares.delete(from);
+  shares.set(to, { ...s, owner, tab: id, key: to });
+  broadcast();
+});
+
 export function registerAgentIpc(): void {
   const ready = (async () => {
     prefs = JSON.parse(await readFile(prefsFile(), 'utf8').catch(() => '{}'));
@@ -194,15 +204,15 @@ export function registerAgentIpc(): void {
     if (prefs.enabled) await enable().catch((err: Error) => log(`não ligou ao abrir: ${err.message}`));
   })();
 
-  ipcMain.handle('agent:status', async () => {
+  ipcMain.handle('agent:status', async (_e) => {
     await ready;
-    return { ...status(), log: activity };
+    return { ...status(_e.sender), log: activity };
   });
   ipcMain.handle('agent:enable', async (_e, on: unknown) => {
     await ready;
     if (on === true) await enable();
     else await disable();
-    return status();
+    return status(_e.sender);
   });
   ipcMain.handle('agent:set-port', async (_e, port: unknown) => {
     const n = Number(port);
@@ -212,7 +222,7 @@ export function registerAgentIpc(): void {
     prefs.port = n;
     await savePrefs();
     if (was) await enable();
-    return status();
+    return status(_e.sender);
   });
   ipcMain.handle('agent:set-command', async (_e, cmd: unknown) => {
     const text = typeof cmd === 'string' ? cmd.trim() : '';
@@ -221,15 +231,15 @@ export function registerAgentIpc(): void {
     prefs.agentCommand = text;
     await savePrefs();
     broadcast();
-    return status();
+    return status(_e.sender);
   });
-  ipcMain.handle('agent:new-token', async () => {
+  ipcMain.handle('agent:new-token', async (_e) => {
     const was = !!http;
     await disable(false);
     await newToken();
     if (was) await enable();
     log('token trocado: atualize a configuração do agente');
-    return status();
+    return status(_e.sender);
   });
   ipcMain.handle('agent:share', (e, tab: unknown, mode: unknown, title: unknown, detail: unknown) => {
     if (!Number.isInteger(tab)) throw new Error('aba inválida');

@@ -195,6 +195,9 @@ form h2 { margin: 0 0 12px; font-size: 16px; }
 /* ---------- ajuda ---------- */
 
 .toolbar .spacer { flex: 1; }
+/* Janela com abas destacadas: só as abas. */
+body.detached .toolbar, body.detached .sidebar, body.detached .statusbar, body.detached #tab-editor, body.detached #panel-editor { display: none; }
+.tab-menu { position: fixed; z-index: 50; }
 .badge-dot {
   display: inline-block;
   width: 8px;

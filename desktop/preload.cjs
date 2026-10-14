@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Abas oferecidas por outra janela podem chegar antes do app registrar o listener: guarda até lá.
+const adoptQueue = [];
+let adoptCb = null;
+ipcRenderer.on('term:adopt', (_e, offer) => (adoptCb ? adoptCb(offer) : adoptQueue.push(offer)));
+
 // Única ponte entre a interface e o processo principal.
 contextBridge.exposeInMainWorld('multterm', {
   load: () => ipcRenderer.invoke('sessions:load'),
@@ -11,6 +16,16 @@ contextBridge.exposeInMainWorld('multterm', {
 
   termOpen: (id, session, cols, rows) => ipcRenderer.invoke('term:open', id, session, cols, rows),
   termOpenLocal: (id, kind, cols, rows) => ipcRenderer.invoke('term:open-local', id, kind, cols, rows),
+  // Destacar/devolver abas entre janelas.
+  isDetached: new URLSearchParams(location.search).get('detached') === '1',
+  termDetach: (id, meta) => ipcRenderer.invoke('term:detach', id, meta),
+  termReattach: (id, meta) => ipcRenderer.invoke('term:reattach', id, meta),
+  termAdopt: (fromWc, fromId, toId) => ipcRenderer.invoke('term:adopt', fromWc, fromId, toId),
+  onTermAdopt: (cb) => {
+    adoptCb = cb;
+    for (const offer of adoptQueue.splice(0)) cb(offer);
+  },
+  onTermReleased: (cb) => ipcRenderer.on('term:released', (_e, id) => cb(id)),
   termInput: (id, data) => ipcRenderer.send('term:input', id, data),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
   termClose: (id) => ipcRenderer.send('term:close', id),
