@@ -46,7 +46,7 @@ const TOOLS = [
   {
     name: 'list_terminals',
     title: 'Listar terminais',
-    description: 'Lista os terminais do MultTerm que o usuário compartilhou com o agente (id, título, host e permissão: read = só leitura, approve = cada envio precisa da aprovação do usuário, auto = controle livre).',
+    description: 'Lista os terminais do MultTerm que o usuário compartilhou com o agente — sessões em MÁQUINAS REMOTAS (servidores, VMs, equipamentos), não a máquina local do agente. Use antes de qualquer pedido sobre servidores, VMs ou sessões abertas. Devolve id, título, host e permissão (read = só leitura, approve = cada envio precisa da aprovação do usuário, auto = controle livre).',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
   },
@@ -68,7 +68,7 @@ const TOOLS = [
   {
     name: 'run_command',
     title: 'Rodar comando',
-    description: 'Digita um comando no terminal, aperta Enter e devolve a saída produzida até ela parar (ou o tempo esgotar). O comando roda no sistema remoto da sessão (ex.: shell do servidor SSH). Pode exigir a aprovação do usuário.',
+    description: 'Digita um comando no terminal, aperta Enter e devolve a saída produzida até ela parar (ou o tempo esgotar). O comando roda na MÁQUINA REMOTA da sessão (ex.: o shell do servidor ou da VM via SSH), não na máquina local do agente. Pode exigir a aprovação do usuário.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -162,8 +162,13 @@ export class McpServer {
           protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: this.serverName, title: 'MultTerm', version: this.version },
-          instructions: 'Terminais do MultTerm compartilhados pelo usuário. Comece por list_terminals; leia com read_terminal antes de agir. '
-            + 'Comandos rodam nos sistemas remotos das sessões (servidores reais): seja cuidadoso e explique o que vai fazer.',
+          instructions: 'O MultTerm é o gerenciador de sessões do usuário: os terminais compartilhados aqui são MÁQUINAS REMOTAS '
+            + '(servidores, VMs, equipamentos de rede acessados por SSH), diferentes da máquina onde você roda. '
+            + 'Quando o usuário falar de "a VM", "o servidor", "o equipamento", "a sessão", "o terminal" ou citar o nome de uma aba, '
+            + 'ou quando houver terminais compartilhados e o pedido não disser que é na máquina local, use estas ferramentas — '
+            + 'NÃO o seu shell local. Em dúvida sobre qual máquina, chame list_terminals e pergunte ao usuário. '
+            + 'Comece por list_terminals; leia com read_terminal antes de agir. Os comandos rodam em sistemas reais: '
+            + 'seja cuidadoso, explique o que vai fazer e prefira comandos de leitura.',
         });
       }
       case 'notifications/initialized':
