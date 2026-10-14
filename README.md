@@ -73,7 +73,8 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
 
 - **Duplo clique** numa sessão abre uma aba: terminal (SSH) ou área de trabalho remota (RDP).
 - **Botão direito numa sessão**: Conectar, Janela externa, Ligar (Wake-on-LAN, se a sessão
-  tem MAC), Ping, Traceroute, Scanner de portas, Consulta SNMP e Editar.
+  tem MAC), Ping, Traceroute, Scanner de portas, Consulta SNMP, Editar e **Excluir…** (com
+  confirmação; com várias selecionadas, **Excluir as N selecionadas…**).
 - **Várias sessões**: Ctrl+clique adiciona ou tira sessões da seleção e Shift+clique seleciona um
   intervalo (Esc limpa); botão direito numa delas → **Conectar as N selecionadas**.
 - **Botão direito numa pasta**: Conectar todas, Nova subpasta, Nova sessão aqui, Renomear (move as sessões e

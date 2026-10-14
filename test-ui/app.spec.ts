@@ -68,8 +68,8 @@ test('cria, edita e exclui uma sessão, gravando no YAML', async () => {
   await expect(page.locator('#messages')).toHaveText('Sessão salva.');
   expect(await readFile(sessionsFile, 'utf8')).toContain('port: 2222');
 
-  page.once('dialog', (d) => d.accept());
   await page.click('#btn-delete');
+  await page.click('#confirm-ok');
   await expect(page.locator('#messages')).toHaveText('Sessão "db-01" excluída.');
   await expect(session('db-01')).toHaveCount(0);
   expect(await readFile(sessionsFile, 'utf8')).not.toContain('db-01');
