@@ -10,6 +10,8 @@ const state = {
   path: '',
   sessions: [],
   selected: null, // chave da sessão selecionada
+  multi: new Set(), // seleção múltipla (Ctrl/Shift+clique)
+  anchor: null, // início do intervalo do Shift+clique
   editing: null, // chave em edição; null + form visível = nova sessão
   filter: '',
   collapsed: new Set(readCollapsed()),
@@ -100,7 +102,11 @@ function treeItem({ depth, label, cls, twisty = '', badge = '' }) {
   return li;
 }
 
+// Chaves das sessões na ordem em que aparecem na árvore (para o Shift+clique).
+let treeOrder = [];
+
 function renderTree() {
+  treeOrder = [];
   const visible = state.sessions.filter(matches);
   const tree = buildTree(visible, state.filter ? [] : [...pendingFolders]);
   const items = [];
@@ -131,10 +137,13 @@ function renderTree() {
     }
     for (const s of [...node.sessions].sort((a, b) => collator.compare(a.name, b.name))) {
       const key = keyOf(s);
-      const li = treeItem({ depth, label: s.name, cls: key === state.selected ? 'session selected' : 'session', badge: s.type });
+      treeOrder.push(key);
+      const marked = state.multi.size ? state.multi.has(key) : key === state.selected;
+      const li = treeItem({ depth, label: s.name, cls: marked ? 'session selected' : 'session', badge: s.type });
       li.setAttribute('role', 'treeitem');
+      li.setAttribute('aria-selected', String(marked));
       li.title = `${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? DEFAULT_PORTS[s.type]}`;
-      li.addEventListener('click', () => select(key));
+      li.addEventListener('click', (e) => clickSession(e, key));
       li.addEventListener('dblclick', () => connect(s));
       li.addEventListener('contextmenu', (e) => openSessionMenu(e, s));
       li.addEventListener('keydown', (e) => {
@@ -149,6 +158,7 @@ function renderTree() {
   $('status-count').textContent = state.filter
     ? `${visible.length} de ${state.sessions.length} sessões`
     : `${state.sessions.length} sessões · sem limite`;
+  if (state.multi.size) $('status-count').textContent += ` · ${state.multi.size} selecionadas`;
   $('status-path').textContent = state.path;
   $('status-path').title = state.path;
 
@@ -203,7 +213,36 @@ function readForm() {
   return session;
 }
 
+/** Clique numa sessão: simples edita; Ctrl alterna na seleção múltipla; Shift seleciona o intervalo. */
+function clickSession(e, key) {
+  if (e.ctrlKey || e.metaKey) {
+    if (!state.multi.size && state.selected) state.multi.add(state.selected);
+    if (state.multi.has(key)) state.multi.delete(key);
+    else state.multi.add(key);
+    if (!state.multi.size) state.selected = null; // desmarcou a única selecionada
+    state.anchor = key;
+    renderTree();
+    return;
+  }
+  const from = treeOrder.indexOf(state.anchor ?? state.selected);
+  const to = treeOrder.indexOf(key);
+  if (e.shiftKey && from >= 0 && to >= 0) {
+    state.multi = new Set(treeOrder.slice(Math.min(from, to), Math.max(from, to) + 1));
+    renderTree();
+    return;
+  }
+  state.anchor = key;
+  select(key);
+}
+
+function clearMulti() {
+  if (!state.multi.size) return;
+  state.multi.clear();
+  renderTree();
+}
+
 function select(key) {
+  state.multi.clear();
   state.selected = key;
   state.editing = key;
   clearMessages();
@@ -216,6 +255,7 @@ function apply(snapshot) {
   state.sessions = snapshot.sessions;
   // Pasta pendente que ganhou sessão passa a existir no arquivo.
   for (const p of [...pendingFolders]) if (hasSessions(p)) pendingFolders.delete(p);
+  for (const k of [...state.multi]) if (!state.sessions.some((x) => keyOf(x) === k)) state.multi.delete(k);
   if (state.selected && !state.sessions.some((s) => keyOf(s) === state.selected)) {
     state.selected = state.editing = null;
     form.hidden = true;
@@ -273,6 +313,24 @@ async function connect(session, { external = false } = {}) {
     for (const w of warnings) message(w, 'warn');
   } catch (err) {
     message(cleanError(err), 'error');
+  }
+}
+
+/**
+ * Conecta várias sessões em sequência. Se uma delas usa uma VPN desconectada, abre a VPN e
+ * continua a partir dela quando a VPN conectar.
+ */
+async function connectMany(sessions) {
+  for (const [i, session] of sessions.entries()) {
+    if (session.vpn && !(vpnStatus?.site === session.vpn && vpnStatus.state === 'connected')) {
+      openToolTab('vpn', {
+        vpnSite: session.vpn,
+        vpnNotice: `${sessions.length - i} sessão(ões) usam a VPN "${session.vpn}". Elas abrem assim que a VPN conectar.`,
+        vpnThen: () => connectMany(sessions.slice(i)),
+      });
+      return;
+    }
+    await connect(session);
   }
 }
 
@@ -804,8 +862,9 @@ const hideTreeMenu = () => {
 function openFolderMenu(e, folder) {
   e.preventDefault();
   e.stopPropagation();
+  const inside = state.sessions.filter((s) => isUnder(s.folder, folder));
   const items = folder
-    ? [['subfolder', 'Nova subpasta…'], ['session', 'Nova sessão aqui'], ['rename', 'Renomear…'], ['export', 'Exportar pasta…'], ['delete', 'Excluir pasta']]
+    ? [...(inside.length ? [['connect-all', `Conectar todas (${inside.length})`]] : []), ['subfolder', 'Nova subpasta…'], ['session', 'Nova sessão aqui'], ['rename', 'Renomear…'], ['export', 'Exportar pasta…'], ['delete', 'Excluir pasta']]
     : [['subfolder', 'Nova pasta…'], ['session', 'Nova sessão na raiz'], ['export', 'Exportar sessões…']];
   treeMenu.replaceChildren(...items.map(([action, label]) => {
     const b = document.createElement('button');
@@ -830,7 +889,10 @@ $('tree').addEventListener('contextmenu', (e) => {
 });
 document.addEventListener('click', hideTreeMenu);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') hideTreeMenu();
+  if (e.key === 'Escape') {
+    hideTreeMenu();
+    clearMulti();
+  }
 });
 window.addEventListener('blur', hideTreeMenu);
 
@@ -840,6 +902,12 @@ function expandFolder(path) {
 }
 
 async function folderAction(action, folder) {
+  if (action === 'connect-all') {
+    const inside = state.sessions.filter((s) => isUnder(s.folder, folder));
+    if (inside.length > 10 && !confirm(`Conectar as ${inside.length} sessões de "${folder}"?`)) return;
+    await connectMany(inside.sort((a, b) => collator.compare(a.folder ?? '', b.folder ?? '') || collator.compare(a.name, b.name)));
+    return;
+  }
   showEditor();
   clearMessages();
 
@@ -933,9 +1001,21 @@ async function wakeSession(session) {
   }
 }
 
+/** Seleção múltipla: o menu age sobre todas as sessões marcadas. */
+function openMultiMenu(e) {
+  const chosen = treeOrder.filter((k) => state.multi.has(k)).map((k) => state.sessions.find((s) => keyOf(s) === k)).filter(Boolean);
+  showTreeMenu(e, [
+    ['connect-selected', `Conectar as ${chosen.length} selecionadas`, () => connectMany(chosen)],
+    ['clear-selection', 'Limpar seleção', clearMulti],
+  ]);
+}
+
 function openSessionMenu(e, session) {
-  e.preventDefault();
-  e.stopPropagation();
+  if (state.multi.size > 1 && state.multi.has(keyOf(session))) {
+    openMultiMenu(e);
+    return;
+  }
+  clearMulti();
   const items = [
     ['connect', 'Conectar', () => connect(session)],
     ...(session.type === 'ssh' ? [['external', 'Janela externa', () => connect(session, { external: true })]] : []),
@@ -946,6 +1026,13 @@ function openSessionMenu(e, session) {
     ['snmp', 'Consulta SNMP', () => openToolTab('snmp', session)],
     ['edit', 'Editar', () => select(keyOf(session))],
   ];
+  showTreeMenu(e, items);
+}
+
+/** Mostra o menu de contexto da árvore com itens [ação, rótulo, função]. */
+function showTreeMenu(e, items) {
+  e.preventDefault();
+  e.stopPropagation();
   treeMenu.replaceChildren(...items.map(([action, label, run]) => {
     const b = document.createElement('button');
     b.type = 'button';

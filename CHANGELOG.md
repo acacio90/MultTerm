@@ -19,6 +19,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   principal, sem reiniciar a sessão; o compartilhamento com o agente acompanha a aba. (#32)
 - Agente: **Definir todas** aplica o mesmo modo de compartilhamento a todas as abas de uma vez
   (controle livre pede confirmação). (#33)
+- Seleção de várias sessões na árvore (Ctrl/Shift+clique) e **Conectar as N selecionadas** no
+  botão direito; **Conectar todas** no menu da pasta. Sessões atrás de VPN conectam a VPN antes. (#34)
 
 ### Corrigido
 

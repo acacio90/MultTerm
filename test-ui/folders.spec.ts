@@ -45,7 +45,7 @@ async function nameDialog(value: string) {
 
 test('nova subpasta aparece vazia e é gravada ao salvar uma sessão dentro dela', async () => {
   await folder('Servidores').click({ button: 'right' });
-  await expect(page.locator('#tree-menu button')).toHaveText(['Nova subpasta…', 'Nova sessão aqui', 'Renomear…', 'Exportar pasta…', 'Excluir pasta']);
+  await expect(page.locator('#tree-menu button')).toHaveText(['Conectar todas (3)', 'Nova subpasta…', 'Nova sessão aqui', 'Renomear…', 'Exportar pasta…', 'Excluir pasta']);
   await menuItem('subfolder').click();
   await nameDialog('Banco');
   await expect(folder('Banco')).toHaveClass(/pending/);

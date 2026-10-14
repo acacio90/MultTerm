@@ -60,7 +60,9 @@ a variável `MULTTERM_SESSIONS`.
 - **Duplo clique** numa sessão abre uma aba de terminal (SSH) ou o cliente RDP.
 - **Botão direito numa sessão**: Conectar, Janela externa, Ligar (Wake-on-LAN, se a sessão
   tem MAC), Ping, Traceroute, Scanner de portas, Consulta SNMP e Editar.
-- **Botão direito numa pasta**: Nova subpasta, Nova sessão aqui, Renomear (move as sessões e
+- **Várias sessões**: Ctrl+clique adiciona ou tira sessões da seleção e Shift+clique seleciona um
+  intervalo (Esc limpa); botão direito numa delas → **Conectar as N selecionadas**.
+- **Botão direito numa pasta**: Conectar todas, Nova subpasta, Nova sessão aqui, Renomear (move as sessões e
   subpastas) e Excluir (só pastas vazias). Na área vazia da árvore: Nova pasta. Uma pasta nova
   é gravada no arquivo quando uma sessão é salva dentro dela.
 - Selecionar texto copia; botão direito cola (ou Ctrl+Shift+C / Ctrl+Shift+V).
