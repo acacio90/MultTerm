@@ -253,6 +253,9 @@ que vem com o instalador encaixado na área da aba:
   abertos (a área remota é uma janela nativa e ficaria por cima deles).
 - Quando a sessão cai, a aba mostra o motivo em português (senha incorreta, porta fechada,
   conta bloqueada...) com **Reconectar** e **Abrir no cliente do Windows**.
+- Servidores Windows antigos que só falam TLS 1.0 são recusados por padrão. A tela de erro
+  oferece **Permitir TLS antigo nesta sessão e reconectar**, que vale só para aquela sessão
+  (opção *Aceitar TLS antigo* no formulário, gravada como `legacyTls: true`).
 - **Janela externa (cliente do Windows)** no botão direito abre no `mstsc`, como antes.
 - Abas RDP não podem ir para uma janela separada.
 

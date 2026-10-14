@@ -168,6 +168,9 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
     '+clipboard',
     `/title:${s.name}`,
   );
+  // Só quando o usuário permitiu nesta sessão: servidores que falam apenas TLS 1.0, que o
+  // OpenSSL 3 recusa no nível padrão. A versão continua a mais alta que os dois lados suportam.
+  if (s.legacyTls) args.push('/tls:seclevel:0');
   return args;
 }
 

@@ -384,3 +384,6 @@ dialog#name-dialog {
 dialog#name-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .form-error { margin: 0; color: var(--danger); font-size: 12px; }
 .form-error:empty { display: none; }
+/* Caixa de seleção no formulário de sessão (ex.: TLS antigo nas sessões RDP). */
+#form label.check { flex-direction: row; align-items: center; gap: 6px; }
+#form label.check input { width: auto; }

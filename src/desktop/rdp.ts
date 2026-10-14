@@ -141,9 +141,10 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
 
   const collect = (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split(/\r?\n/)) {
-      if (line.trim()) s.log.push(line.trim());
+      // Avisos fixos do FreeRDP (contatos, opções de build) só escondem o que importa.
+      if (line.trim() && !/warn_contact_details|log_build_warn/.test(line)) s.log.push(line.trim());
     }
-    if (s.log.length > 40) s.log.splice(0, s.log.length - 40);
+    if (s.log.length > 200) s.log.splice(0, s.log.length - 200);
   };
   proc.stdout?.on('data', collect);
   proc.stderr?.on('data', collect);
@@ -163,8 +164,10 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
     close(key);
     const end = rdpExitMessage(error ? null : code);
     if (error) end.message = `${end.message}: ${error}`;
-    // O registro do cliente vai junto, para os detalhes técnicos.
-    if (!owner.isDestroyed()) owner.send('rdp:exit', s.id, code, { ...end, log: s.log.slice(-12).join('\n') });
+    // O registro do cliente vai junto, para os detalhes técnicos: os erros primeiro.
+    const errors = s.log.filter((l) => /\[(ERROR|FATAL)\]/.test(l));
+    const log = (errors.length ? errors : s.log).slice(-12).join('\n');
+    if (!owner.isDestroyed()) owner.send('rdp:exit', s.id, code, { ...end, log });
   };
   proc.on('error', (err) => finish(null, err.message));
   proc.on('exit', (code) => finish(code));

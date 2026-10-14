@@ -133,3 +133,10 @@ test('rdp numa aba: fim da sessão em português', () => {
   assert.equal(rdpExitMessage(0x2abcd).message, 'erro do cliente RDP 0x0002abcd');
   assert.deepEqual(rdpExitMessage(null), { normal: false, message: 'o cliente RDP não pôde ser iniciado' });
 });
+
+test('rdp numa aba: TLS antigo só quando a sessão permite', () => {
+  const rdp: Session = { name: 'AD', folder: '', type: 'rdp', host: '10.0.0.9' };
+  const view = { parent: '1', width: 800, height: 600 };
+  assert.ok(!embeddedRdpArgs(rdp, view).includes('/tls:seclevel:0'));
+  assert.ok(embeddedRdpArgs({ ...rdp, legacyTls: true }, view).includes('/tls:seclevel:0'));
+});

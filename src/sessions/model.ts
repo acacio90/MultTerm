@@ -19,6 +19,8 @@ export interface Session {
   mac?: string;
   /** Site de VPN que precisa estar conectado para alcançar o host. */
   vpn?: string;
+  /** RDP: aceita TLS 1.0/cifras antigas (servidores Windows antigos). Escolha explícita por sessão. */
+  legacyTls?: boolean;
   tags?: string[];
 }
 
@@ -123,12 +125,16 @@ export function validateSession(raw: unknown, where: string): Session {
   if (macText !== undefined && !mac) throw new SessionError(`${where}: "mac" inválido (${macText})`);
   const vpn = optionalString(obj, 'vpn', where)?.trim() || undefined;
   if (vpn !== undefined && !isSafeSiteName(vpn)) throw new SessionError(`${where}: "vpn" inválido (${vpn})`);
+  if (obj.legacyTls !== undefined && obj.legacyTls !== null && typeof obj.legacyTls !== 'boolean') {
+    throw new SessionError(`${where}: "legacyTls" deve ser true ou false`);
+  }
   // Campos opcionais ausentes ficam fora do objeto (comparação e IPC mais limpos).
   if (port !== undefined) session.port = port;
   if (user !== undefined) session.user = user;
   if (identityFile !== undefined) session.identityFile = identityFile;
   if (mac !== undefined) session.mac = mac;
   if (vpn !== undefined) session.vpn = vpn;
+  if (obj.legacyTls === true && session.type === 'rdp') session.legacyTls = true;
   if (tags !== undefined) session.tags = tags;
   return session;
 }

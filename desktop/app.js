@@ -183,6 +183,7 @@ function showForm(session) {
   form.identityFile.value = session?.identityFile ?? '';
   form.mac.value = session?.mac ?? '';
   form.vpn.value = session?.vpn ?? '';
+  form.legacyTls.checked = session?.legacyTls === true;
   form.tags.value = (session?.tags ?? []).join(', ');
   $('btn-connect').disabled = !session;
   $('btn-external').disabled = !session;
@@ -194,6 +195,7 @@ function updateTypeFields() {
   const type = form.type.value;
   form.port.placeholder = String(DEFAULT_PORTS[type]);
   for (const el of form.querySelectorAll('.ssh-only')) el.hidden = type !== 'ssh';
+  for (const el of form.querySelectorAll('.rdp-only')) el.hidden = type !== 'rdp';
 }
 
 function readForm() {
@@ -209,6 +211,7 @@ function readForm() {
   if (form.type.value === 'ssh' && form.identityFile.value.trim()) session.identityFile = form.identityFile.value.trim();
   if (form.mac.value.trim()) session.mac = form.mac.value.trim();
   if (form.vpn.value.trim()) session.vpn = form.vpn.value.trim();
+  if (form.type.value === 'rdp' && form.legacyTls.checked) session.legacyTls = true;
   if (tags.length) session.tags = tags;
   return session;
 }
@@ -711,14 +714,33 @@ async function startRdp(tab) {
 function endRdp(tab, end) {
   tab.running = false;
   tab.button.classList.add('ended');
+  // ERRCONNECT_TLS_CONNECT_FAILED: em geral, servidor que só fala TLS 1.0.
+  const tlsFailed = end.code === 0x20008 && !tab.session.legacyTls;
   rdpStatus(tab, 'Sessão RDP encerrada.', {
-    error: end.normal ? '' : end.message,
+    error: end.normal ? '' : end.message + (tlsFailed
+      ? '. Servidores Windows antigos só aceitam TLS 1.0, que o MultTerm recusa por padrão; o cliente do Windows aceita.'
+      : ''),
     log: end.normal ? '' : end.log,
     actions: [
-      ['Reconectar', () => startRdp(tab), true],
+      ...(tlsFailed ? [['Permitir TLS antigo nesta sessão e reconectar', () => allowLegacyTls(tab), true]] : []),
+      ['Reconectar', () => startRdp(tab), !tlsFailed],
       ['Abrir no cliente do Windows', () => connect(tab.session, { external: true })],
     ],
   });
+}
+
+/** Grava "aceitar TLS antigo" na sessão (só nela) e reconecta. */
+async function allowLegacyTls(tab) {
+  const key = keyOf(tab.session);
+  const updated = { ...tab.session, legacyTls: true };
+  try {
+    apply(await api.save(state.sessions.map((s) => (keyOf(s) === key ? updated : s))));
+    if (state.editing === key) showForm(updated);
+    tab.session = updated;
+    await startRdp(tab);
+  } catch (err) {
+    rdpStatus(tab, 'Não foi possível gravar a sessão.', { error: cleanError(err) });
+  }
 }
 
 /** Aba com a sessão RDP (cliente FreeRDP encaixado sobre a área da aba). */
@@ -765,9 +787,9 @@ window.addEventListener('resize', () => {
   for (const t of rdpTabs()) t.sync();
 });
 api.onRdpReady((id) => tabsById.get(id)?.sync?.());
-api.onRdpExit((id, _code, end) => {
+api.onRdpExit((id, code, end) => {
   const tab = tabsById.get(id);
-  if (tab?.kind === 'rdp' && tab.running) endRdp(tab, end);
+  if (tab?.kind === 'rdp' && tab.running) endRdp(tab, { ...end, code });
 });
 
 api.onTermData((id, data) => tabsById.get(id)?.term?.write(data));

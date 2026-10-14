@@ -90,3 +90,16 @@ test('sessionsInFolder e exportFileName', () => {
   assert.equal(exportFileName('', day), 'multterm-sessoes-2026-10-13.yaml');
   assert.equal(exportFileName('Servidores/Produção', day), 'multterm-Servidores-Produção-2026-10-13.yaml');
 });
+
+test('legacyTls: só em sessões RDP, gravado só quando ligado', () => {
+  const [rdp, ssh] = validateSessions([
+    { name: 'AD', type: 'rdp', host: '10.0.0.9', legacyTls: true },
+    { name: 'web', type: 'ssh', host: '10.0.0.1', legacyTls: true },
+  ], 'teste');
+  assert.equal(rdp.legacyTls, true);
+  assert.equal(ssh.legacyTls, undefined);
+  assert.equal(validateSessions([{ name: 'AD', type: 'rdp', host: '10.0.0.9', legacyTls: false }], 'teste')[0].legacyTls, undefined);
+  assert.throws(() => validateSessions([{ name: 'AD', type: 'rdp', host: '10.0.0.9', legacyTls: 'sim' }], 'teste'), /legacyTls/);
+  const yaml = serializeSessions([rdp, { ...C }]);
+  assert.equal(yaml.match(/legacyTls: true/g)?.length, 1);
+});
