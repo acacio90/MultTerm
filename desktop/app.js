@@ -523,11 +523,98 @@ function createTab({ title, tooltip = '', panelClass }) {
   tab.button.addEventListener('auxclick', (e) => {
     if (e.button === 1) closeTab(tab); // botão do meio fecha, como no navegador
   });
+  tab.button.dataset.tabId = String(tab.id);
+  tab.button.draggable = true;
+  tab.button.addEventListener('dragstart', (e) => {
+    draggedTab = tab;
+    tab.button.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tab.title);
+  });
+  tab.button.addEventListener('dragend', () => {
+    draggedTab = null;
+    tab.button.classList.remove('dragging');
+    clearDropMarks();
+  });
+  tab.button.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openTabMenu(e, tab);
+  });
   $('tabs').append(tab.button);
   tabsById.set(tab.id, tab);
   setTimeout(notifyTabsChanged, 0); // depois que a aba de terminal ganha o term
   return tab;
 }
+
+// ---------- ordem das abas ----------
+
+/*
+ * A ordem das abas é a dos botões na barra. O mapa tabsById é refeito na mesma ordem a cada
+ * mudança, então tudo que percorre as abas (próxima ao fechar, tela dividida, lista do agente)
+ * segue a ordem que o usuário vê. A aba "Sessão" fica sempre no início.
+ */
+let draggedTab = null;
+const orderedTabs = () => [...tabsById.values()];
+
+function moveTab(tab, index) {
+  const order = orderedTabs().filter((t) => t !== tab);
+  const to = Math.max(0, Math.min(order.length, index));
+  if (orderedTabs().indexOf(tab) === to) return;
+  order.splice(to, 0, tab);
+  for (const t of order) $('tabs').append(t.button);
+  tabsById.clear();
+  for (const t of order) tabsById.set(t.id, t);
+  notifyTabsChanged();
+  tab.button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function clearDropMarks() {
+  for (const b of $('tabs').querySelectorAll('.drop-before, .drop-after')) b.classList.remove('drop-before', 'drop-after');
+}
+
+/** Onde a aba arrastada cairia: antes ou depois da aba sob o ponteiro. */
+function dropTarget(e) {
+  const over = e.target.closest?.('.tab[data-tab-id]');
+  if (!over) return null;
+  const r = over.getBoundingClientRect();
+  return { over, after: e.clientX > r.left + r.width / 2 };
+}
+
+$('tabs').addEventListener('dragover', (e) => {
+  if (!draggedTab) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  clearDropMarks();
+  const target = dropTarget(e);
+  if (target && target.over !== draggedTab.button) target.over.classList.add(target.after ? 'drop-after' : 'drop-before');
+});
+$('tabs').addEventListener('dragleave', (e) => {
+  if (!$('tabs').contains(e.relatedTarget)) clearDropMarks();
+});
+$('tabs').addEventListener('drop', (e) => {
+  if (!draggedTab) return;
+  e.preventDefault();
+  const tab = draggedTab;
+  clearDropMarks();
+  const target = dropTarget(e);
+  const order = orderedTabs().filter((t) => t !== tab);
+  let index;
+  if (!target) index = e.target.closest?.('#tab-editor') ? 0 : order.length; // solto no início ou no vazio
+  else {
+    const over = tabsById.get(Number(target.over.dataset.tabId));
+    if (over === tab) return;
+    index = order.indexOf(over) + (target.after ? 1 : 0);
+  }
+  moveTab(tab, index);
+});
+
+// Ctrl+Shift+PageUp/PageDown move a aba ativa (como no Windows Terminal).
+document.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey || !e.shiftKey || !activeTab || (e.code !== 'PageUp' && e.code !== 'PageDown')) return;
+  e.preventDefault();
+  const at = orderedTabs().indexOf(activeTab);
+  moveTab(activeTab, at + (e.code === 'PageUp' ? -1 : 1));
+});
 
 /** Painéis que listam as abas (ex.: o do agente) se atualizam. */
 function notifyTabsChanged() {
@@ -639,15 +726,12 @@ async function openTerminalTab({ title, tooltip, open, spec, adopt, endedText = 
       if (text) api.clipboardWrite(text);
       return false;
     }
+    if (e.code === 'PageUp' || e.code === 'PageDown') return false; // mover a aba (atalho da página)
     return true;
   });
   new ResizeObserver(() => {
     if (!tab.panel.hidden) tab.fit.fit();
   }).observe(tab.host);
-  tab.button.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    openTabMenu(e, tab);
-  });
 
   if (adopt) await adoptInto(tab, adopt);
   else await startTab(tab);
@@ -699,12 +783,23 @@ function openTabMenu(e, tab) {
   tabMenu = document.createElement('div');
   tabMenu.className = 'menu tab-menu';
   tabMenu.setAttribute('role', 'menu');
+  const order = orderedTabs();
+  const at = order.indexOf(tab);
+  const moveItem = (label, enabled, fn) => Object.assign(item(label, fn), { disabled: !enabled });
   tabMenu.append(
-    api.isDetached
-      ? item('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
-      : item('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))),
-    item('Fechar aba', () => closeTab(tab)),
+    moveItem('Mover para a esquerda', at > 0, () => moveTab(tab, at - 1)),
+    moveItem('Mover para a direita', at < order.length - 1, () => moveTab(tab, at + 1)),
+    moveItem('Mover para o início', at > 0, () => moveTab(tab, 0)),
+    moveItem('Mover para o fim', at < order.length - 1, () => moveTab(tab, order.length - 1)),
+    document.createElement('hr'),
   );
+  // Só abas de terminal mudam de janela.
+  if (tab.term) {
+    tabMenu.append(api.isDetached
+      ? item('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
+      : item('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))));
+  }
+  tabMenu.append(item('Fechar aba', () => closeTab(tab)));
   tabMenu.style.left = `${e.clientX}px`;
   tabMenu.style.top = `${e.clientY}px`;
   document.body.append(tabMenu);
