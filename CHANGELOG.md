@@ -27,6 +27,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Servidores: **Escutar em** escolhe a interface (todas, só esta máquina ou uma placa de rede
   específica); o log mostra onde o servidor está escutando e lembra do Firewall do Windows fora do
   localhost; endereço que não existe mais na máquina dá um erro claro. (#20)
+- Servidor **NFS** (experimental): NFSv3 somente leitura da pasta raiz, com portmapper (porta 111),
+  MOUNT v1/v3, TCP e UDP e lista de clientes permitidos, para equipamentos que fazem boot ou
+  atualização por NFS. Testado no CI contra o cliente NFS do kernel Linux. (#28)
 
 ## [0.5.0] - 2026-10-14
 

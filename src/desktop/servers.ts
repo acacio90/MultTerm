@@ -10,6 +10,7 @@ import { startTelnet, validateTelnet } from '../servers/telnet.ts';
 import { ensureHostKey, startSsh, validateSsh } from '../servers/ssh.ts';
 import { startCron, validateCron } from '../servers/cron.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
+import { startNfs, validateNfs } from '../servers/nfs.ts';
 
 /*
  * Servidores locais (Ferramentas → Servidores): iniciar/parar, parar sozinho depois de N
@@ -214,6 +215,22 @@ const DEFS: ServerDef[] = [
     ],
     defaults: () => ({ port: 5201, stopAfter: 3600 }),
     start: (raw, log) => startIperf(validateIperf(raw), log),
+  },
+  {
+    kind: 'nfs',
+    title: 'NFS (experimental)',
+    description: 'Servidor NFSv3 somente leitura da pasta raiz, para equipamentos que fazem boot ou atualização por NFS ' +
+      '(ex.: mount -t nfs -o vers=3,nolock <ip deste computador>:/ /mnt). A pasta é exportada como "/"; nada é gravado.',
+    fields: [
+      { key: 'root', label: 'Pasta raiz', type: 'dir' },
+      { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
+      { key: 'portmap', label: 'Portmapper na porta 111 (a maioria dos clientes precisa dele)', type: 'bool' },
+      { key: 'allow', label: 'Clientes permitidos', type: 'text', hint: 'IPs ou faixas (10.0.0.0/24), separados por vírgula; vazio = qualquer um' },
+      ...COMMON,
+    ],
+    defaults: () => ({ root: filesDir(), port: 2049, portmap: true, allow: '', stopAfter: 3600 }),
+    start: (raw, log) => startNfs(validateNfs(raw), log),
   },
 ];
 

@@ -38,3 +38,51 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 7
+
+  # Servidor NFS do MultTerm contra o cliente NFS do kernel Linux (portmapper, MOUNT e NFSv3).
+  nfs-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Cliente NFS do Linux
+        run: sudo apt-get update -q && sudo apt-get install -y -q nfs-common
+
+      - name: Servidor NFS do MultTerm
+        run: |
+          # O rpcbind do sistema usa a porta 111: sai para o portmapper do MultTerm.
+          sudo systemctl stop rpcbind.socket rpcbind || true
+          mkdir -p /tmp/nfsroot/boot /tmp/nfsroot/sub
+          head -c 1048576 /dev/urandom > /tmp/nfsroot/boot/kernel.bin
+          echo "olá NFS" > /tmp/nfsroot/readme.txt
+          for i in $(seq 1 60); do echo "$i" > /tmp/nfsroot/sub/arquivo-$i.txt; done
+          sudo node test/nfs-linux/serve.ts /tmp/nfsroot > /tmp/nfs.log 2>&1 &
+          for i in $(seq 1 20); do grep -q pronto /tmp/nfs.log && break; sleep 0.5; done
+          cat /tmp/nfs.log
+          rpcinfo -p 127.0.0.1
+          showmount -e 127.0.0.1
+
+      - name: Montar e ler por TCP e UDP; gravar é recusado
+        run: |
+          for proto in tcp udp; do
+            echo "== $proto"
+            sudo mkdir -p /mnt/$proto
+            sudo mount -t nfs -o vers=3,proto=$proto,mountproto=$proto,nolock 127.0.0.1:/ /mnt/$proto
+            ls -la /mnt/$proto /mnt/$proto/boot
+            test "$(ls /mnt/$proto/sub | wc -l)" = 60
+            cmp /tmp/nfsroot/boot/kernel.bin /mnt/$proto/boot/kernel.bin
+            grep -q "olá NFS" /mnt/$proto/readme.txt
+            if sudo touch /mnt/$proto/novo 2>/tmp/touch.err; then echo "a escrita deveria falhar"; exit 1; fi
+            cat /tmp/touch.err
+            grep -qi "read-only" /tmp/touch.err
+            sudo umount /mnt/$proto
+          done
+
+      - name: Log do servidor
+        if: always()
+        run: cat /tmp/nfs.log

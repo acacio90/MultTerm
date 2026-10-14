@@ -39,7 +39,7 @@ test('HTTP: inicia pelo painel, serve a pasta, registra e para', async () => {
   await writeFile(join(root, 'firmware.bin'), 'conteúdo do firmware');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(7);
+  await expect(panel.locator('.server-row')).toHaveCount(8);
   await panel.locator('.server-row[data-kind=http] .server-name').click();
   const detail = panel.locator('.server-detail');
   await expect(detail.locator('h3')).toHaveText('Servidor HTTP');
@@ -108,7 +108,7 @@ test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async (
   await writeFile(join(root, 'config.txt'), 'interface eth0');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(7);
+  await expect(panel.locator('.server-row')).toHaveCount(8);
   await panel.locator('.server-row[data-kind=ftp] .server-name').click();
   const detail = panel.locator('.server-detail');
   await detail.locator('[name=root]').fill(root);
@@ -199,4 +199,28 @@ test('escutar só em 127.0.0.1 (ou numa placa específica); aviso de firewall fo
   await expect(detail.locator('.server-log')).toContainText(`escutando em todas as interfaces, porta ${port}`);
   await expect(detail.locator('.server-log')).toContainText('Firewall do Windows');
   await panel.locator('.server-row[data-kind=http] button', { hasText: 'Parar' }).click();
+});
+
+test('NFS: inicia pelo painel (somente leitura), sem portmapper, e para', async () => {
+  const port = await freePort();
+  const panel = await openServers();
+  await panel.locator('.server-row[data-kind=nfs] .server-name').click();
+  const detail = panel.locator('.server-detail');
+  await expect(detail.locator('h3')).toHaveText('Servidor NFS (experimental)');
+  await detail.locator('[name=root]').fill(root);
+  await detail.locator('[name=port]').fill(String(port));
+  await detail.locator('select[name=host]').selectOption('127.0.0.1');
+  await detail.locator('[name=portmap]').uncheck();
+  await detail.locator('[name=allow]').fill('127.0.0.1, 10.0.0.0/8');
+  await panel.locator('.server-row[data-kind=nfs] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.server-row[data-kind=nfs] .server-state')).toContainText(`rodando na porta ${port}`);
+  await expect(detail.locator('.server-log')).toContainText(`NFS somente leitura de ${root} na porta ${port} (sem portmapper)`);
+  await expect(detail.locator('.server-log')).toContainText('clientes permitidos: 127.0.0.1, 10.0.0.0/8');
+  await panel.locator('.server-row[data-kind=nfs] button', { hasText: 'Parar' }).click();
+  await expect(panel.locator('.server-row[data-kind=nfs] .server-state')).toHaveText('parado');
+
+  // Lista inválida de clientes: erro claro, nada inicia.
+  await detail.locator('[name=allow]').fill('meu-pc');
+  await panel.locator('.server-row[data-kind=nfs] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.tool-status, .server-error, .status').filter({ hasText: 'cliente permitido inválido' }).first()).toBeVisible();
 });

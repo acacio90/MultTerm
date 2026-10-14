@@ -17,7 +17,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
 - **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos, Iperf (iperf3)
-  para medir banda, SSH/SFTP, Telnet e um agendador de comandos (cron)
+  para medir banda, SSH/SFTP, Telnet, NFS somente leitura (experimental) e um agendador de
+  comandos (cron)
 - **Agente MCP**: um agente de IA (configurado por você) lê e opera os terminais que você
   compartilhar, com aprovação de cada comando
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, botão próprio
@@ -202,6 +203,11 @@ conseguirem conectar.
 - **Iperf** (porta 5201): compatível com o cliente `iperf3` (TCP, `-R` e `-P`; UDP ainda não).
   O cliente iperf3 do Windows usa buffer de envio pequeno: para medir acima de ~600 Mbit/s, use
   `-P 4` ou `-w 1M`.
+- **NFS** (experimental, porta 2049 + portmapper na 111): NFSv3 **somente leitura** da pasta
+  raiz, exportada como `/`, para equipamentos que fazem boot ou atualização por NFS
+  (`mount -t nfs -o vers=3,nolock <ip>:/ /mnt`). TCP e UDP; MOUNT v1/v3. **Clientes permitidos**
+  limita por IP ou faixa (`10.0.0.0/24`). O log mostra quem montou e quais arquivos foram lidos.
+  Sem o portmapper (porta 111 ocupada), o cliente precisa de `port=2049,mountport=2049`.
 
 Na primeira vez, o Firewall do Windows pergunta se o MultTerm pode receber conexões na rede.
 
