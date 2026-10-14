@@ -39,7 +39,7 @@ jobs:
       - name: Configurar
         shell: pwsh
         run: >
-          cmake -S "freerdp-$env:FREERDP_VERSION" -B build -G "Visual Studio 17 2022" -A x64
+          cmake -S "freerdp-$env:FREERDP_VERSION" -B build -A x64
           "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DVCPKG_TARGET_TRIPLET=x64-windows-static
           -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
