@@ -148,7 +148,8 @@ export function parseAgentList(exitCode: number | null, stdout: string, stderr: 
 /**
  * Argumentos do cliente FreeRDP (wfreerdp) para abrir a sessão RDP dentro de uma janela do
  * MultTerm: a janela do RDP vira filha de `parent` e a resolução acompanha o tamanho da aba.
- * A senha não vai na linha de comando: o FreeRDP pede (e o Windows guarda, se o usuário quiser).
+ * A senha não vai na linha de comando (outros processos a leriam): vai pela entrada padrão
+ * (/from-stdin:force), no formato de rdpStdin.
  */
 export function embeddedRdpArgs(s: Session, view: { parent: string; width: number; height: number }): string[] {
   const port = effectivePort(s);
@@ -166,6 +167,7 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
     `/size:${width}x${height}`,
     '/dynamic-resolution',
     '+clipboard',
+    '/from-stdin:force',
     `/title:${s.name}`,
   );
   // Só quando o usuário permitiu nesta sessão: servidores que falam apenas TLS 1.0. O FreeRDP
@@ -173,6 +175,15 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
   // opção só (a última vence), por isso o nível vai pela forma antiga /tls-seclevel.
   if (s.legacyTls) args.push('/tls:enforce:1.0', '/tls-seclevel:0');
   return args;
+}
+
+/**
+ * O que escrever na entrada padrão do FreeRDP (/from-stdin:force): ele pergunta, em ordem, o
+ * domínio (só se não veio em /d:, isto é, usuário sem "DOMINIO\") e a senha.
+ */
+export function rdpStdin(user: string | undefined, password: string): string {
+  const hasDomain = !!user && user.indexOf('\\') > 0;
+  return `${hasDomain ? '' : '\n'}${password}\n`;
 }
 
 // Códigos de saída do wfreerdp = último erro do FreeRDP: (classe << 16) | tipo.

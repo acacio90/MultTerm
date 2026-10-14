@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { embeddedRdpArgs, embeddedSshCommand, rdpExitMessage, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
+import { embeddedRdpArgs, embeddedSshCommand, rdpExitMessage, rdpStdin, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
 
 const WIN: LaunchEnv = {
   platform: 'win32',
@@ -113,7 +113,7 @@ test('parseAgentList: chaves, agente vazio e sem agente', () => {
 test('rdp numa aba: argumentos do FreeRDP encaixado na janela do app', () => {
   const rdp: Session = { name: 'AD WIN', folder: '', type: 'rdp', host: '10.0.0.9' };
   const view = { parent: '1234', width: 1280.4, height: 719.6 };
-  assert.deepEqual(embeddedRdpArgs(rdp, view), ['/v:10.0.0.9', '/parent-window:1234', '/size:1280x720', '/dynamic-resolution', '+clipboard', '/title:AD WIN']);
+  assert.deepEqual(embeddedRdpArgs(rdp, view), ['/v:10.0.0.9', '/parent-window:1234', '/size:1280x720', '/dynamic-resolution', '+clipboard', '/from-stdin:force', '/title:AD WIN']);
   // Porta fora do padrão, DOMINIO\usuario e usuario@dominio.
   const args = embeddedRdpArgs({ ...rdp, port: 3390, user: 'EMPRESA\\ana' }, view);
   assert.deepEqual(args.slice(0, 3), ['/v:10.0.0.9:3390', '/d:EMPRESA', '/u:ana']);
@@ -142,4 +142,11 @@ test('rdp numa aba: TLS antigo só quando a sessão permite', () => {
   assert.deepEqual(legacy.filter((a) => /tls/.test(a)), ['/tls:enforce:1.0', '/tls-seclevel:0']);
   // Uma única chave /tls: (o FreeRDP só fica com a última).
   assert.equal(legacy.filter((a) => a.startsWith('/tls:')).length, 1);
+});
+
+test('rdp numa aba: senha pela entrada padrão (domínio vazio quando não veio no usuário)', () => {
+  assert.equal(rdpStdin('EMPRESA\\ana', 's3nha'), 's3nha\n');
+  assert.equal(rdpStdin('ana', 's3nha'), '\ns3nha\n');
+  assert.equal(rdpStdin('ana@empresa.local', 's3nha'), '\ns3nha\n');
+  assert.equal(rdpStdin(undefined, ''), '\n\n');
 });

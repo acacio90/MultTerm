@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('multterm', {
   },
   // RDP numa aba (FreeRDP encaixado numa janela nativa sobre a área da aba).
   rdpAvailable: () => ipcRenderer.invoke('rdp:available'),
-  rdpOpen: (id, session, view) => ipcRenderer.invoke('rdp:open', id, session, view),
+  rdpOpen: (id, session, view, credentials) => ipcRenderer.invoke('rdp:open', id, session, view, credentials),
   rdpView: (id, view) => ipcRenderer.send('rdp:view', id, view),
   rdpClose: (id) => ipcRenderer.invoke('rdp:close', id),
   onRdpReady: (cb) => ipcRenderer.on('rdp:ready', (_e, id) => cb(id)),

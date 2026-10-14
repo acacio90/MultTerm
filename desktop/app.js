@@ -697,23 +697,67 @@ function rdpStatus(tab, text, { error = '', log = '', actions = [] } = {}) {
   tab.status.replaceChildren(...parts);
 }
 
+/** Usuário e senha da sessão RDP (a senha não é gravada). Devolve null se cancelar. */
+function askRdpCredentials(session, user) {
+  const dialog = $('rdp-auth-dialog');
+  const authForm = $('rdp-auth-form');
+  $('rdp-auth-title').textContent = `Conectar a ${session.name}`;
+  authForm.rdpUser.value = user ?? session.user ?? '';
+  authForm.rdpPassword.value = '';
+  return new Promise((resolve) => {
+    const done = (result) => {
+      authForm.onsubmit = null;
+      $('rdp-auth-cancel').onclick = null;
+      dialog.oncancel = null;
+      authForm.rdpPassword.value = '';
+      dialog.close();
+      resolve(result);
+    };
+    authForm.onsubmit = (e) => {
+      e.preventDefault();
+      done({ user: authForm.rdpUser.value.trim(), password: authForm.rdpPassword.value });
+    };
+    $('rdp-auth-cancel').onclick = () => done(null);
+    dialog.oncancel = (e) => {
+      e.preventDefault();
+      done(null);
+    };
+    dialog.showModal();
+    (authForm.rdpUser.value ? authForm.rdpPassword : authForm.rdpUser).focus();
+  });
+}
+
 async function startRdp(tab) {
+  // Senha pedida pelo MultTerm (fica só na memória da aba, para reconectar sem digitar de novo).
+  if (!tab.credentials) {
+    const credentials = await askRdpCredentials(tab.session, tab.lastUser);
+    if (!credentials) {
+      endRdp(tab, { normal: false, message: 'conexão cancelada' });
+      return;
+    }
+    tab.credentials = credentials;
+    tab.lastUser = credentials.user;
+  }
   tab.running = true;
   tab.lastView = '';
   tab.button.classList.remove('ended');
   rdpStatus(tab, `Conectando a ${tab.session.host}… O cliente RDP pede a senha numa janela própria.`);
   await new Promise(requestAnimationFrame); // espera o layout da aba
   try {
-    await api.rdpOpen(tab.id, tab.session, rdpView(tab));
+    await api.rdpOpen(tab.id, tab.session, rdpView(tab), tab.credentials);
   } catch (err) {
     endRdp(tab, { normal: false, message: cleanError(err) });
   }
 }
 
 /** `end`: { normal, message, log } vindo do processo principal (ou só a mensagem de um erro local). */
+// Falhas de usuário/senha: a próxima tentativa pede a senha de novo.
+const RDP_AUTH_ERRORS = new Set([0x20009, 0x20014, 0x20015, 0x2001b]);
+
 function endRdp(tab, end) {
   tab.running = false;
   tab.button.classList.add('ended');
+  if (RDP_AUTH_ERRORS.has(end.code)) tab.credentials = null;
   // ERRCONNECT_TLS_CONNECT_FAILED: em geral, servidor que só fala TLS 1.0.
   const tlsFailed = end.code === 0x20008 && !tab.session.legacyTls;
   rdpStatus(tab, 'Sessão RDP encerrada.', {
@@ -772,6 +816,7 @@ async function openRdpTab(session) {
   tab.onClose = () => {
     if (tab.running) void api.rdpClose(tab.id);
     tab.running = false;
+    tab.credentials = null;
   };
   showTab(tab);
   await startRdp(tab);

@@ -24,6 +24,16 @@ test.afterEach(async () => {
   server.close();
 });
 
+/** Janela de senha do MultTerm (a senha vai ao cliente RDP pela entrada padrão). */
+async function typePassword(user?: string) {
+  const dialog = ctx.page.locator('#rdp-auth-dialog');
+  await expect(dialog).toBeVisible();
+  if (user !== undefined) await dialog.locator('[name=rdpUser]').fill(user);
+  await dialog.locator('[name=rdpPassword]').fill('s3nha');
+  await dialog.locator('button[type=submit]').click();
+  await expect(dialog).toBeHidden();
+}
+
 const session = (name: string) => ctx.page.locator('#tree li.session', { has: ctx.page.locator('.label', { hasText: new RegExp(`^${name}$`) }) });
 
 test('RDP abre numa aba; falha de conexão mostra o motivo e reconectar', async () => {
@@ -32,6 +42,9 @@ test('RDP abre numa aba; falha de conexão mostra o motivo e reconectar', async 
   await session('AD WIN').dblclick();
   const tab = ctx.page.locator('#tabs .tab', { hasText: 'AD WIN' });
   await expect(tab).toHaveClass(/active/);
+  // Usuário da sessão já preenchido; só a senha é digitada.
+  await expect(ctx.page.locator('#rdp-auth-dialog [name=rdpUser]')).toHaveValue('EMPRESA\\ana');
+  await typePassword();
   const status = ctx.page.locator('.rdp-panel:not([hidden]) .rdp-status');
   await expect(status).toContainText('Sessão RDP encerrada', { timeout: 30_000 });
   await expect(tab).toHaveClass(/ended/);
@@ -39,8 +52,9 @@ test('RDP abre numa aba; falha de conexão mostra o motivo e reconectar', async 
   await expect(status.locator('.rdp-error')).toContainText('não foi possível conectar');
   await expect(status.locator('details pre')).toContainText('ERRCONNECT_CONNECT_TRANSPORT_FAILED');
 
-  // Reconectar tenta de novo (e falha de novo, sem travar a aba).
+  // Reconectar tenta de novo sem pedir a senha (a falha não foi de autenticação).
   await status.locator('button', { hasText: 'Reconectar' }).click();
+  await expect(ctx.page.locator('#rdp-auth-dialog')).toBeHidden();
   await expect(tab).not.toHaveClass(/ended/);
   await expect(status).toContainText('Sessão RDP encerrada', { timeout: 30_000 });
 });
@@ -69,6 +83,7 @@ test('servidor só com TLS antigo: oferece permitir TLS antigo só nesta sessão
   try {
     ctx = await launchApp(`version: 1\nsessions:\n  - {name: AD WIN, type: rdp, host: 127.0.0.1, port: ${oldPort}}\n  - {name: OUTRO, type: rdp, host: 127.0.0.1, port: ${oldPort}}\n`);
     await session('AD WIN').dblclick();
+    await typePassword();
     const status = ctx.page.locator('.rdp-panel:not([hidden]) .rdp-status');
     await expect(status.locator('.rdp-error')).toContainText('falha na conexão segura (TLS)', { timeout: 30_000 });
     await expect(status.locator('.rdp-error')).toContainText('só aceitam TLS 1.0');
@@ -89,4 +104,20 @@ test('servidor só com TLS antigo: oferece permitir TLS antigo só nesta sessão
   } finally {
     old.close();
   }
+});
+
+test('cancelar a senha não conecta; Reconectar pede de novo', async () => {
+  test.skip(!existsSync(FREERDP), 'cliente RDP não baixado (npm run fetch:freerdp)');
+  ctx = await launchApp(`version: 1\nsessions:\n  - {name: AD WIN, type: rdp, host: 127.0.0.1, port: ${port}}\n`);
+  await session('AD WIN').dblclick();
+  const dialog = ctx.page.locator('#rdp-auth-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[name=rdpUser]')).toBeFocused(); // sem usuário na sessão
+  await dialog.locator('#rdp-auth-cancel').click();
+  const status = ctx.page.locator('.rdp-panel:not([hidden]) .rdp-status');
+  await expect(status.locator('.rdp-error')).toHaveText('conexão cancelada');
+  await status.locator('button', { hasText: 'Reconectar' }).click();
+  await typePassword('ana');
+  await expect(status).toContainText('Sessão RDP encerrada', { timeout: 30_000 });
+  await expect(status.locator('.rdp-error')).toContainText('não foi possível conectar');
 });

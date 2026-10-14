@@ -246,8 +246,9 @@ com as sessões existentes (mesma pasta + nome não é sobrescrito):
 Sessões RDP abrem numa aba, com o cliente [FreeRDP](https://www.freerdp.com) (Apache 2.0)
 que vem com o instalador encaixado na área da aba:
 
-- A senha é pedida pelo próprio cliente, numa janela do Windows; o MultTerm não a guarda.
-  Usuário no formato `DOMINIO\usuario` ou `usuario@dominio`.
+- O MultTerm pede usuário e senha ao conectar. A senha não é gravada: fica só na memória da
+  aba (para **Reconectar** sem digitar de novo) e vai ao cliente pela entrada padrão, nunca pela
+  linha de comando. Usuário no formato `DOMINIO\usuario` ou `usuario@dominio`.
 - A resolução acompanha o tamanho da aba. Área de transferência compartilhada.
 - Menus e diálogos do MultTerm que passam por cima da área escondem a sessão enquanto estão
   abertos (a área remota é uma janela nativa e ficaria por cima deles).

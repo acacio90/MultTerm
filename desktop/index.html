@@ -124,6 +124,19 @@
     </form>
   </dialog>
 
+  <dialog id="rdp-auth-dialog" aria-labelledby="rdp-auth-title">
+    <form id="rdp-auth-form" method="dialog" class="small-dialog">
+      <h2 id="rdp-auth-title">Conectar</h2>
+      <label>Usuário <input name="rdpUser" autocomplete="off" spellcheck="false" placeholder="DOMINIO\usuario"></label>
+      <label>Senha <input name="rdpPassword" type="password" autocomplete="off"></label>
+      <p class="muted">A senha não é gravada; vale enquanto a aba estiver aberta.</p>
+      <div class="actions">
+        <button type="submit" class="primary">Conectar</button>
+        <button type="button" id="rdp-auth-cancel">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="diag-dialog" aria-labelledby="diag-title">
     <form id="diag-form" method="dialog" class="small-dialog">
       <h2 id="diag-title">Ping</h2>

@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { embeddedRdpArgs, rdpExitMessage } from '../sessions/launch.ts';
+import { embeddedRdpArgs, rdpExitMessage, rdpStdin } from '../sessions/launch.ts';
 import { validateSessions } from '../sessions/store.ts';
 
 /*
@@ -115,13 +115,28 @@ export function closeRdpOf(owner: WebContents) {
   for (const [key, s] of sessions) if (s.owner === owner) close(key);
 }
 
-function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unknown) {
+/** Usuário e senha digitados na interface (a senha só passa por aqui, nunca é gravada). */
+function validCredentials(raw: unknown): { user?: string; password: string } {
+  const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const user = typeof o.user === 'string' ? o.user.trim() : '';
+  const password = typeof o.password === 'string' ? o.password : '';
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(user) || user.length > 256) throw new Error('usuário inválido');
+  // A senha vai numa linha da entrada padrão: quebra de linha a cortaria.
+  if (/[\r\n\x00]/.test(password) || password.length > 512) throw new Error('senha inválida');
+  return { ...(user ? { user } : {}), password };
+}
+
+function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unknown, rawCredentials: unknown) {
   if (process.platform !== 'win32') throw new Error('RDP numa aba só no Windows; use Janela externa');
   if (!Number.isInteger(id) || (id as number) <= 0) throw new Error('aba inválida');
   const key = keyOf(owner, id as number);
   if (sessions.has(key)) throw new Error('esta aba já tem uma sessão RDP');
-  const [session] = validateSessions([rawSession], 'RDP');
-  if (session.type !== 'rdp') throw new Error('a sessão não é RDP');
+  const [saved] = validateSessions([rawSession], 'RDP');
+  if (saved.type !== 'rdp') throw new Error('a sessão não é RDP');
+  const credentials = validCredentials(rawCredentials);
+  // O usuário digitado na hora vale para esta conexão (sem mudar a sessão gravada).
+  const session = { ...saved, user: credentials.user ?? saved.user };
   const exe = freerdpPath();
   if (!existsSync(exe)) throw new Error('cliente RDP não encontrado nesta instalação; use Janela externa (botão direito na sessão)');
   const win = BrowserWindow.fromWebContents(owner);
@@ -135,7 +150,9 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   if (!container) throw new Error('não foi possível criar a área da sessão RDP');
 
   const args = embeddedRdpArgs(session, { parent: String(container), width: view.width, height: view.height });
-  const proc = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false });
+  const proc = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: false });
+  proc.stdin?.on('error', () => {});
+  proc.stdin?.end(rdpStdin(session.user, credentials.password));
   const s: RdpSession = { owner, id: id as number, container, proc, view, log: [] };
   sessions.set(key, s);
 
@@ -174,7 +191,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
 }
 
 export function registerRdpIpc(): void {
-  ipcMain.handle('rdp:open', (e, id: unknown, session: unknown, view: unknown) => open(e.sender, id, session, view));
+  ipcMain.handle('rdp:open', (e, id: unknown, session: unknown, view: unknown, credentials: unknown) => open(e.sender, id, session, view, credentials));
   ipcMain.on('rdp:view', (e, id: unknown, view: unknown) => {
     const s = Number.isInteger(id) ? sessions.get(keyOf(e.sender, id as number)) : undefined;
     if (!s) return;
