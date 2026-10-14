@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.4.0] - 2026-10-13
+
 ### Adicionado
 
 - Agente MCP: servidor MCP local (HTTP em 127.0.0.1 com token, ou ponte stdio pelo próprio
@@ -24,7 +26,7 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ### Corrigido
 
-- Painel do agente: porta e comando digitados não são mais apagados quando o painel se redesenha.
+- Painel do agente: a porta digitada não é mais apagada quando o painel se redesenha.
 
 ## [0.3.0] - 2026-10-13
 
@@ -114,7 +116,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.3.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.4.0...develop
+[0.4.0]: https://github.com/acacio90/MultTerm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/acacio90/MultTerm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/acacio90/MultTerm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/acacio90/MultTerm/releases/tag/v0.1.0
