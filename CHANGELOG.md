@@ -13,6 +13,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Mudar a ordem das abas: arrastando, pelo botão direito na aba (mover para a esquerda, direita,
   início ou fim) ou com Ctrl+Shift+PageUp/PageDown. O botão direito agora funciona em qualquer
   aba, não só nas de terminal. (#45)
+- Arrastar uma aba de terminal para fora da barra de abas a destaca numa janela própria, aberta
+  onde a aba foi solta. (#49)
 
 ## [0.5.0] - 2026-10-14
 
