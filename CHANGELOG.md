@@ -6,13 +6,17 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.4.1] - 2026-10-14
+
 ### Adicionado
 
 - **RDP numa aba**: o cliente FreeRDP vem com o instalador e se encaixa na área da aba, com a
   resolução acompanhando o tamanho e o motivo de queda em português (senha incorreta, porta
-  fechada, conta bloqueada...) com Reconectar. O cliente do Windows continua no botão direito
-  (**Janela externa**). Servidores que só falam TLS 1.0 funcionam com a opção **Aceitar TLS
-  antigo**, por sessão, oferecida na própria tela de erro. (#37)
+  fechada, conta bloqueada...) com Reconectar. O MultTerm pede usuário e senha ao conectar; a
+  senha não é gravada (fica só na memória da aba) e não passa pela linha de comando. O
+  cliente do Windows continua no botão direito (**Janela externa**). Servidores que só falam
+  TLS 1.0 funcionam com a opção **Aceitar TLS antigo**, por sessão, oferecida na própria tela
+  de erro. (#37)
 - Botões **Importar** e **Exportar** com menu: sessões, sites de VPN (todos de uma vez, numa
   pasta) ou **backup completo** (`.multterm`, com sessões, sites de VPN, configurações dos
   servidores e do agente; sem as senhas cifradas pelo Windows). (#36)
@@ -127,7 +131,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.4.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.4.1...develop
+[0.4.1]: https://github.com/acacio90/MultTerm/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/acacio90/MultTerm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/acacio90/MultTerm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/acacio90/MultTerm/compare/v0.1.0...v0.2.0
