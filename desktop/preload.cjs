@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('multterm', {
     adoptCb = cb;
     for (const offer of adoptQueue.splice(0)) cb(offer);
   },
+  // RDP numa aba (FreeRDP encaixado numa janela nativa sobre a área da aba).
+  rdpAvailable: () => ipcRenderer.invoke('rdp:available'),
+  rdpOpen: (id, session, view) => ipcRenderer.invoke('rdp:open', id, session, view),
+  rdpView: (id, view) => ipcRenderer.send('rdp:view', id, view),
+  rdpClose: (id) => ipcRenderer.invoke('rdp:close', id),
+  onRdpReady: (cb) => ipcRenderer.on('rdp:ready', (_e, id) => cb(id)),
+  onRdpExit: (cb) => ipcRenderer.on('rdp:exit', (_e, id, code, end) => cb(id, code, end)),
   onTermReleased: (cb) => ipcRenderer.on('term:released', (_e, id) => cb(id)),
   termInput: (id, data) => ipcRenderer.send('term:input', id, data),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),

@@ -177,6 +177,15 @@ form h2 { margin: 0 0 12px; font-size: 16px; }
 .terminals[hidden] { display: none; }
 .term-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; background: #1e1f22; }
 .term-panel[hidden] { display: none; }
+/* RDP: a janela nativa da sessão cobre .rdp-screen; o texto aparece enquanto conecta ou ao encerrar. */
+.rdp-panel { flex: 1; display: flex; min-width: 0; background: #000; }
+.rdp-panel[hidden] { display: none; }
+.rdp-screen { flex: 1; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.rdp-status { max-width: 640px; padding: 16px; color: #c9ccd1; text-align: center; }
+.rdp-status .rdp-error { color: #f08a8a; }
+.rdp-status details { text-align: left; margin: 8px 0; }
+.rdp-status pre { white-space: pre-wrap; font-size: 11px; color: #9aa0a6; max-height: 200px; overflow: auto; user-select: text; }
+.rdp-status .actions { justify-content: center; }
 .term-host { flex: 1; min-height: 0; padding: 4px; }
 .term-host .xterm { height: 100%; }
 .term-notice {

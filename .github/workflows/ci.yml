@@ -25,6 +25,9 @@ jobs:
       - name: Testes de unidade
         run: npm test
 
+      - name: Cliente RDP (FreeRDP)
+        run: npm run fetch:freerdp
+
       - name: Testes de interface (Electron + Playwright)
         run: npm run test:ui
 

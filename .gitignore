@@ -5,3 +5,5 @@ release/
 .code-review-graph/
 test-results/
 playwright-report/
+# Cliente RDP baixado por scripts/fetch-freerdp.mjs
+vendor/freerdp/

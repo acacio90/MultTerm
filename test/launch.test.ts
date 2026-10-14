@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { embeddedSshCommand, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
+import { embeddedRdpArgs, embeddedSshCommand, rdpExitMessage, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
 
 const WIN: LaunchEnv = {
   platform: 'win32',
@@ -108,4 +108,28 @@ test('parseAgentList: chaves, agente vazio e sem agente', () => {
   assert.deepEqual(parseAgentList(1, 'The agent has no identities.\n', ''), { available: true, keys: [] });
   assert.deepEqual(parseAgentList(2, '', 'Error connecting to agent: No such file or directory\n'),
     { available: false, message: 'Error connecting to agent: No such file or directory' });
+});
+
+test('rdp numa aba: argumentos do FreeRDP encaixado na janela do app', () => {
+  const rdp: Session = { name: 'AD WIN', folder: '', type: 'rdp', host: '10.0.0.9' };
+  const view = { parent: '1234', width: 1280.4, height: 719.6 };
+  assert.deepEqual(embeddedRdpArgs(rdp, view), ['/v:10.0.0.9', '/parent-window:1234', '/size:1280x720', '/dynamic-resolution', '+clipboard', '/title:AD WIN']);
+  // Porta fora do padrão, DOMINIO\usuario e usuario@dominio.
+  const args = embeddedRdpArgs({ ...rdp, port: 3390, user: 'EMPRESA\\ana' }, view);
+  assert.deepEqual(args.slice(0, 3), ['/v:10.0.0.9:3390', '/d:EMPRESA', '/u:ana']);
+  assert.equal(embeddedRdpArgs({ ...rdp, user: 'ana@empresa.local' }, view)[1], '/u:ana@empresa.local');
+  // Área minúscula (aba escondida ao abrir) não vira resolução inválida.
+  assert.ok(embeddedRdpArgs(rdp, { parent: '1', width: 0, height: 0 }).includes('/size:200x200'));
+  // A senha nunca vai na linha de comando.
+  assert.ok(!embeddedRdpArgs({ ...rdp, user: 'ana' }, view).some((a) => a.startsWith('/p:')));
+});
+
+test('rdp numa aba: fim da sessão em português', () => {
+  assert.deepEqual(rdpExitMessage(0), { normal: true, message: '' });
+  assert.equal(rdpExitMessage(0x1000c).normal, true); // logoff pelo usuário
+  assert.match(rdpExitMessage(131085).message, /não foi possível conectar/); // ERRCONNECT_CONNECT_TRANSPORT_FAILED
+  assert.match(rdpExitMessage(0x20014).message, /usuário ou senha incorretos/);
+  assert.match(rdpExitMessage(0x10003).message, /ociosa/);
+  assert.equal(rdpExitMessage(0x2abcd).message, 'erro do cliente RDP 0x0002abcd');
+  assert.deepEqual(rdpExitMessage(null), { normal: false, message: 'o cliente RDP não pôde ser iniciado' });
 });

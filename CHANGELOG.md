@@ -8,6 +8,10 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ### Adicionado
 
+- **RDP numa aba**: o cliente FreeRDP vem com o instalador e se encaixa na área da aba, com a
+  resolução acompanhando o tamanho e o motivo de queda em português (senha incorreta, porta
+  fechada, conta bloqueada...) com Reconectar. O cliente do Windows continua no botão direito
+  (**Janela externa**). (#37)
 - Botões **Importar** e **Exportar** com menu: sessões, sites de VPN (todos de uma vez, numa
   pasta) ou **backup completo** (`.multterm`, com sessões, sites de VPN, configurações dos
   servidores e do agente; sem as senhas cifradas pelo Windows). (#36)

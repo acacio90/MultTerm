@@ -20,6 +20,7 @@ import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { exportVpnSites, importVpnSites, registerVpnIpc } from './vpn.ts';
 import { exportServerConfigs, importServerConfigs, registerServersIpc } from './servers.ts';
 import { agentLaunch, exportAgentPrefs, importAgentPrefs, registerAgentIpc } from './agent.ts';
+import { closeRdpOf, registerRdpIpc } from './rdp.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
@@ -307,6 +308,7 @@ async function createWindow(opts: { detached?: boolean; title?: string } = {}): 
   const contents = win.webContents;
   contents.on('destroyed', () => {
     closeTerminalsOf(contents);
+    closeRdpOf(contents);
     cancelJobsOf(contents);
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -378,6 +380,7 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerServersIpc();
   registerAgentIpc();
   registerDetachIpc();
+  registerRdpIpc();
   initUpdates();
   await createWindow();
   app.on('activate', () => {

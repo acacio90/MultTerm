@@ -305,6 +305,10 @@ async function connect(session, { external = false } = {}) {
     await openSessionTab(session);
     return;
   }
+  if (session.type === 'rdp' && !external && await api.rdpAvailable()) {
+    await openRdpTab(session);
+    return;
+  }
   showEditor();
   clearMessages();
   try {
@@ -644,6 +648,127 @@ function openSessionTab(session) {
     tooltip: `${session.user ? `${session.user}@` : ''}${session.host}`,
   });
 }
+
+// ---------- RDP numa aba ----------
+
+/** Menus e diálogos abertos sobre a área (a janela nativa do RDP ficaria por cima deles). */
+function coversRect(r) {
+  for (const el of document.querySelectorAll('.menu:not([hidden]), .tab-menu, dialog[open]')) {
+    const o = el.getBoundingClientRect();
+    if (o.width && o.height && o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top) return true;
+  }
+  return false;
+}
+
+/** Área da aba em pixels físicos, e se a sessão deve aparecer. */
+function rdpView(tab) {
+  const r = tab.screen.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const visible = !tab.panel.hidden && !$('terminals').hidden && r.width > 0 && r.height > 0 && !coversRect(r);
+  return { x: r.left * dpr, y: r.top * dpr, width: r.width * dpr, height: r.height * dpr, visible };
+}
+
+function rdpStatus(tab, text, { error = '', log = '', actions = [] } = {}) {
+  const p = document.createElement('p');
+  p.textContent = text;
+  const parts = [p];
+  if (error) parts.push(Object.assign(document.createElement('p'), { className: 'rdp-error', textContent: error }));
+  if (log) {
+    const details = document.createElement('details');
+    details.append(
+      Object.assign(document.createElement('summary'), { textContent: 'Detalhes técnicos' }),
+      Object.assign(document.createElement('pre'), { textContent: log }),
+    );
+    parts.push(details);
+  }
+  if (actions.length) {
+    const row = document.createElement('div');
+    row.className = 'actions';
+    for (const [label, fn, primary] of actions) {
+      const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label, className: primary ? 'primary' : '' });
+      b.addEventListener('click', fn);
+      row.append(b);
+    }
+    parts.push(row);
+  }
+  tab.status.replaceChildren(...parts);
+}
+
+async function startRdp(tab) {
+  tab.running = true;
+  tab.lastView = '';
+  tab.button.classList.remove('ended');
+  rdpStatus(tab, `Conectando a ${tab.session.host}… O cliente RDP pede a senha numa janela própria.`);
+  await new Promise(requestAnimationFrame); // espera o layout da aba
+  try {
+    await api.rdpOpen(tab.id, tab.session, rdpView(tab));
+  } catch (err) {
+    endRdp(tab, { normal: false, message: cleanError(err) });
+  }
+}
+
+/** `end`: { normal, message, log } vindo do processo principal (ou só a mensagem de um erro local). */
+function endRdp(tab, end) {
+  tab.running = false;
+  tab.button.classList.add('ended');
+  rdpStatus(tab, 'Sessão RDP encerrada.', {
+    error: end.normal ? '' : end.message,
+    log: end.normal ? '' : end.log,
+    actions: [
+      ['Reconectar', () => startRdp(tab), true],
+      ['Abrir no cliente do Windows', () => connect(tab.session, { external: true })],
+    ],
+  });
+}
+
+/** Aba com a sessão RDP (cliente FreeRDP encaixado sobre a área da aba). */
+async function openRdpTab(session) {
+  const tab = createTab({ title: session.name, tooltip: `RDP ${session.user ? `${session.user}@` : ''}${session.host}`, panelClass: 'rdp-panel' });
+  Object.assign(tab, { kind: 'rdp', session, running: false });
+  tab.screen = document.createElement('div');
+  tab.screen.className = 'rdp-screen';
+  tab.status = document.createElement('div');
+  tab.status.className = 'rdp-status';
+  tab.screen.append(tab.status);
+  tab.panel.append(tab.screen);
+  // Avisa o processo principal da posição/visibilidade, no máximo uma vez por quadro e só se mudou.
+  let frame = 0;
+  tab.sync = () => {
+    if (!tab.running || frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (!tab.running) return;
+      const view = rdpView(tab);
+      const key = JSON.stringify(view);
+      if (key === tab.lastView) return;
+      tab.lastView = key;
+      api.rdpView(tab.id, view);
+    });
+  };
+  new ResizeObserver(tab.sync).observe(tab.screen);
+  tab.onShow = tab.sync;
+  tab.onClose = () => {
+    if (tab.running) void api.rdpClose(tab.id);
+    tab.running = false;
+  };
+  showTab(tab);
+  await startRdp(tab);
+  return tab;
+}
+
+const rdpTabs = () => [...tabsById.values()].filter((t) => t.kind === 'rdp');
+// Troca de aba, menus, diálogos, barra lateral redimensionada: reposiciona/esconde as sessões RDP.
+new MutationObserver(() => {
+  for (const t of rdpTabs()) t.sync();
+}).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'open', 'class', 'style'] });
+window.addEventListener('resize', () => {
+  for (const t of rdpTabs()) t.sync();
+});
+api.onRdpReady((id) => tabsById.get(id)?.sync?.());
+api.onRdpExit((id, _code, end) => {
+  const tab = tabsById.get(id);
+  if (tab?.kind === 'rdp' && tab.running) endRdp(tab, end);
+});
 
 api.onTermData((id, data) => tabsById.get(id)?.term?.write(data));
 api.onTermExit((id, code) => {
@@ -1104,7 +1229,7 @@ function openSessionMenu(e, session) {
   clearMulti();
   const items = [
     ['connect', 'Conectar', () => connect(session)],
-    ...(session.type === 'ssh' ? [['external', 'Janela externa', () => connect(session, { external: true })]] : []),
+    ['external', session.type === 'rdp' ? 'Janela externa (cliente do Windows)' : 'Janela externa', () => connect(session, { external: true })],
     ...(session.mac ? [['wol', 'Ligar (Wake-on-LAN)', () => wakeSession(session)]] : []),
     ['ping', 'Ping…', () => openDiagDialog('ping', session.host)],
     ['traceroute', 'Traceroute…', () => openDiagDialog('traceroute', session.host)],

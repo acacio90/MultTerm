@@ -10,7 +10,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Árvore de sessões com pastas e busca; criar, editar e excluir sessões
 - **Terminal SSH embutido em abas** (xterm.js + node-pty), usando o OpenSSH do sistema
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
-- RDP pelo cliente do sistema (`mstsc` no Windows)
+- **RDP numa aba** (cliente FreeRDP embutido), ou no cliente do Windows (`mstsc`) pelo menu
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
 - Exportação das sessões (todas ou uma pasta), dos sites de VPN ou de um **backup completo** para
   levar tudo a outra máquina
@@ -58,7 +58,7 @@ a variável `MULTTERM_SESSIONS`.
 
 ## Uso
 
-- **Duplo clique** numa sessão abre uma aba de terminal (SSH) ou o cliente RDP.
+- **Duplo clique** numa sessão abre uma aba: terminal (SSH) ou área de trabalho remota (RDP).
 - **Botão direito numa sessão**: Conectar, Janela externa, Ligar (Wake-on-LAN, se a sessão
   tem MAC), Ping, Traceroute, Scanner de portas, Consulta SNMP e Editar.
 - **Várias sessões**: Ctrl+clique adiciona ou tira sessões da seleção e Shift+clique seleciona um
@@ -241,6 +241,25 @@ com as sessões existentes (mesma pasta + nome não é sobrescrito):
    privada (anexo ou arquivo) e marcar *Adicionar ao agente quando o banco for aberto* e
    *Remover quando for fechado*.
 
+### RDP numa aba
+
+Sessões RDP abrem numa aba, com o cliente [FreeRDP](https://www.freerdp.com) (Apache 2.0)
+que vem com o instalador encaixado na área da aba:
+
+- A senha é pedida pelo próprio cliente, numa janela do Windows; o MultTerm não a guarda.
+  Usuário no formato `DOMINIO\usuario` ou `usuario@dominio`.
+- A resolução acompanha o tamanho da aba. Área de transferência compartilhada.
+- Menus e diálogos do MultTerm que passam por cima da área escondem a sessão enquanto estão
+  abertos (a área remota é uma janela nativa e ficaria por cima deles).
+- Quando a sessão cai, a aba mostra o motivo em português (senha incorreta, porta fechada,
+  conta bloqueada...) com **Reconectar** e **Abrir no cliente do Windows**.
+- **Janela externa (cliente do Windows)** no botão direito abre no `mstsc`, como antes.
+- Abas RDP não podem ir para uma janela separada.
+
+O `wfreerdp.exe` é compilado pelo workflow `.github/workflows/freerdp.yml` a partir do
+código-fonte oficial (hash conferido) e publicado numa release auxiliar (`freerdp-<versão>`);
+`npm run fetch:freerdp` o baixa para `vendor/freerdp`, conferindo o hash.
+
 ## Desenvolvimento
 
 O motor de VPN tem testes de interoperabilidade contra um gateway strongSwan em Docker
@@ -252,6 +271,7 @@ Requer Node.js 22.18+.
 
 ```sh
 npm install
+npm run fetch:freerdp  # cliente RDP (uma vez; o npm run release baixa sozinho)
 npm start            # compila e abre o app
 npm test             # testes de unidade
 npm run test:ui      # testes de interface (abre o app com Playwright)
@@ -310,4 +330,5 @@ O grafo é atualizado pelo hook `pre-commit` do git; o banco local fica em
 
 ## Licença
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](LICENSE). O instalador inclui o [FreeRDP](https://github.com/FreeRDP/FreeRDP) (Apache 2.0,
+licença em `resources/freerdp/LICENSE.txt`) e o [Wintun](https://www.wintun.net).

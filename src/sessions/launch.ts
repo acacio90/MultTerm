@@ -144,3 +144,81 @@ export function parseAgentList(exitCode: number | null, stdout: string, stderr: 
   if (exitCode === 1) return { available: true, keys: [] };
   return { available: false, message: (stderr || stdout).trim() || 'agente SSH indisponível' };
 }
+
+/**
+ * Argumentos do cliente FreeRDP (wfreerdp) para abrir a sessão RDP dentro de uma janela do
+ * MultTerm: a janela do RDP vira filha de `parent` e a resolução acompanha o tamanho da aba.
+ * A senha não vai na linha de comando: o FreeRDP pede (e o Windows guarda, se o usuário quiser).
+ */
+export function embeddedRdpArgs(s: Session, view: { parent: string; width: number; height: number }): string[] {
+  const port = effectivePort(s);
+  const args = [`/v:${s.host}${port === DEFAULT_PORTS.rdp ? '' : `:${port}`}`];
+  if (s.user) {
+    // DOMINIO\usuario vira /d: + /u:; usuario@dominio vai inteiro em /u:.
+    const slash = s.user.indexOf('\\');
+    if (slash > 0) args.push(`/d:${s.user.slice(0, slash)}`, `/u:${s.user.slice(slash + 1)}`);
+    else args.push(`/u:${s.user}`);
+  }
+  const width = Math.max(200, Math.min(8192, Math.round(view.width)));
+  const height = Math.max(200, Math.min(8192, Math.round(view.height)));
+  args.push(
+    `/parent-window:${view.parent}`,
+    `/size:${width}x${height}`,
+    '/dynamic-resolution',
+    '+clipboard',
+    `/title:${s.name}`,
+  );
+  return args;
+}
+
+// Códigos de saída do wfreerdp = último erro do FreeRDP: (classe << 16) | tipo.
+// Classe 1: o servidor encerrou (ERRINFO_*); classe 2: falha ao conectar (ERRCONNECT_*).
+const RDP_ENDED: Record<number, string> = {
+  0x10001: 'um administrador desconectou a sessão',
+  0x10002: 'um administrador encerrou a sessão (logoff)',
+  0x10003: 'a sessão ficou ociosa por muito tempo e o servidor a desconectou',
+  0x10004: 'o tempo para fazer logon esgotou',
+  0x10005: 'outra conexão assumiu esta sessão',
+  0x10007: 'o servidor recusou a conexão',
+  0x10009: 'o usuário não tem permissão para acesso remoto neste servidor',
+  0x1000a: 'o servidor exige que a senha seja digitada de novo',
+  0x10101: 'o servidor não encontrou um servidor de licenças de RDP',
+  0x10102: 'não há licença de RDP disponível no servidor',
+};
+const RDP_FAILED: Record<number, string> = {
+  0x20004: 'falha na consulta DNS do host',
+  0x20005: 'o nome do host não foi encontrado (DNS)',
+  0x20006: 'não foi possível conectar ao servidor',
+  0x20008: 'falha na conexão segura (TLS) com o servidor',
+  0x20009: 'falha na autenticação',
+  0x2000a: 'privilégios insuficientes',
+  0x2000b: 'conexão cancelada',
+  0x2000c: 'o servidor não aceitou nenhum dos modos de segurança oferecidos',
+  0x2000d: 'não foi possível conectar: o servidor não respondeu ou a porta está fechada/bloqueada',
+  0x2000e: 'a senha expirou',
+  0x2000f: 'a senha expirou',
+  0x20011: 'o controlador de domínio (Kerberos) não está acessível',
+  0x20012: 'a conta está desativada',
+  0x20013: 'é preciso trocar a senha antes de entrar',
+  0x20014: 'usuário ou senha incorretos',
+  0x20015: 'senha incorreta',
+  0x20016: 'acesso negado',
+  0x20017: 'a conta tem restrições que impedem este logon',
+  0x20018: 'a conta está bloqueada',
+  0x20019: 'a conta expirou',
+  0x2001a: 'o usuário não tem permissão de logon remoto neste servidor',
+  0x2001b: 'usuário ou senha não informados',
+  0x2001c: 'o servidor demorou demais para iniciar a sessão',
+  0x2001d: 'o servidor ainda está iniciando; tente de novo em instantes',
+  0x2001e: 'o servidor exige autenticação no nível da rede (NLA)',
+};
+// Fins normais (o próprio usuário saiu ou desconectou pelo Windows remoto).
+const RDP_NORMAL = new Set([0, 0x1000b, 0x1000c]);
+
+/** Mensagem para o fim de uma sessão RDP; `normal` = o usuário saiu, não é erro. */
+export function rdpExitMessage(code: number | null): { normal: boolean; message: string } {
+  if (code === null) return { normal: false, message: 'o cliente RDP não pôde ser iniciado' };
+  if (RDP_NORMAL.has(code)) return { normal: true, message: '' };
+  const known = RDP_ENDED[code] ?? RDP_FAILED[code];
+  return { normal: false, message: known ?? `erro do cliente RDP 0x${code.toString(16).padStart(8, '0')}` };
+}
