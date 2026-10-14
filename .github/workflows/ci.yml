@@ -91,3 +91,46 @@ jobs:
       - name: Log do servidor
         if: always()
         run: cat /tmp/nfs.log
+
+  # Servidor VNC do MultTerm contra um cliente VNC real (vncdotool), com uma tela sintética.
+  vnc-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cliente VNC (vncdotool)
+        run: pip install vncdotool pillow
+
+      - name: Servidor VNC do MultTerm
+        run: |
+          node test/vnc-linux/serve.ts segredo1 > /tmp/vnc.log 2>&1 &
+          for i in $(seq 1 20); do grep -q pronto /tmp/vnc.log && break; sleep 0.5; done
+          cat /tmp/vnc.log
+
+      - name: Capturar a tela e conferir os pixels; senha errada é recusada
+        run: |
+          vncdo -s 127.0.0.1::5900 -p segredo1 capture /tmp/tela.png
+          python - <<'PY'
+          from PIL import Image
+          im = Image.open('/tmp/tela.png').convert('RGB')
+          assert im.size == (320, 200), im.size
+          for x, y in [(0, 0), (10, 20), (100, 50), (319, 199), (200, 150)]:
+              esperado = ((x + y) & 255, y & 255, x & 255)
+              assert im.getpixel((x, y)) == esperado, (x, y, im.getpixel((x, y)), esperado)
+          print('pixels conferem')
+          PY
+          if timeout 20 vncdo -s 127.0.0.1::5900 -p errada capture /tmp/x.png; then echo "a senha errada deveria falhar"; exit 1; fi
+          grep -q "senha errada" /tmp/vnc.log
+
+      - name: Log do servidor
+        if: always()
+        run: cat /tmp/vnc.log

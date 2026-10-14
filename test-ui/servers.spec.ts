@@ -39,7 +39,7 @@ test('HTTP: inicia pelo painel, serve a pasta, registra e para', async () => {
   await writeFile(join(root, 'firmware.bin'), 'conteúdo do firmware');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(8);
+  await expect(panel.locator('.server-row')).toHaveCount(9);
   await panel.locator('.server-row[data-kind=http] .server-name').click();
   const detail = panel.locator('.server-detail');
   await expect(detail.locator('h3')).toHaveText('Servidor HTTP');
@@ -108,7 +108,7 @@ test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async (
   await writeFile(join(root, 'config.txt'), 'interface eth0');
   const port = await freePort();
   const panel = await openServers();
-  await expect(panel.locator('.server-row')).toHaveCount(8);
+  await expect(panel.locator('.server-row')).toHaveCount(9);
   await panel.locator('.server-row[data-kind=ftp] .server-name').click();
   const detail = panel.locator('.server-detail');
   await detail.locator('[name=root]').fill(root);
@@ -223,4 +223,65 @@ test('NFS: inicia pelo painel (somente leitura), sem portmapper, e para', async 
   await detail.locator('[name=allow]').fill('meu-pc');
   await panel.locator('.server-row[data-kind=nfs] button', { hasText: 'Iniciar' }).click();
   await expect(panel.locator('.tool-status, .server-error, .status').filter({ hasText: 'cliente permitido inválido' }).first()).toBeVisible();
+});
+
+test('VNC: senha obrigatória; inicia pelo painel e entrega a tela real a um cliente RFB', async () => {
+  const { connect } = await import('node:net');
+  const { vncAuthResponse } = await import('../src/servers/des.ts');
+  const port = await freePort();
+  const panel = await openServers();
+  await panel.locator('.server-row[data-kind=vnc] .server-name').click();
+  const detail = panel.locator('.server-detail');
+  await expect(detail.locator('h3')).toHaveText('Servidor VNC (experimental)');
+  await expect(detail.locator('[name=viewOnly]')).toBeChecked(); // somente visualização por padrão
+  await detail.locator('[name=port]').fill(String(port));
+  await detail.locator('select[name=host]').selectOption('127.0.0.1');
+  await detail.locator('[name=confirm]').uncheck();
+  // Sem senha não inicia.
+  await panel.locator('.server-row[data-kind=vnc] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.tool-status, .server-error, .status').filter({ hasText: 'defina a senha do VNC' }).first()).toBeVisible();
+  await detail.locator('[name=password]').fill('teste123');
+  await panel.locator('.server-row[data-kind=vnc] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.server-row[data-kind=vnc] .server-state')).toContainText(`rodando na porta ${port}`);
+  await expect(detail.locator('.server-log')).toContainText('somente visualização');
+
+  // Cliente RFB mínimo: versão, senha, ServerInit e um quadro inteiro (Raw).
+  const sock = connect(port, '127.0.0.1');
+  let buf = Buffer.alloc(0);
+  sock.on('data', (d) => { buf = Buffer.concat([buf, d]); });
+  const read = async (n: number) => {
+    await expect.poll(() => buf.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(n);
+    const out = buf.subarray(0, n);
+    buf = buf.subarray(n);
+    return out;
+  };
+  expect((await read(12)).toString()).toBe('RFB 003.008\n');
+  sock.write('RFB 003.008\n');
+  expect([...(await read(2))]).toEqual([1, 2]);
+  sock.write(Buffer.from([2]));
+  sock.write(vncAuthResponse('teste123', await read(16)));
+  expect((await read(4)).readUInt32BE(0)).toBe(0);
+  sock.write(Buffer.from([1]));
+  const init = await read(24);
+  const width = init.readUInt16BE(0);
+  const height = init.readUInt16BE(2);
+  expect(width).toBeGreaterThan(100);
+  expect(height).toBeGreaterThan(100);
+  await read(init.readUInt32BE(20));
+  const req = Buffer.alloc(10);
+  req[0] = 3;
+  req.writeUInt16BE(width, 6);
+  req.writeUInt16BE(height, 8);
+  sock.write(req);
+  const head = await read(4);
+  expect(head.readUInt16BE(2)).toBe(1);
+  const rect = await read(12);
+  expect([rect.readUInt16BE(4), rect.readUInt16BE(6), rect.readInt32BE(8)]).toEqual([width, height, 0]);
+  const pixels = await read(width * height * 4);
+  // A tela capturada não é toda de uma cor só.
+  expect(new Set(Array.from({ length: 200 }, (_, i) => pixels.readUInt32LE(Math.floor((i / 200) * (pixels.length / 4)) * 4))).size).toBeGreaterThan(1);
+  await expect(detail.locator('.server-log')).toContainText('127.0.0.1 conectado (somente visualização)');
+  sock.destroy();
+  await panel.locator('.server-row[data-kind=vnc] button', { hasText: 'Parar' }).click();
+  await expect(panel.locator('.server-row[data-kind=vnc] .server-state')).toHaveText('parado');
 });

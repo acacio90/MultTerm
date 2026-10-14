@@ -11,6 +11,8 @@ import { ensureHostKey, startSsh, validateSsh } from '../servers/ssh.ts';
 import { startCron, validateCron } from '../servers/cron.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 import { startNfs, validateNfs } from '../servers/nfs.ts';
+import { startVnc, validateVnc } from '../servers/vnc.ts';
+import { captureScreen, windowsInput } from './screen-share.ts';
 
 /*
  * Servidores locais (Ferramentas → Servidores): iniciar/parar, parar sozinho depois de N
@@ -231,6 +233,30 @@ const DEFS: ServerDef[] = [
     ],
     defaults: () => ({ root: filesDir(), port: 2049, portmap: true, allow: '', stopAfter: 3600 }),
     start: (raw, log) => startNfs(validateNfs(raw), log),
+  },
+  {
+    kind: 'vnc',
+    title: 'VNC (experimental)',
+    description: 'Compartilha a tela principal deste computador por VNC (qualquer visualizador VNC: TightVNC, RealVNC, ' +
+      'TigerVNC...). Senha obrigatória (até 8 caracteres, limite do protocolo). O VNC não cifra o tráfego: use só em ' +
+      'rede confiável ou por um túnel (VPN, SSH).',
+    fields: [
+      { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'viewOnly', label: 'Somente visualização (sem mouse e teclado)', type: 'bool' },
+      { key: 'confirm', label: 'Perguntar antes de aceitar cada conexão', type: 'bool' },
+      { key: 'allow', label: 'Clientes permitidos', type: 'text', hint: 'IPs ou faixas (10.0.0.0/24), separados por vírgula; vazio = qualquer um' },
+      { key: 'fps', label: 'Quadros por segundo', type: 'number', min: 1, max: 30 },
+      ...COMMON,
+    ],
+    defaults: () => ({ port: 5900, password: '', viewOnly: true, confirm: true, allow: '', fps: 5, stopAfter: 3600 }),
+    start: (raw, log, notify) => startVnc(validateVnc(raw), {
+      capture: captureScreen,
+      input: raw.viewOnly === false ? windowsInput() : undefined,
+      confirm: raw.confirm === true ? (client) => confirmConnection('VNC', client) : undefined,
+      notify,
+    }, log),
   },
 ];
 
