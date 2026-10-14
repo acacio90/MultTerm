@@ -164,3 +164,37 @@ test('terminal local e abrir o agente numa aba com a configuração MCP', async 
   const prefs = JSON.parse(await readFile(join(ctx.dir, 'userdata', 'agent.json'), 'utf8'));
   expect(prefs.agentCommand).toBe('Get-Content {mcp}');
 });
+
+test('agente MCP: define o modo de todas as abas de uma vez', async () => {
+  for (let i = 0; i < 2; i++) {
+    await page.click('#btn-tools');
+    await page.click('#tools-menu [data-tool="local-powershell"]');
+  }
+  const tabs = page.locator('#tabs .tab', { hasText: 'PowerShell' });
+  await expect(tabs).toHaveCount(2);
+
+  await page.click('#btn-agent');
+  const panel = page.locator('.panel:not([hidden])').last();
+  await panel.locator('[name=port]').fill(String(await freePort()));
+  await panel.locator('button', { hasText: 'Trocar porta' }).click();
+  await panel.locator('button', { hasText: 'Ligar o agente' }).click();
+
+  await panel.locator('select[name=shareAll]').selectOption('read');
+  await expect(tabs.nth(0)).toHaveClass(/agent-shared/);
+  await expect(tabs.nth(1)).toHaveClass(/agent-shared/);
+  for (const sel of await panel.locator('select[name^=share-]').all()) await expect(sel).toHaveValue('read');
+  expect(JSON.parse((await tool('list_terminals')).text)).toHaveLength(2);
+
+  // Controle livre pede confirmação; recusar não muda nada.
+  page.once('dialog', (d) => void d.dismiss());
+  await panel.locator('select[name=shareAll]').selectOption('auto');
+  await expect(panel.locator('select[name=shareAll]')).toHaveValue('');
+  for (const sel of await panel.locator('select[name^=share-]').all()) await expect(sel).toHaveValue('read');
+  page.once('dialog', (d) => void d.accept());
+  await panel.locator('select[name=shareAll]').selectOption('auto');
+  for (const sel of await panel.locator('select[name^=share-]').all()) await expect(sel).toHaveValue('auto');
+
+  await panel.locator('select[name=shareAll]').selectOption('off');
+  await expect(tabs.nth(0)).not.toHaveClass(/agent-shared/);
+  await expect(tabs.nth(1)).not.toHaveClass(/agent-shared/);
+});

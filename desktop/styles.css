@@ -323,6 +323,7 @@ pre.server-log { min-height: 120px; max-height: 260px; overflow: auto; }
 .agent-state.on { color: #22a35a; font-weight: 600; }
 pre.agent-config { max-height: 220px; overflow: auto; user-select: text; }
 table.agent-shares td { vertical-align: middle; }
+table.agent-shares tr.agent-share-all td { font-weight: 600; border-bottom: 2px solid var(--border); }
 .server-textarea { width: 100%; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; resize: vertical; }
 @media (max-width: 800px) { .servers { grid-template-columns: 1fr; } }
 .tool-form label.check input { width: auto; }

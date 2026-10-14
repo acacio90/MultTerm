@@ -112,7 +112,8 @@ abertos. O MultTerm não fala com nenhum serviço de IA: ele só expõe ferramen
 - **Nada é compartilhado por padrão.** Para cada aba de terminal você escolhe: não compartilhar,
   **somente leitura**, **aprovar cada envio** (o MultTerm mostra exatamente o que será digitado e
   em qual aba, com Permitir / Permitir sempre nesta aba / Recusar) ou **controle livre**. Abas
-  compartilhadas ganham uma marca (◉); **Parar de compartilhar tudo** corta o acesso na hora.
+  compartilhadas ganham uma marca (◉); **Definir todas** aplica um modo a todas as abas de uma vez e
+  **Parar de compartilhar tudo** corta o acesso na hora.
 - Ferramentas: `list_terminals`, `read_terminal` (a saída como texto, sem cores),
   `run_command` (digita, aperta Enter e devolve a saída quando ela para), `send_input` e
   `send_keys` (Enter, Ctrl+C, setas...). Os comandos rodam nos servidores reais das sessões.

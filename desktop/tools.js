@@ -583,6 +583,8 @@ function agentPanel(ctx) {
   let state = null;
   let logBox = null;
   let rendered = false;
+  // O que foi digitado e ainda não salvo sobrevive aos redesenhos (eventos de abas e do agente).
+  const draft = { port: null, command: null };
 
   const copyButton = (getText) => {
     const b = el('button', { type: 'button', textContent: 'Copiar' });
@@ -612,11 +614,13 @@ function agentPanel(ctx) {
         status.textContent = ctx.cleanError(err);
       }
     });
-    const port = el('input', { name: 'port', type: 'number', min: 1024, max: 65535, value: s.port });
+    const port = el('input', { name: 'port', type: 'number', min: 1024, max: 65535, value: draft.port ?? s.port });
+    port.addEventListener('input', () => { draft.port = port.value; });
     const savePort = el('button', { type: 'button', textContent: 'Trocar porta' });
     savePort.addEventListener('click', async () => {
       try {
         state = { ...state, ...(await ctx.api.agentSetPort(Number(port.value))) };
+        draft.port = null;
         render();
       } catch (err) {
         status.textContent = ctx.cleanError(err);
@@ -649,6 +653,24 @@ function agentPanel(ctx) {
       });
       return el('tr', {}, el('td', { textContent: t.title }), el('td', { className: 'muted', textContent: t.detail ?? '' }), el('td', {}, sel));
     });
+    // Mesmo modo para todas as abas de uma vez.
+    const all = select('shareAll', [['', 'Definir todas…'], ...AGENT_MODES], '');
+    all.addEventListener('change', async () => {
+      const mode = all.value;
+      all.value = '';
+      if (!mode) return;
+      if (mode === 'auto' && !confirm(`Dar controle livre ao agente em ${terms.length} aba(s)? Ele poderá digitar nelas sem perguntar.`)) return;
+      status.textContent = '';
+      try {
+        for (const t of terms) await ctx.api.agentShare(t.id, mode, t.title, t.detail);
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    if (terms.length > 1) {
+      shareRows.unshift(el('tr', { className: 'agent-share-all' },
+        el('td', { textContent: 'Todas as abas' }), el('td', { className: 'muted', textContent: `${terms.length} abas` }), el('td', {}, all)));
+    }
     const unshare = el('button', { type: 'button', className: 'danger', textContent: 'Parar de compartilhar tudo', disabled: !s.shares.length });
     unshare.addEventListener('click', () => ctx.api.agentUnshareAll());
 
@@ -656,15 +678,19 @@ function agentPanel(ctx) {
 
     // Abrir o próprio agente numa aba local, já apontado para este servidor.
     const command = el('input', {
-      name: 'agentCommand', value: s.agentCommand ?? '', autocomplete: 'off', spellcheck: false,
+      name: 'agentCommand', value: draft.command ?? s.agentCommand ?? '', autocomplete: 'off', spellcheck: false,
       placeholder: 'ex.: meu-agente --mcp-config {mcp}',
     });
     const saveCommand = el('button', { type: 'button', textContent: 'Salvar' });
-    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente', disabled: !s.agentCommand });
-    command.addEventListener('input', () => { launch.disabled = !command.value.trim(); });
+    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente', disabled: !command.value.trim() });
+    command.addEventListener('input', () => {
+      draft.command = command.value;
+      launch.disabled = !command.value.trim();
+    });
     saveCommand.addEventListener('click', async () => {
       try {
         state = { ...state, ...(await ctx.api.agentSetCommand(command.value)) };
+        draft.command = null;
         status.textContent = 'Comando salvo.';
         render();
       } catch (err) {
@@ -674,7 +700,10 @@ function agentPanel(ctx) {
     launch.addEventListener('click', async () => {
       status.textContent = '';
       try {
-        if (command.value.trim() !== (s.agentCommand ?? '')) await ctx.api.agentSetCommand(command.value);
+        if (command.value.trim() !== (s.agentCommand ?? '')) {
+          state = { ...state, ...(await ctx.api.agentSetCommand(command.value)) };
+          draft.command = null;
+        }
         await ctx.openLocal('agent');
       } catch (err) {
         status.textContent = ctx.cleanError(err);

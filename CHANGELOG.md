@@ -17,6 +17,12 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   de configuração). (#31)
 - Destacar uma aba de terminal em janela própria (clique direito na aba) e devolvê-la à janela
   principal, sem reiniciar a sessão; o compartilhamento com o agente acompanha a aba. (#32)
+- Agente: **Definir todas** aplica o mesmo modo de compartilhamento a todas as abas de uma vez
+  (controle livre pede confirmação). (#33)
+
+### Corrigido
+
+- Painel do agente: porta e comando digitados não são mais apagados quando o painel se redesenha.
 
 ## [0.3.0] - 2026-10-13
 
