@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
-import { checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
+import { checkHost, checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
 
 /*
  * Servidor HTTP de arquivos: serve uma pasta (só leitura), com index.html, listagem opcional,
@@ -17,7 +17,7 @@ export interface HttpConfig {
 }
 
 export function validateHttp(raw: Record<string, unknown>): HttpConfig {
-  return { root: checkRoot(raw.root), port: checkPort(raw.port, 8080), listing: raw.listing !== false };
+  return { root: checkRoot(raw.root), port: checkPort(raw.port, 8080), host: checkHost(raw.host), listing: raw.listing !== false };
 }
 
 const MIME: Record<string, string> = {

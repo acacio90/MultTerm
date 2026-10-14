@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { timestamp, type RunningServer } from '../servers/common.ts';
+import { listenOptions, timestamp, type RunningServer } from '../servers/common.ts';
 import { ensureSelfSignedPfx } from '../servers/cert.ts';
 import { startFtp, validateFtp } from '../servers/ftp.ts';
 import { startHttp, validateHttp } from '../servers/http.ts';
@@ -65,6 +65,12 @@ interface ServerDef {
 }
 
 const filesDir = () => join(app.getPath('documents'), 'MultTerm', 'Servidor');
+// Endereço de escuta: as opções (interfaces desta máquina) são montadas na hora, em servers:list.
+const HOST_FIELD: ServerField = {
+  key: 'host', label: 'Escutar em', type: 'select', options: [],
+  hint: 'todas as interfaces, só esta máquina ou uma placa de rede específica',
+};
+
 const COMMON: ServerField[] = [
   { key: 'stopAfter', label: 'Parar depois de (segundos, 0 = nunca)', type: 'number', min: 0, max: 86400 },
 ];
@@ -77,6 +83,7 @@ const DEFS: ServerDef[] = [
     fields: [
       { key: 'root', label: 'Pasta raiz', type: 'dir' },
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
       { key: 'maxBlockSize', label: 'Maior bloco (bytes)', type: 'number', min: 8, max: 65464, hint: 'negociado com o cliente (blksize)' },
       { key: 'allowUpload', label: 'Permitir envio (upload)', type: 'bool' },
       { key: 'allowOverwrite', label: 'Permitir sobrescrever arquivos', type: 'bool' },
@@ -97,6 +104,7 @@ const DEFS: ServerDef[] = [
     fields: [
       { key: 'root', label: 'Pasta raiz', type: 'dir' },
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
       { key: 'user', label: 'Usuário', type: 'text' },
       { key: 'password', label: 'Senha', type: 'password' },
       { key: 'anonymous', label: 'Permitir acesso anônimo (só leitura)', type: 'bool' },
@@ -131,6 +139,7 @@ const DEFS: ServerDef[] = [
     fields: [
       { key: 'root', label: 'Pasta raiz', type: 'dir' },
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
       { key: 'listing', label: 'Mostrar o conteúdo das pastas', type: 'bool' },
       ...COMMON,
     ],
@@ -145,6 +154,7 @@ const DEFS: ServerDef[] = [
     fields: [
       { key: 'root', label: 'Pasta raiz do SFTP', type: 'dir' },
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
       { key: 'user', label: 'Usuário', type: 'text' },
       { key: 'password', label: 'Senha', type: 'password' },
       { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
@@ -165,6 +175,7 @@ const DEFS: ServerDef[] = [
       'a senha e tudo o que for digitado trafegam em texto puro — use só em rede confiável e por pouco tempo.',
     fields: [
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
       { key: 'password', label: 'Senha de acesso', type: 'password' },
       { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
       { key: 'confirm', label: 'Perguntar antes de aceitar cada conexão', type: 'bool' },
@@ -198,6 +209,7 @@ const DEFS: ServerDef[] = [
       '-P N usa vários fluxos). Clientes iperf3 do Windows usam buffer pequeno: para medir acima de ~600 Mbit/s, use -P 4 ou -w 1M.',
     fields: [
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
+      HOST_FIELD,
       ...COMMON,
     ],
     defaults: () => ({ port: 5201, stopAfter: 3600 }),
@@ -317,12 +329,16 @@ export function registerServersIpc(): void {
 
   ipcMain.handle('servers:list', async () => {
     await loaded;
-    return DEFS.map((d) => ({
-      kind: d.kind, title: d.title, description: d.description, fields: d.fields,
-      config: publicConfig(d),
-      state: stateOf(d.kind),
-      log: logs.get(d.kind) ?? [],
-    }));
+    return DEFS.map((d) => {
+      const config = publicConfig(d);
+      return {
+        kind: d.kind, title: d.title, description: d.description,
+        fields: d.fields.map((fl) => (fl.key === 'host' ? { ...fl, options: listenOptions(config.host) } : fl)),
+        config,
+        state: stateOf(d.kind),
+        log: logs.get(d.kind) ?? [],
+      };
+    });
   });
 
   ipcMain.handle('servers:start', async (_e, kind: unknown, raw: unknown) => {
@@ -368,7 +384,9 @@ export function registerServersIpc(): void {
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
       const msg = e.code === 'EADDRINUSE' ? `a porta ${cfg.port} já está em uso por outro programa`
-        : e.code === 'EACCES' ? `sem permissão para usar a porta ${cfg.port}` : e.message;
+        : e.code === 'EACCES' ? `sem permissão para usar a porta ${cfg.port}`
+          : e.code === 'EADDRNOTAVAIL' ? `o endereço ${cfg.host} não existe nesta máquina agora (a placa de rede mudou?); escolha outro em "Escutar em"`
+            : e.message;
       log(def.kind, `falha ao iniciar: ${msg}`);
       throw new Error(msg);
     }
@@ -381,6 +399,14 @@ export function registerServersIpc(): void {
       }, stopAfter * 1000);
     }
     running.set(def.kind, r);
+    if (def.fields.some((fl) => fl.key === 'host')) {
+      const where = cfg.host ? String(cfg.host) : 'todas as interfaces';
+      log(def.kind, `escutando em ${where}, porta ${server.port}`);
+      // Fora do localhost, o Firewall do Windows pode barrar outros equipamentos.
+      if (cfg.host !== '127.0.0.1') {
+        log(def.kind, 'se outros equipamentos não conseguirem conectar, libere a porta no Firewall do Windows (o Windows costuma perguntar na primeira vez)');
+      }
+    }
     broadcast(def.kind);
     return stateOf(def.kind);
   }

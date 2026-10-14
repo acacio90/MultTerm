@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import pty from 'node-pty';
 import ssh2 from 'ssh2';
-import { checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
+import { checkHost, checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
 
 /*
  * Servidor SSH/SFTP: login com usuário e senha do painel, shell do Windows pelo ConPTY, execução
@@ -35,7 +35,7 @@ export function validateSsh(raw: Record<string, unknown>): Omit<SshConfig, 'host
   // eslint-disable-next-line no-control-regex
   if (!user || /[\s\x00-\x1f]/.test(user)) throw new Error('informe o usuário');
   if (password.length < 6) throw new Error('defina uma senha (mínimo 6 caracteres)');
-  return { root: checkRoot(raw.root), port: checkPort(raw.port, 22), user, password, shell: raw.shell === 'cmd' ? 'cmd' : 'powershell' };
+  return { root: checkRoot(raw.root), port: checkPort(raw.port, 22), host: checkHost(raw.host), user, password, shell: raw.shell === 'cmd' ? 'cmd' : 'powershell' };
 }
 
 /** Lê a chave de host em `path` ou gera uma ed25519 nova. */

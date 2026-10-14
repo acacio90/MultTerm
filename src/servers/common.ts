@@ -1,4 +1,6 @@
 import { realpath } from 'node:fs/promises';
+import { isIP } from 'node:net';
+import { networkInterfaces } from 'node:os';
 import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 
 /*
@@ -18,6 +20,25 @@ export function checkPort(v: unknown, fallback: number): number {
   const n = v === undefined || v === null || v === '' ? fallback : Number(v);
   if (!Number.isInteger(n) || n < 0 || n > 65535) throw new Error('porta inválida (1 a 65535)');
   return n;
+}
+
+/** Endereço de escuta: vazio = todas as interfaces; senão um IPv4/IPv6 desta máquina. */
+export function checkHost(v: unknown): string | undefined {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return undefined;
+  if (!isIP(s)) throw new Error(`endereço de escuta inválido (${s})`);
+  return s;
+}
+
+/** Opções do "Escutar em": todas, só esta máquina e cada IPv4 das placas de rede. */
+export function listenOptions(current: unknown, ifaces = networkInterfaces()): [string, string][] {
+  const opts: [string, string][] = [['', 'Todas as interfaces'], ['127.0.0.1', 'Só esta máquina (127.0.0.1)']];
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    for (const a of addrs ?? []) if (a.family === 'IPv4' && !a.internal) opts.push([a.address, `${name} (${a.address})`]);
+  }
+  // Endereço gravado que sumiu (placa desligada, DHCP mudou): continua visível, marcado.
+  if (typeof current === 'string' && current && !opts.some(([v]) => v === current)) opts.push([current, `${current} (não disponível agora)`]);
+  return opts;
 }
 
 export function checkRoot(v: unknown): string {

@@ -177,6 +177,10 @@ MultTerm, inclusive as janelas separadas.
 "parar depois de N segundos" (1 hora por padrão) e log com horário; as configurações ficam
 lembradas e todos param ao sair do MultTerm. Os arquivos ficam em `Documentos\MultTerm\Servidor`
 (ou na pasta escolhida) e nenhum servidor sai da pasta raiz.
+**Escutar em** escolhe onde cada servidor atende: todas as interfaces, só esta máquina
+(127.0.0.1) ou uma placa de rede específica (a lista mostra as placas com o IPv4 de cada uma).
+Fora do localhost, o log lembra de liberar a porta no Firewall do Windows se os equipamentos não
+conseguirem conectar.
 
 - **TFTP** (porta 69): baixar e enviar firmware e configurações de equipamentos, com negociação
   de bloco (até 64 KB), tamanho e timeout, arquivos grandes, opção de bloquear envio ou

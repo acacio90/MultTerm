@@ -24,6 +24,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Agente: a lista mostra só os agentes instalados na máquina (PATH e caminhos de instalação
   comuns), com a versão; os não encontrados aparecem desabilitados, há **Procurar de novo**, e
   **Abrir o agente** fica bloqueado quando não há nenhum. O agente abre pelo caminho encontrado. (#43)
+- Servidores: **Escutar em** escolhe a interface (todas, só esta máquina ou uma placa de rede
+  específica); o log mostra onde o servidor está escutando e lembra do Firewall do Windows fora do
+  localhost; endereço que não existe mais na máquina dá um erro claro. (#20)
 
 ## [0.5.0] - 2026-10-14
 
