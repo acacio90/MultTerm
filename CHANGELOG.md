@@ -6,6 +6,12 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- Botões **Importar** e **Exportar** com menu: sessões, sites de VPN (todos de uma vez, numa
+  pasta) ou **backup completo** (`.multterm`, com sessões, sites de VPN, configurações dos
+  servidores e do agente; sem as senhas cifradas pelo Windows). (#36)
+
 ## [0.4.0] - 2026-10-13
 
 ### Adicionado

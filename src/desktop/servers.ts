@@ -218,6 +218,9 @@ let configs: Record<string, Record<string, unknown>> & { _cert?: { passphrase?: 
 // MULTTERM_SERVERS_FILE troca o arquivo de configurações (testes).
 const configFile = () => process.env.MULTTERM_SERVERS_FILE || join(app.getPath('userData'), 'servers.json');
 
+let loadedConfigs: Promise<void> | undefined;
+const configsReady = () => (loadedConfigs ??= loadConfigs());
+
 async function loadConfigs() {
   try {
     configs = JSON.parse(await readFile(configFile(), 'utf8'));
@@ -275,12 +278,42 @@ async function stop(kind: string) {
   broadcast(kind);
 }
 
+const plainKeys = (def: ServerDef) => def.fields.filter((f) => f.type !== 'password').map((f) => f.key);
+
+/** Configurações para o backup, sem as senhas (cifradas para este usuário do Windows). */
+export async function exportServerConfigs(): Promise<Record<string, Record<string, unknown>>> {
+  await configsReady();
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const def of DEFS) {
+    const cfg = configs[def.kind];
+    if (cfg) out[def.kind] = Object.fromEntries(plainKeys(def).filter((k) => k in cfg).map((k) => [k, cfg[k]]));
+  }
+  return out;
+}
+
+/** Restaura do backup só servidores e campos conhecidos; as senhas guardadas aqui continuam. */
+export async function importServerConfigs(raw: Record<string, Record<string, unknown>>): Promise<number> {
+  await configsReady();
+  let restored = 0;
+  for (const def of DEFS) {
+    const given = raw[def.kind];
+    if (!given) continue;
+    const picked = Object.fromEntries(plainKeys(def)
+      .filter((k) => ['string', 'number', 'boolean'].includes(typeof given[k]))
+      .map((k) => [k, given[k]]));
+    configs[def.kind] = { ...configs[def.kind], ...picked };
+    restored++;
+  }
+  if (restored) await saveConfigs();
+  return restored;
+}
+
 export async function stopAllServers() {
   await Promise.all([...running.keys()].map(stop));
 }
 
 export function registerServersIpc(): void {
-  const loaded = loadConfigs();
+  const loaded = configsReady();
 
   ipcMain.handle('servers:list', async () => {
     await loaded;

@@ -124,6 +124,7 @@ test('importa inventário do Ansible pelo botão (diálogo substituído no teste
   }, inventory);
 
   await page.click('#btn-import');
+  await page.click('#import-menu [data-what=sessions]');
   await expect(page.locator('#messages')).toContainText('3 sessões importadas do inventário do Ansible');
   await expect(page.locator('#status-count')).toHaveText('6 sessões · sem limite');
   await expect(session('web02.example.org')).toHaveCount(1);

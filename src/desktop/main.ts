@@ -17,9 +17,10 @@ import {
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
 import { closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
-import { registerVpnIpc } from './vpn.ts';
-import { registerServersIpc } from './servers.ts';
-import { agentLaunch, registerAgentIpc } from './agent.ts';
+import { exportVpnSites, importVpnSites, registerVpnIpc } from './vpn.ts';
+import { exportServerConfigs, importServerConfigs, registerServersIpc } from './servers.ts';
+import { agentLaunch, exportAgentPrefs, importAgentPrefs, registerAgentIpc } from './agent.ts';
+import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
@@ -130,6 +131,47 @@ function registerIpc(): void {
     const { format, sessions: imported, warnings } = await readImportFile(result.filePaths[0]);
     const { merged, added, skipped } = mergeSessions(await loadSessionFile(sessionsPath), imported);
     return { ...(await persist(merged)), format, added: added.length, skipped: skipped.length, warnings };
+  });
+
+  // Backup completo: sessões, sites de VPN, configurações dos servidores e do agente.
+  ipcMain.handle('backup:export', async () => {
+    const result = await dialog.showSaveDialog({
+      title: 'Exportar backup completo',
+      defaultPath: join(app.getPath('documents'), backupFileName()),
+      filters: [{ name: 'Backup do MultTerm', extensions: [BACKUP_EXTENSION] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    const sessions = await loadSessionFile(sessionsPath);
+    const vpnSites = await exportVpnSites();
+    const servers = await exportServerConfigs();
+    await writeFile(result.filePath, serializeBackup({
+      createdAt: new Date().toISOString(),
+      appVersion: app.getVersion(),
+      sessions,
+      vpnSites,
+      servers,
+      agent: exportAgentPrefs(),
+    }), 'utf8');
+    return { path: result.filePath, sessions: sessions.length, vpnSites: vpnSites.length, servers: Object.keys(servers).length };
+  });
+
+  ipcMain.handle('backup:import', async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Importar backup completo',
+      defaultPath: app.getPath('documents'),
+      filters: [{ name: 'Backup do MultTerm', extensions: [BACKUP_EXTENSION] }, { name: 'Todos os arquivos', extensions: ['*'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const backup = parseBackup(await readFile(result.filePaths[0], 'utf8'));
+    // Valida tudo antes de gravar qualquer coisa.
+    const imported = validateSessions(backup.sessions, 'backup');
+    const { merged, added, skipped } = mergeSessions(await loadSessionFile(sessionsPath), imported);
+    const snap = added.length ? await persist(merged) : await snapshot();
+    const sites = await importVpnSites(backup.vpnSites);
+    const servers = await importServerConfigs(backup.servers);
+    await importAgentPrefs(backup.agent);
+    return { ...snap, added: added.length, skipped: skipped.length, sites, servers };
   });
 
   ipcMain.handle('session:connect', async (_e, raw: unknown) => {

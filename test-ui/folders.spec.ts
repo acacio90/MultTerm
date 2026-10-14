@@ -122,6 +122,7 @@ test.describe('exportar', () => {
     const out = join(ctx.dir, 'backup.yaml');
     await stubSave(out);
     await page.click('#btn-export');
+    await page.click('#export-menu [data-what=sessions]');
     await expect(page.locator('#messages')).toHaveText(`3 sessão(ões) exportada(s) para ${out}`);
     const { format, sessions } = await readImportFile(out);
     expect(format).toBe('multterm');
@@ -141,6 +142,7 @@ test.describe('exportar', () => {
   test('não sobrescreve o arquivo de sessões em uso', async () => {
     await stubSave(ctx.sessionsFile);
     await page.click('#btn-export');
+    await page.click('#export-menu [data-what=sessions]');
     await expect(page.locator('#messages .error')).toContainText('este é o arquivo de sessões em uso');
   });
 });

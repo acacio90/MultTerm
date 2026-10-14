@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('multterm', {
   chooseFile: () => ipcRenderer.invoke('sessions:choose-file'),
   importSessions: () => ipcRenderer.invoke('sessions:import'),
   exportSessions: (folder) => ipcRenderer.invoke('sessions:export', folder),
+  exportBackup: () => ipcRenderer.invoke('backup:export'),
+  importBackup: () => ipcRenderer.invoke('backup:import'),
   connect: (session) => ipcRenderer.invoke('session:connect', session),
 
   termOpen: (id, session, cols, rows) => ipcRenderer.invoke('term:open', id, session, cols, rows),
@@ -70,6 +72,7 @@ contextBridge.exposeInMainWorld('multterm', {
   // VPN (motor IPsec do MultTerm).
   vpnInfo: () => ipcRenderer.invoke('vpn:info'),
   vpnImport: () => ipcRenderer.invoke('vpn:import'),
+  vpnExportAll: () => ipcRenderer.invoke('vpn:export-all'),
   vpnConnect: (req) => ipcRenderer.invoke('vpn:connect', req),
   vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),
   vpnNetworks: () => ipcRenderer.invoke('vpn:networks'),

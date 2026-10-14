@@ -665,7 +665,94 @@ $('btn-new').addEventListener('click', () => {
   form.name.focus();
 });
 
-$('btn-import').addEventListener('click', async () => {
+/** Botão com menu suspenso (Importar/Exportar): fecha ao escolher, clicar fora ou Esc. */
+function dropdown(buttonId, menuId, run) {
+  const button = $(buttonId);
+  const menu = $(menuId);
+  const set = (open) => {
+    menu.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+  };
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    for (const other of document.querySelectorAll('.toolbar .menu')) if (other !== menu) other.hidden = true;
+    set(menu.hidden);
+  });
+  menu.addEventListener('click', (e) => {
+    const what = e.target.closest('[data-what]')?.dataset.what;
+    if (!what) return;
+    set(false);
+    run(what);
+  });
+  document.addEventListener('click', () => set(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') set(false);
+  });
+}
+
+dropdown('btn-import', 'import-menu', (what) => {
+  if (what === 'sessions') void importSessions();
+  else if (what === 'vpn') void importVpnSite();
+  else if (what === 'backup') void importBackup();
+});
+dropdown('btn-export', 'export-menu', (what) => {
+  if (what === 'sessions') void exportSessions();
+  else if (what === 'vpn') void exportVpnSites();
+  else if (what === 'backup') void exportBackup();
+});
+
+async function importVpnSite() {
+  showEditor();
+  clearMessages();
+  try {
+    const site = await api.vpnImport();
+    if (site) message(`Site de VPN "${site.name}" importado. Conecte por Ferramentas → VPN.`);
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+async function exportVpnSites() {
+  showEditor();
+  clearMessages();
+  try {
+    const result = await api.vpnExportAll();
+    if (result) message(`${result.count} site(s) de VPN exportado(s) para ${result.dir} (os arquivos contêm a chave compartilhada; guarde com cuidado).`);
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+async function exportBackup() {
+  showEditor();
+  clearMessages();
+  try {
+    const r = await api.exportBackup();
+    if (!r) return;
+    message(`Backup salvo em ${r.path}: ${r.sessions} sessão(ões), ${r.vpnSites} site(s) de VPN e ${r.servers} servidor(es) configurado(s).`);
+    message('O backup contém as chaves compartilhadas das VPNs; guarde com cuidado. Senhas dos servidores e o token do agente não vão no backup (são cifrados para este usuário do Windows).', 'warn');
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+async function importBackup() {
+  showEditor();
+  clearMessages();
+  if (!confirm('Importar um backup completo?\n\nSessões e sites de VPN que já existem são mantidos (só os novos entram). As configurações dos servidores e a escolha do agente são substituídas pelas do backup.')) return;
+  try {
+    const r = await api.importBackup();
+    if (!r) return;
+    apply(r);
+    message(`Backup importado: ${r.added} sessão(ões) nova(s) (${r.skipped} já existiam), ${r.sites.added} site(s) de VPN novo(s) (${r.sites.skipped} já existiam) e ${r.servers} servidor(es) configurado(s).`);
+    if (r.servers) message('Senhas dos servidores não vêm no backup: preencha de novo ao iniciar cada um.', 'warn');
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+async function importSessions() {
+  showEditor();
   clearMessages();
   try {
     const result = await api.importSessions();
@@ -677,7 +764,7 @@ $('btn-import').addEventListener('click', async () => {
   } catch (err) {
     message(cleanError(err), 'error');
   }
-});
+}
 
 $('btn-file').addEventListener('click', async () => {
   clearMessages();
@@ -805,7 +892,6 @@ async function exportSessions(folder = '') {
   }
 }
 
-$('btn-export').addEventListener('click', () => exportSessions());
 
 // ---------- pastas: menu de contexto ----------
 

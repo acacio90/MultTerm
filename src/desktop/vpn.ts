@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { importSite, listSites, migrateSites, type SiteDirs, type VpnStatus } from '../vpn/sites.ts';
+import { importSite, isSafeSiteName, listSites, migrateSites, siteInfo, type SiteDirs, type VpnStatus } from '../vpn/sites.ts';
 import { deleteSite, exportSite, newSite, readSite, readSiteText, saveSite, SITE_FIELDS, type SiteSave } from '../vpn/site-editor.ts';
 import { siteToVpnOptions } from '../vpn/site-config.ts';
 import { NativeVpnConnection } from './native-vpn.ts';
@@ -45,6 +46,33 @@ export async function disconnectVpn(): Promise<void> {
   const c = connection;
   connection = undefined;
   await c?.disconnect();
+}
+
+/** Todos os sites, com o conteúdo do .vpn (para o backup). */
+export async function exportVpnSites(): Promise<{ name: string; content: string }[]> {
+  await ready();
+  const sites = await listSites(siteDirs());
+  return Promise.all(sites.map(async (s) => ({ name: s.name, content: await readSiteText(siteDirs(), s.name) })));
+}
+
+/** Restaura sites de um backup; os que já existem (mesmo nome) ficam como estão. */
+export async function importVpnSites(list: { name: string; content: string }[]): Promise<{ added: number; skipped: number }> {
+  await ready();
+  const dir = siteDirs().user;
+  await mkdir(dir, { recursive: true });
+  const taken = new Set((await readdir(dir)).map((n) => n.toLowerCase()));
+  let added = 0;
+  let skipped = 0;
+  for (const { name, content } of list) {
+    if (!isSafeSiteName(name) || !siteInfo(name, content).host || taken.has(name.toLowerCase())) {
+      skipped++;
+      continue;
+    }
+    await writeFile(join(dir, name), content, 'utf8');
+    taken.add(name.toLowerCase());
+    added++;
+  }
+  return { added, skipped };
 }
 
 export function registerVpnIpc(): void {
@@ -97,6 +125,22 @@ export function registerVpnIpc(): void {
     if (res.canceled || !res.filePath) return null;
     await exportSite(siteDirs(), site, res.filePath);
     return res.filePath;
+  });
+
+  // Exporta todos os sites (um .vpn por site) numa pasta escolhida.
+  ipcMain.handle('vpn:export-all', async (e) => {
+    const sites = await exportVpnSites();
+    if (!sites.length) throw new Error('não há sites de VPN para exportar');
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const opts = {
+      title: 'Exportar sites de VPN (escolha a pasta)',
+      defaultPath: app.getPath('documents'),
+      properties: ['openDirectory' as const, 'createDirectory' as const],
+    };
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    if (res.canceled || !res.filePaths[0]) return null;
+    for (const s of sites) await writeFile(join(res.filePaths[0], `${s.name}.vpn`), s.content, 'utf8');
+    return { dir: res.filePaths[0], count: sites.length };
   });
 
   ipcMain.handle('vpn:connect', async (_e, raw: unknown) => {

@@ -182,6 +182,19 @@ async function disable(remember = true) {
   broadcast();
 }
 
+/** Escolhas do agente para o backup (o token fica de fora: é cifrado para este usuário). */
+export function exportAgentPrefs(): { port?: number; agent?: string } {
+  return { ...(prefs.port ? { port: prefs.port } : {}), agent: currentAgent() };
+}
+
+/** Restaura do backup; a porta vale na próxima vez que o agente for ligado. */
+export async function importAgentPrefs(raw: { port?: number; agent?: string }): Promise<void> {
+  if (raw.port !== undefined && Number.isInteger(raw.port) && raw.port >= 1024 && raw.port <= 65535) prefs.port = raw.port;
+  if (raw.agent && Object.hasOwn(AGENTS, raw.agent)) prefs.agent = raw.agent;
+  await savePrefs();
+  broadcast();
+}
+
 const currentAgent = () => (prefs.agent && Object.hasOwn(AGENTS, prefs.agent) ? prefs.agent : DEFAULT_AGENT);
 
 /**

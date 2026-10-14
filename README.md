@@ -12,7 +12,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - RDP pelo cliente do sistema (`mstsc` no Windows)
 - Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
-- Exportação das sessões (todas ou uma pasta) para backup ou outra máquina
+- Exportação das sessões (todas ou uma pasta), dos sites de VPN ou de um **backup completo** para
+  levar tudo a outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
 - **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos, Iperf (iperf3)
@@ -195,11 +196,24 @@ memória e somem ao desconectar.
 - Uma sessão com o campo **VPN** preenchido abre a VPN primeiro e se conecta assim que ela sobe.
 - Limites atuais: só chave compartilhada (sem certificados), Main Mode, NAT-T sempre ligado, IPv4.
 
+### Exportar e importar
+
+Os botões **Exportar** e **Importar** da barra superior abrem um menu para escolher o quê:
+
+- **Sessões** (abaixo).
+- **Sites de VPN**: exporta todos os sites, um `.vpn` por site, numa pasta; importa um `.vpn`.
+- **Backup completo**: um arquivo `.multterm` com as sessões, os sites de VPN, as configurações
+  dos servidores e a escolha do agente. Ao importar, sessões e sites que já existem são mantidos
+  (só os novos entram) e as configurações dos servidores e do agente são substituídas.
+  As senhas dos servidores e o token do agente **não** vão no backup (são cifrados para o seu
+  usuário do Windows e não abririam em outra máquina): preencha de novo depois de importar.
+  Os sites de VPN levam a chave compartilhada (PSK): guarde o backup com cuidado.
+
 ### Exportar sessões
 
-**Exportar sessões…** (barra superior) grava todas as sessões num YAML; **Exportar pasta…**
+**Exportar → Sessões…** grava todas as sessões num YAML; **Exportar pasta…**
 (botão direito numa pasta) grava só a pasta e as subpastas, com os caminhos completos. O
-arquivo é o mesmo formato que **Importar sessões…** lê — serve de backup e para levar as
+arquivo é o mesmo formato que **Importar → Sessões…** lê — serve de backup e para levar as
 sessões a outra máquina. Não há senhas no arquivo (o app não guarda senhas).
 
 **Abrir arquivo…** é diferente: troca o arquivo de sessões que o app usa (por exemplo, um
@@ -207,7 +221,7 @@ sessões a outra máquina. Não há senhas no arquivo (o app não guarda senhas)
 
 ### Importar sessões
 
-**Importar sessões…** (ou `multterm import <arquivo>`) detecta o formato do arquivo e mescla
+**Importar → Sessões…** (ou `multterm import <arquivo>`) detecta o formato do arquivo e mescla
 com as sessões existentes (mesma pasta + nome não é sobrescrito):
 
 - **Sessões do MultTerm** (YAML com `sessions:`).
