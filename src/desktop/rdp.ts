@@ -7,18 +7,19 @@ import { embeddedRdpArgs, rdpExitMessage, rdpStdin } from '../sessions/launch.ts
 import { validateSessions } from '../sessions/store.ts';
 
 /*
- * Sessões RDP numa aba: o MultTerm cria uma janela nativa filha da janela do app, posicionada
- * sobre a área da aba, e o cliente FreeRDP (wfreerdp.exe, distribuído com o app) se encaixa
- * nela com /parent-window. A interface informa a posição/visibilidade da aba; menus e diálogos
+ * Sessões RDP numa aba: o MultTerm cria uma janela nativa vinculada à janela do app (uma janela
+ * "owned": fica sempre acima dela e minimiza junto), posicionada sobre a área da aba, e o cliente
+ * FreeRDP (wfreerdp.exe, distribuído com o app) se encaixa nela com /parent-window. Uma janela
+ * filha não serviria: o Chromium compõe a página (DirectComposition) por cima das filhas. A interface informa a posição/visibilidade da aba; menus e diálogos
  * por cima da área escondem a sessão (uma janela nativa sempre fica acima da página).
  */
 
 const require = createRequire(import.meta.url);
 
 // Constantes do Win32.
-const WS_CHILD = 0x40000000;
-const WS_CLIPSIBLINGS = 0x04000000;
+const WS_POPUP = 0x80000000;
 const WS_CLIPCHILDREN = 0x02000000;
+const WS_EX_TOOLWINDOW = 0x80; // sem botão na barra de tarefas
 const SS_BLACKRECT = 0x4;
 const SW_HIDE = 0;
 const SW_SHOWNA = 8;
@@ -29,13 +30,15 @@ const GW_CHILD = 5;
 const WM_EXITSIZEMOVE = 0x232;
 
 type Fn = (...args: unknown[]) => unknown;
-let user32: Record<'CreateWindowExW' | 'DestroyWindow' | 'SetWindowPos' | 'ShowWindow' | 'GetWindow' | 'PostMessageW' | 'IsWindow', Fn> | undefined;
+let user32: Record<'CreateWindowExW' | 'DestroyWindow' | 'SetWindowPos' | 'ShowWindow' | 'GetWindow' | 'PostMessageW' | 'IsWindow' | 'ClientToScreen', Fn> | undefined;
 
 function win32() {
   if (user32) return user32;
   const koffi = require('koffi');
   const u = koffi.load('user32.dll');
+  const POINT = koffi.struct('MULTTERM_POINT', { x: 'int', y: 'int' });
   user32 = {
+    ClientToScreen: u.func('__stdcall', 'ClientToScreen', 'bool', ['intptr', koffi.inout(koffi.pointer(POINT))]),
     CreateWindowExW: u.func('__stdcall', 'CreateWindowExW', 'intptr',
       ['uint32', 'str16', 'str16', 'uint32', 'int', 'int', 'int', 'int', 'intptr', 'intptr', 'intptr', 'intptr']),
     DestroyWindow: u.func('__stdcall', 'DestroyWindow', 'bool', ['intptr']),
@@ -63,6 +66,8 @@ interface View {
 interface RdpSession {
   owner: WebContents;
   id: number;
+  /** Janela do app (dona do contêiner): a posição da aba é relativa à área cliente dela. */
+  window: bigint;
   container: number | bigint;
   proc: ChildProcess;
   view: View;
@@ -90,7 +95,10 @@ function place(s: RdpSession) {
     w.ShowWindow(s.container, SW_HIDE);
     return;
   }
-  w.SetWindowPos(s.container, HWND_TOP, x, y, width, height, SWP_NOACTIVATE);
+  // A aba informa a posição na área cliente da janela; o contêiner é de nível superior (tela).
+  const pt = { x, y };
+  w.ClientToScreen(s.window, pt);
+  w.SetWindowPos(s.container, HWND_TOP, pt.x, pt.y, width, height, SWP_NOACTIVATE);
   w.ShowWindow(s.container, SW_SHOWNA);
   w.SetWindowPos(s.child, 0, 0, 0, width, height, SWP_NOACTIVATE | SWP_NOZORDER);
   // O wfreerdp pede a nova resolução ao servidor ao fim de um redimensionamento.
@@ -109,6 +117,19 @@ function close(key: string) {
   if (s.proc.exitCode === null) s.proc.kill();
   const w = win32();
   if (w.IsWindow(s.container)) w.DestroyWindow(s.container);
+}
+
+// Mover a janela do app não muda a posição da aba na página: reposiciona as sessões dela.
+const followed = new WeakSet<BrowserWindow>();
+function follow(win: BrowserWindow, owner: WebContents) {
+  if (followed.has(win)) return;
+  followed.add(win);
+  const replace = () => {
+    for (const s of sessions.values()) if (s.owner === owner) place(s);
+  };
+  win.on('move', replace);
+  win.on('moved', replace);
+  win.on('restore', replace);
 }
 
 export function closeRdpOf(owner: WebContents) {
@@ -145,16 +166,18 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   const view = validView(rawView);
   const w = win32();
   const parent = win.getNativeWindowHandle().readBigUInt64LE(0);
-  const container = w.CreateWindowExW(0, 'STATIC', '', WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | SS_BLACKRECT,
-    view.x, view.y, Math.max(1, view.width), Math.max(1, view.height), parent, 0, 0, 0) as number | bigint;
+  // Popup "owned" pela janela do app (o parâmetro de pai vira o dono); criada escondida.
+  const container = w.CreateWindowExW(WS_EX_TOOLWINDOW, 'STATIC', '', WS_POPUP | WS_CLIPCHILDREN | SS_BLACKRECT,
+    0, 0, Math.max(1, view.width), Math.max(1, view.height), parent, 0, 0, 0) as number | bigint;
   if (!container) throw new Error('não foi possível criar a área da sessão RDP');
 
   const args = embeddedRdpArgs(session, { parent: String(container), width: view.width, height: view.height });
   const proc = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: false });
   proc.stdin?.on('error', () => {});
   proc.stdin?.end(rdpStdin(session.user, credentials.password));
-  const s: RdpSession = { owner, id: id as number, container, proc, view, log: [] };
+  const s: RdpSession = { owner, id: id as number, window: parent, container, proc, view, log: [] };
   sessions.set(key, s);
+  follow(win, owner);
 
   const collect = (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split(/\r?\n/)) {

@@ -741,7 +741,7 @@ async function startRdp(tab) {
   tab.running = true;
   tab.lastView = '';
   tab.button.classList.remove('ended');
-  rdpStatus(tab, `Conectando a ${tab.session.host}… O cliente RDP pede a senha numa janela própria.`);
+  rdpStatus(tab, `Conectando a ${tab.session.host}…`);
   await new Promise(requestAnimationFrame); // espera o layout da aba
   try {
     await api.rdpOpen(tab.id, tab.session, rdpView(tab), tab.credentials);
