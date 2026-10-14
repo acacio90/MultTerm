@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveInRoot } from '../src/servers/common.ts';
+import { checkHost, listenOptions, resolveInRoot } from '../src/servers/common.ts';
 import { fromNetascii, parseRequest, startTftp, toNetascii, validateTftp } from '../src/servers/tftp.ts';
 
 const CURL = 'C:/Windows/System32/curl.exe';
@@ -316,4 +316,25 @@ test('Telnet: senha, shell pelo ConPTY e saída', { timeout: 60_000 }, async () 
   } finally {
     await srv.stop();
   }
+});
+
+test('endereço de escuta: vazio = todas; só IP literal; opções com as placas desta máquina', () => {
+  assert.equal(checkHost(''), undefined);
+  assert.equal(checkHost(undefined), undefined);
+  assert.equal(checkHost(' 127.0.0.1 '), '127.0.0.1');
+  assert.equal(checkHost('::1'), '::1');
+  assert.throws(() => checkHost('meu-pc'), /endereço de escuta inválido/);
+  assert.throws(() => checkHost('10.0.0.300'), /endereço de escuta inválido/);
+  const ifaces = {
+    Ethernet: [
+      { address: '10.0.0.5', family: 'IPv4', internal: false, netmask: '255.255.255.0', mac: '00:00:00:00:00:01', cidr: '10.0.0.5/24' },
+      { address: 'fe80::1', family: 'IPv6', internal: false, netmask: 'ffff::', mac: '00:00:00:00:00:01', cidr: 'fe80::1/64', scopeid: 1 },
+    ],
+    'Loopback Pseudo-Interface 1': [{ address: '127.0.0.1', family: 'IPv4', internal: true, netmask: '255.0.0.0', mac: '00:00:00:00:00:00', cidr: '127.0.0.1/8' }],
+  } as unknown as ReturnType<typeof import('node:os').networkInterfaces>;
+  assert.deepEqual(listenOptions('', ifaces), [
+    ['', 'Todas as interfaces'], ['127.0.0.1', 'Só esta máquina (127.0.0.1)'], ['10.0.0.5', 'Ethernet (10.0.0.5)'],
+  ]);
+  // Endereço gravado que sumiu continua visível, marcado.
+  assert.deepEqual(listenOptions('192.168.1.9', ifaces).at(-1), ['192.168.1.9', '192.168.1.9 (não disponível agora)']);
 });

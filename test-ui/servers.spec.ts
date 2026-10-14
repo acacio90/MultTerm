@@ -172,3 +172,31 @@ test('todos os servidores abrem as configurações (inclusive os com caixa de se
   await expect(panel.locator('.server-detail [name=shell]')).toHaveValue('powershell');
   await expect(panel.locator('.server-detail')).toContainText('não é cifrado');
 });
+
+test('escutar só em 127.0.0.1 (ou numa placa específica); aviso de firewall fora do localhost', async () => {
+  const port = await freePort();
+  const panel = await openServers();
+  await panel.locator('.server-row[data-kind=http] .server-name').click();
+  const detail = panel.locator('.server-detail');
+  const host = detail.locator('select[name=host]');
+  await expect(host.locator('option').first()).toHaveText('Todas as interfaces');
+  await expect(host.locator('option').nth(1)).toHaveText('Só esta máquina (127.0.0.1)');
+  await host.selectOption('127.0.0.1');
+  await detail.locator('[name=root]').fill(root);
+  await detail.locator('[name=port]').fill(String(port));
+  await panel.locator('.server-row[data-kind=http] button', { hasText: 'Iniciar' }).click();
+  await expect(panel.locator('.server-row[data-kind=http] .server-state')).toContainText(`rodando na porta ${port}`);
+  await expect(detail.locator('.server-log')).toContainText(`escutando em 127.0.0.1, porta ${port}`);
+  await expect(detail.locator('.server-log')).not.toContainText('Firewall');
+  expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200);
+  const saved = JSON.parse(await readFile(join(root, 'servers.json'), 'utf8'));
+  expect(saved.http.host).toBe('127.0.0.1');
+  await panel.locator('.server-row[data-kind=http] button', { hasText: 'Parar' }).click();
+
+  // Todas as interfaces: avisa do firewall.
+  await host.selectOption('');
+  await panel.locator('.server-row[data-kind=http] button', { hasText: 'Iniciar' }).click();
+  await expect(detail.locator('.server-log')).toContainText(`escutando em todas as interfaces, porta ${port}`);
+  await expect(detail.locator('.server-log')).toContainText('Firewall do Windows');
+  await panel.locator('.server-row[data-kind=http] button', { hasText: 'Parar' }).click();
+});

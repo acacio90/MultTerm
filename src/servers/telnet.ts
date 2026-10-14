@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type Socket } from 'node:net';
 import { homedir } from 'node:os';
 import pty from 'node-pty';
-import { checkPort, type LogFn, type RunningServer } from './common.ts';
+import { checkHost, checkPort, type LogFn, type RunningServer } from './common.ts';
 
 /*
  * Servidor Telnet (RFC 854/857/858/1073) para equipamentos que só falam Telnet: pede a senha (sem
@@ -25,7 +25,7 @@ export function validateTelnet(raw: Record<string, unknown>): Omit<TelnetConfig,
   const password = String(raw.password ?? '');
   if (password.length < 4) throw new Error('defina uma senha (mínimo 4 caracteres): o Telnet não é cifrado');
   const shell = raw.shell === 'cmd' ? 'cmd' : 'powershell';
-  return { port: checkPort(raw.port, 23), password, shell };
+  return { port: checkPort(raw.port, 23), host: checkHost(raw.host), password, shell };
 }
 
 /**

@@ -1,6 +1,6 @@
 import { createSocket, type RemoteInfo, type Socket } from 'node:dgram';
 import { open, rename, rm, stat, type FileHandle } from 'node:fs/promises';
-import { checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
+import { checkHost, checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
 
 /*
  * Servidor TFTP (RFC 1350) com negociação de opções (RFC 2347 blksize/RFC 2348, timeout e
@@ -32,6 +32,7 @@ export function validateTftp(raw: Record<string, unknown>): Omit<TftpConfig, 'on
   return {
     root: checkRoot(raw.root),
     port: checkPort(raw.port, 69),
+    host: checkHost(raw.host),
     maxBlockSize: max,
     allowUpload: raw.allowUpload !== false,
     allowOverwrite: raw.allowOverwrite !== false,

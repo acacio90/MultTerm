@@ -1,5 +1,5 @@
 import { createServer, type Socket } from 'node:net';
-import { checkPort, type LogFn, type RunningServer } from './common.ts';
+import { checkHost, checkPort, type LogFn, type RunningServer } from './common.ts';
 
 /*
  * Servidor de teste de banda compatível com o cliente iperf3 (protocolo do iperf3: conexão de
@@ -21,7 +21,7 @@ export interface IperfConfig {
 }
 
 export function validateIperf(raw: Record<string, unknown>): IperfConfig {
-  return { port: checkPort(raw.port, 5201) };
+  return { port: checkPort(raw.port, 5201), host: checkHost(raw.host) };
 }
 
 /** Lê exatamente n bytes de um socket (fila interna por socket). */

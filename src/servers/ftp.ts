@@ -4,7 +4,7 @@ import { mkdir, readdir, realpath, rename, rm, rmdir, stat } from 'node:fs/promi
 import { connect, createServer, type Server, type Socket } from 'node:net';
 import { relative, sep } from 'node:path';
 import { createSecureContext, createServer as createTlsServer, TLSSocket, type SecureContextOptions } from 'node:tls';
-import { checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
+import { checkHost, checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
 
 /*
  * Servidor FTP (RFC 959 + 2389 FEAT, 3659 SIZE/MDTM/MLSD/REST, 2428 EPSV/EPRT) para trocar arquivos
@@ -35,7 +35,7 @@ export function validateFtp(raw: Record<string, unknown>): Omit<FtpConfig, 'tls'
   if (!anonymous && (!user || !password)) throw new Error('informe usuário e senha (ou permita o acesso anônimo)');
   // eslint-disable-next-line no-control-regex
   if (/[\s\x00-\x1f]/.test(user)) throw new Error('usuário inválido');
-  return { root: checkRoot(raw.root), port: checkPort(raw.port, 21), user, password, anonymous };
+  return { root: checkRoot(raw.root), port: checkPort(raw.port, 21), host: checkHost(raw.host), user, password, anonymous };
 }
 
 const same = (a: string, b: string) => {
