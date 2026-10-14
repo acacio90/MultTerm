@@ -27,8 +27,7 @@ test.afterEach(async () => {
 
 async function openVpn(yaml: string, env: Record<string, string>) {
   ctx = await launchApp(yaml, env);
-  await ctx.page.click('#btn-tools');
-  await ctx.page.click('#tools-menu [data-tool="vpn"]');
+  await ctx.page.click('#btn-vpn');
   return ctx.page.locator('.panel:not([hidden])').last();
 }
 
@@ -37,12 +36,15 @@ const FILIAL = 's:network-host:10.9.9.9\nn:network-ike-port:4500\ns:auth-method:
 
 test('menu e painel da VPN, sem cliente externo', async () => {
   const panel = await openVpn('version: 1\nsessions: []\n', await withSites({ Matriz: MATRIZ }));
-  await expect(ctx!.page.locator('#tools-menu [data-tool="vpn"]')).toHaveText('VPN');
+  // Botão próprio na barra (fora do menu Ferramentas), ao lado do Agente.
+  await expect(ctx!.page.locator('#btn-vpn')).toHaveText('VPN');
+  await expect(ctx!.page.locator('#tools-menu [data-tool="vpn"]')).toHaveCount(0);
+  await expect(ctx!.page.locator('#btn-vpn + #btn-agent')).toHaveCount(1);
   await expect(panel.locator('[name=site] option')).toHaveText(['Matriz — vpn.example.org']);
   await expect(panel).toContainText('O MultTerm conecta sozinho');
   await expect(panel).not.toContainText(/Shrew/i);
   await expect(panel.locator('[name=engine]')).toHaveCount(0);
-  await expect(ctx!.page.locator('#vpn-indicator')).toBeHidden();
+  await expect(ctx!.page.locator('#btn-vpn')).toHaveClass(/vpn-off/);
   // Site sem PSK: o motor recusa antes de pedir administrador.
   await panel.locator('[name=password]').fill('x');
   await panel.locator('button[type=submit]').click();

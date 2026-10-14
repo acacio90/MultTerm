@@ -6,6 +6,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Alterado
+
+- A VPN ganhou um botão próprio na barra superior, ao lado do **Agente** (antes ficava no menu
+  Ferramentas). Ele mostra o estado: `VPN: <site>` com um ponto colorido quando ligada. (#38)
+
 ## [0.4.1] - 2026-10-14
 
 ### Adicionado

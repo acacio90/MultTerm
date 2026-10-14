@@ -297,8 +297,9 @@ dialog#diag-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .tool-form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); min-width: 160px; }
 .tool-form label.check { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
 .tool-form label[hidden] { display: none; }
-.vpn-indicator { border-radius: 12px; padding: 2px 10px; font-weight: 600; }
-.vpn-indicator::before { content: "● "; }
+/* Ponto de estado só com a VPN ligada (conectando ou conectada). */
+.vpn-indicator:not(.vpn-off) { font-weight: 600; }
+.vpn-indicator:not(.vpn-off)::before { content: "● "; }
 .vpn-indicator.vpn-connected::before, .vpn-state.vpn-connected { color: #22a35a; }
 .vpn-indicator.vpn-connecting::before, .vpn-indicator.vpn-disconnecting::before,
 .vpn-state.vpn-connecting, .vpn-state.vpn-disconnecting { color: #c58a00; }

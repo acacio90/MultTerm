@@ -20,8 +20,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
   para medir banda, SSH/SFTP, Telnet e um agendador de comandos (cron)
 - **Agente MCP**: um agente de IA (configurado por você) lê e opera os terminais que você
   compartilhar, com aprovação de cada comando
-- **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, indicador
-  na barra e sessões que conectam a VPN antes de abrir
+- **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, botão próprio
+  na barra (com o estado) e sessões que conectam a VPN antes de abrir
 - Tela de ajuda e atualização automática pelas releases do GitHub
 
 ## Instalação
@@ -172,8 +172,8 @@ Na primeira vez, o Firewall do Windows pergunta se o MultTerm pode receber conex
 
 ### VPN
 
-**Ferramentas → VPN** conecta a VPNs IPsec/IKEv1 sem instalar nada: o próprio MultTerm negocia
-o IKEv1 (Main Mode, chave compartilhada com ou sem usuário e senha/XAuth, Mode Config) e cifra o
+O botão **VPN** (barra superior, ao lado do Agente) conecta a VPNs IPsec/IKEv1 sem instalar
+nada: o próprio MultTerm negocia o IKEv1 (Main Mode, chave compartilhada com ou sem usuário e senha/XAuth, Mode Config) e cifra o
 tráfego (ESP em UDP 4500/NAT-T). O adaptador "MultTerm VPN" usa o [Wintun](https://www.wintun.net)
 que acompanha o instalador; criá-lo exige administrador, então o Windows pede confirmação (UAC) a
 cada conexão — só o processo do túnel roda elevado, o MultTerm não. IP, rotas e DNS ficam só na
@@ -191,8 +191,9 @@ memória e somem ao desconectar.
   `%TEMP%\multterm-vpn.log`.
 - Conectada, mostra o IP recebido e as redes roteadas pelo túnel, com atalho para o scanner de
   rede — o caminho para descobrir os ativos do outro lado.
-- A conexão é uma só e não depende da aba: o indicador **VPN:** na barra superior mostra o
-  estado e abre a aba. Sair do MultTerm desconecta a VPN.
+- A conexão é uma só e não depende da aba: o botão **VPN** na barra superior mostra o
+  estado (`VPN: <site>` com um ponto colorido quando ligada) e abre a aba. Sair do MultTerm
+  desconecta a VPN.
 - Uma sessão com o campo **VPN** preenchido abre a VPN primeiro e se conecta assim que ela sobe.
 - Limites atuais: só chave compartilhada (sem certificados), Main Mode, NAT-T sempre ligado, IPv4.
 

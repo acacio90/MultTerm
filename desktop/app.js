@@ -898,7 +898,7 @@ async function importVpnSite() {
   clearMessages();
   try {
     const site = await api.vpnImport();
-    if (site) message(`Site de VPN "${site.name}" importado. Conecte por Ferramentas → VPN.`);
+    if (site) message(`Site de VPN "${site.name}" importado. Conecte pelo botão VPN, na barra superior.`);
   } catch (err) {
     message(cleanError(err), 'error');
   }
@@ -1374,23 +1374,22 @@ function openToolTab(kind, target) {
   showTab(tab);
 }
 
-// Indicador da VPN na barra superior (clique abre a aba da VPN).
+// Botão da VPN na barra superior: abre a aba da VPN e mostra o estado (site e ponto colorido).
 let vpnStatus = null;
 function renderVpnIndicator() {
-  const btn = $('vpn-indicator');
+  const btn = $('btn-vpn');
   const on = vpnStatus && vpnStatus.state !== 'off';
-  btn.hidden = !on;
-  if (!on) return;
-  btn.className = `vpn-indicator vpn-${vpnStatus.state}`;
-  btn.textContent = `VPN: ${vpnStatus.site}`;
-  btn.title = vpnStatus.state === 'connected' ? 'VPN conectada' : 'VPN conectando…';
+  btn.className = `vpn-indicator vpn-${on ? vpnStatus.state : 'off'}`;
+  btn.textContent = on ? `VPN: ${vpnStatus.site}` : 'VPN';
+  btn.title = !on ? 'VPN IPsec: conectar e editar os sites'
+    : vpnStatus.state === 'connected' ? `VPN conectada (${vpnStatus.site})` : 'VPN conectando…';
 }
 api.onVpnStatus((s) => {
   vpnStatus = s;
   renderVpnIndicator();
   for (const t of tabsById.values()) t.onVpnStatus?.(s);
 });
-$('vpn-indicator').addEventListener('click', () => openToolTab('vpn'));
+$('btn-vpn').addEventListener('click', () => openToolTab('vpn'));
 api.onServersEvent((ev) => {
   for (const t of tabsById.values()) t.onServersEvent?.(ev);
 });
