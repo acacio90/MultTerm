@@ -17,8 +17,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
   portas, scanner de rede, portas abertas locais, Wake-on-LAN e captura de pacotes
 - **Servidores locais** TFTP, FTP/FTPS e HTTP para trocar arquivos com equipamentos, Iperf (iperf3)
-  para medir banda, SSH/SFTP, Telnet, NFS somente leitura (experimental) e um agendador de
-  comandos (cron)
+  para medir banda, SSH/SFTP, Telnet, NFS somente leitura e VNC (experimentais) e um agendador
+  de comandos (cron)
 - **Agente MCP**: um agente de IA (configurado por você) lê e opera os terminais que você
   compartilhar, com aprovação de cada comando
 - **VPN IPsec** sem instalar nada (motor próprio, IKEv1 + XAuth), com editor de sites, botão próprio
@@ -208,6 +208,12 @@ conseguirem conectar.
   (`mount -t nfs -o vers=3,nolock <ip>:/ /mnt`). TCP e UDP; MOUNT v1/v3. **Clientes permitidos**
   limita por IP ou faixa (`10.0.0.0/24`). O log mostra quem montou e quais arquivos foram lidos.
   Sem o portmapper (porta 111 ocupada), o cliente precisa de `port=2049,mountport=2049`.
+- **VNC** (experimental, porta 5900): compartilha a tela principal com qualquer visualizador VNC
+  (TightVNC, RealVNC, TigerVNC...). Senha obrigatória (até 8 caracteres, limite do protocolo);
+  **somente visualização** e **perguntar antes de aceitar** vêm ligados; com o controle ligado,
+  mouse e teclado do visualizador agem neste computador. **Clientes permitidos** como no NFS.
+  O VNC não cifra o tráfego: use só em rede confiável ou por um túnel (VPN, SSH). A tela segura
+  do Windows (UAC, Ctrl+Alt+Del) não aparece. Acesso pelo navegador ainda não.
 
 Na primeira vez, o Firewall do Windows pergunta se o MultTerm pode receber conexões na rede.
 

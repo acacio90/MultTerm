@@ -30,6 +30,10 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Servidor **NFS** (experimental): NFSv3 somente leitura da pasta raiz, com portmapper (porta 111),
   MOUNT v1/v3, TCP e UDP e lista de clientes permitidos, para equipamentos que fazem boot ou
   atualização por NFS. Testado no CI contra o cliente NFS do kernel Linux. (#28)
+- Servidor **VNC** (experimental): compartilha a tela principal com qualquer visualizador VNC (RFB
+  3.3/3.7/3.8), com senha obrigatória, somente visualização e confirmação de cada conexão ligadas
+  por padrão, controle de mouse e teclado opcional, lista de clientes permitidos e envio só dos
+  blocos que mudaram. Testado no CI contra um cliente VNC real. (#29)
 
 ## [0.5.0] - 2026-10-14
 
