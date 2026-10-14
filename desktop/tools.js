@@ -584,7 +584,7 @@ function agentPanel(ctx) {
   let logBox = null;
   let rendered = false;
   // O que foi digitado e ainda não salvo sobrevive aos redesenhos (eventos de abas e do agente).
-  const draft = { port: null, command: null };
+  const draft = { port: null };
 
   const copyButton = (getText) => {
     const b = el('button', { type: 'button', textContent: 'Copiar' });
@@ -676,34 +676,19 @@ function agentPanel(ctx) {
 
     logBox = el('pre', { className: 'dns-result server-log', textContent: (s.log ?? []).join('\n') });
 
-    // Abrir o próprio agente numa aba local, já apontado para este servidor.
-    const command = el('input', {
-      name: 'agentCommand', value: draft.command ?? s.agentCommand ?? '', autocomplete: 'off', spellcheck: false,
-      placeholder: 'ex.: meu-agente --mcp-config {mcp}',
-    });
-    const saveCommand = el('button', { type: 'button', textContent: 'Salvar' });
-    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente', disabled: !command.value.trim() });
-    command.addEventListener('input', () => {
-      draft.command = command.value;
-      launch.disabled = !command.value.trim();
-    });
-    saveCommand.addEventListener('click', async () => {
+    // Abrir o agente escolhido numa aba local, já apontado para este servidor.
+    const agentSel = select('agent', (s.agents ?? []).map((a) => [a.id, a.label]), s.agent);
+    agentSel.addEventListener('change', async () => {
       try {
-        state = { ...state, ...(await ctx.api.agentSetCommand(command.value)) };
-        draft.command = null;
-        status.textContent = 'Comando salvo.';
-        render();
+        state = { ...state, ...(await ctx.api.agentSetAgent(agentSel.value)) };
       } catch (err) {
         status.textContent = ctx.cleanError(err);
       }
     });
+    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente' });
     launch.addEventListener('click', async () => {
       status.textContent = '';
       try {
-        if (command.value.trim() !== (s.agentCommand ?? '')) {
-          state = { ...state, ...(await ctx.api.agentSetCommand(command.value)) };
-          draft.command = null;
-        }
         await ctx.openLocal('agent');
       } catch (err) {
         status.textContent = ctx.cleanError(err);
@@ -720,11 +705,11 @@ function agentPanel(ctx) {
       }),
       el('div', { className: 'actions' }, toggle, el('span', { className: `agent-state ${s.enabled ? 'on' : 'off'}`, textContent: s.enabled ? `ligado em ${s.url}` : 'desligado' })),
       el('h3', { textContent: 'Abrir o agente no MultTerm' }),
-      el('div', { className: 'tool-form' }, el('label', { className: 'wide' }, 'Comando do agente', command), el('div', { className: 'actions' }, saveCommand, launch)),
+      el('div', { className: 'tool-form' }, field('Agente', agentSel), el('div', { className: 'actions' }, launch)),
       el('p', {
         className: 'muted',
-        textContent: 'O agente abre numa aba de terminal local (PowerShell), já ligado a este servidor. Use {mcp} no comando onde o seu ' +
-          `agente espera o arquivo de configuração MCP: o MultTerm troca por ${s.mcpConfig}. Converse com ele nessa aba; ele opera as abas que você compartilhar.`,
+        textContent: 'O agente abre numa aba de terminal local (PowerShell), já ligado a este servidor, com a conta que você tem ' +
+          'nele nesta máquina (ele precisa estar instalado). Converse com ele nessa aba; ele opera as abas que você compartilhar.',
       }),
       el('h3', { textContent: 'Terminais compartilhados' }),
       terms.length

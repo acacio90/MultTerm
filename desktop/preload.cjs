@@ -54,7 +54,7 @@ contextBridge.exposeInMainWorld('multterm', {
   agentEnable: (on) => ipcRenderer.invoke('agent:enable', on),
   agentSetPort: (port) => ipcRenderer.invoke('agent:set-port', port),
   agentNewToken: () => ipcRenderer.invoke('agent:new-token'),
-  agentSetCommand: (cmd) => ipcRenderer.invoke('agent:set-command', cmd),
+  agentSetAgent: (id) => ipcRenderer.invoke('agent:set-agent', id),
   agentShare: (tab, mode, title, detail) => ipcRenderer.invoke('agent:share', tab, mode, title, detail),
   agentUnshareAll: () => ipcRenderer.invoke('agent:unshare-all'),
   onAgentEvent: (cb) => ipcRenderer.on('agent:event', (_e, ev) => cb(ev)),

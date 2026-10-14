@@ -13,8 +13,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   permissão por aba (somente leitura, aprovar cada envio ou controle livre), janela de
   aprovação, marca nas abas, corte imediato e registro de atividade. (#30)
 - Terminal local (PowerShell, Prompt de comando, WSL) em Ferramentas, e botão **Abrir o agente**
-  que abre o agente configurado numa aba local já ligado ao servidor MCP (`{mcp}` vira o arquivo
-  de configuração). (#31)
+  que abre o agente escolhido numa lista (por enquanto, Claude Code) numa aba local já ligado ao
+  servidor MCP. (#31, #35)
 - Destacar uma aba de terminal em janela própria (clique direito na aba) e devolvê-la à janela
   principal, sem reiniciar a sessão; o compartilhamento com o agente acompanha a aba. (#32)
 - Agente: **Definir todas** aplica o mesmo modo de compartilhamento a todas as abas de uma vez

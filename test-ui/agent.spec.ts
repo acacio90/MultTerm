@@ -18,7 +18,8 @@ const freePort = () => new Promise<number>((resolve) => {
 });
 
 test.beforeEach(async () => {
-  ctx = await launchApp('version: 1\nsessions:\n  - {name: local, host: 127.0.0.1}\n');
+  // O "agente" dos testes só mostra o arquivo de configuração que recebeu no lugar de {mcp}.
+  ctx = await launchApp('version: 1\nsessions:\n  - {name: local, host: 127.0.0.1}\n', { MULTTERM_AGENT_COMMAND: 'Get-Content {mcp}' });
   page = ctx.page;
 });
 
@@ -146,13 +147,13 @@ test('terminal local e abrir o agente numa aba com a configuração MCP', async 
   await page.keyboard.type('Write-Output (6*7)\r');
   await expect(rows).toContainText(/\(6\*7\)\s*42/, { timeout: 20_000 });
 
-  // "Agente" de teste: mostra o arquivo de configuração que recebeu no lugar de {mcp}.
+  // Agente escolhido na lista (o comando de teste vem de MULTTERM_AGENT_COMMAND).
   await page.click('#btn-agent');
   const panel = page.locator('.panel:not([hidden])').last();
   await panel.locator('[name=port]').fill(String(await freePort()));
   await panel.locator('button', { hasText: 'Trocar porta' }).click();
-  await expect(panel.locator('button', { hasText: 'Abrir o agente' })).toBeDisabled();
-  await panel.locator('[name=agentCommand]').fill('Get-Content {mcp}');
+  await expect(panel.locator('select[name=agent] option')).toHaveText(['Claude Code']);
+  await panel.locator('select[name=agent]').selectOption('claude');
   await panel.locator('button', { hasText: 'Abrir o agente' }).click();
   const agentTab = page.locator('#tabs .tab', { hasText: /^Agente/ }).filter({ hasNot: page.locator('.nada') }).last();
   await expect(agentTab).toHaveClass(/active/);
@@ -162,7 +163,7 @@ test('terminal local e abrir o agente numa aba com a configuração MCP', async 
   const cfg = JSON.parse(await readFile(join(ctx.dir, 'userdata', 'agent-mcp.json'), 'utf8'));
   expect(cfg.mcpServers.multterm.env).toEqual({ ELECTRON_RUN_AS_NODE: '1' });
   const prefs = JSON.parse(await readFile(join(ctx.dir, 'userdata', 'agent.json'), 'utf8'));
-  expect(prefs.agentCommand).toBe('Get-Content {mcp}');
+  expect(prefs.agent).toBe('claude');
 });
 
 test('agente MCP: define o modo de todas as abas de uma vez', async () => {

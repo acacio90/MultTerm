@@ -6,7 +6,7 @@ import { McpServer, type ShareMode, type SharedTerminal } from '../agent/mcp.ts'
 import { startAgentHttp, type AgentHttp } from '../agent/http.ts';
 import { timestamp } from '../servers/common.ts';
 import { onTerminalMoved, terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
-import { agentLaunchCommand } from './local-terminal.ts';
+import { AGENTS, agentLaunchCommand, DEFAULT_AGENT } from './local-terminal.ts';
 
 /*
  * Agente MCP: servidor local (HTTP em 127.0.0.1 + ponte stdio) que expõe só as abas de terminal
@@ -26,7 +26,7 @@ interface Share {
 const shares = new Map<string, Share>();
 const activity: string[] = [];
 let http: AgentHttp | undefined;
-let prefs: { enabled?: boolean; port?: number; tokenSealed?: string; agentCommand?: string } = {};
+let prefs: { enabled?: boolean; port?: number; tokenSealed?: string; agent?: string } = {};
 let token = '';
 
 const prefsFile = () => join(app.getPath('userData'), 'agent.json');
@@ -85,7 +85,8 @@ function status(viewer?: WebContents) {
     token,
     stdio: stdioCommand(),
     shares: [...shares.values()].filter((s) => !viewer || s.owner === viewer).map((s) => ({ tab: s.tab, mode: s.mode, title: s.title })),
-    agentCommand: prefs.agentCommand ?? '',
+    agent: currentAgent(),
+    agents: Object.entries(AGENTS).map(([id, a]) => ({ id, label: a.label })),
     mcpConfig: mcpConfigFile(),
   };
 }
@@ -181,10 +182,15 @@ async function disable(remember = true) {
   broadcast();
 }
 
-/** Liga o servidor (se preciso) e devolve a linha de comando do agente numa aba local. */
+const currentAgent = () => (prefs.agent && Object.hasOwn(AGENTS, prefs.agent) ? prefs.agent : DEFAULT_AGENT);
+
+/**
+ * Liga o servidor (se preciso) e devolve a linha de comando do agente escolhido numa aba local.
+ * MULTTERM_AGENT_COMMAND troca o comando (testes).
+ */
 export async function agentLaunch(): Promise<{ file: string; args: string[] }> {
   await enable();
-  return agentLaunchCommand(prefs.agentCommand ?? '', mcpConfigFile());
+  return agentLaunchCommand(process.env.MULTTERM_AGENT_COMMAND || AGENTS[currentAgent()].command, mcpConfigFile());
 }
 
 // A aba mudou de janela (destacar/devolver): o compartilhamento vai junto.
@@ -224,11 +230,9 @@ export function registerAgentIpc(): void {
     if (was) await enable();
     return status(_e.sender);
   });
-  ipcMain.handle('agent:set-command', async (_e, cmd: unknown) => {
-    const text = typeof cmd === 'string' ? cmd.trim() : '';
-    // eslint-disable-next-line no-control-regex
-    if (/[\r\n\x00]/.test(text) || text.length > 2000) throw new Error('comando do agente inválido (uma linha)');
-    prefs.agentCommand = text;
+  ipcMain.handle('agent:set-agent', async (_e, id: unknown) => {
+    if (typeof id !== 'string' || !Object.hasOwn(AGENTS, id)) throw new Error('agente desconhecido');
+    prefs.agent = id;
     await savePrefs();
     broadcast();
     return status(_e.sender);

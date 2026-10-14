@@ -23,9 +23,15 @@ const psQuote = (s: string) => `'${s.replace(/'/g, "''")}'`;
  * Agente numa aba local: roda o comando configurado no PowerShell e mantém o shell aberto quando ele
  * termina. `{mcp}` vira o caminho do arquivo de configuração MCP (entre aspas, pronto para o shell).
  */
+/** Agentes que o MultTerm sabe abrir; {mcp} vira o arquivo de configuração MCP gerado. */
+export const AGENTS: Record<string, { label: string; command: string }> = {
+  claude: { label: 'Claude Code', command: 'claude --mcp-config {mcp}' },
+};
+export const DEFAULT_AGENT = 'claude';
+
 export function agentLaunchCommand(template: string, mcpConfig: string, systemRoot?: string): { file: string; args: string[] } {
   const cmd = template.trim();
-  if (!cmd) throw new Error('configure o comando do agente na tela Agente');
+  if (!cmd) throw new Error('escolha o agente na tela Agente');
   // eslint-disable-next-line no-control-regex
   if (/[\r\n\x00]/.test(cmd) || cmd.length > 2000) throw new Error('comando do agente inválido');
   const line = cmd.includes('{mcp}') ? cmd.split('{mcp}').join(psQuote(mcpConfig)) : cmd;
