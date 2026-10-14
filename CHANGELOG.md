@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.5.0] - 2026-10-14
+
 ### Adicionado
 
 - SSH com equipamentos antigos (switches que só oferecem troca de chaves SHA-1, ssh-rsa, CBC):
@@ -149,7 +151,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.4.1...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.5.0...develop
+[0.5.0]: https://github.com/acacio90/MultTerm/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/acacio90/MultTerm/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/acacio90/MultTerm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/acacio90/MultTerm/compare/v0.2.0...v0.3.0
