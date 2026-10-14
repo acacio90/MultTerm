@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld('multterm', {
     menuCb = cb;
     for (const command of menuQueue.splice(0)) cb(command);
   },
+  // Janela destacada: fechar devolve as abas à principal.
+  onReturnTabs: (cb) => ipcRenderer.on('window:return-tabs', () => cb()),
+  closeWindowNow: () => ipcRenderer.send('window:close-now'),
   onTermReleased: (cb) => ipcRenderer.on('term:released', (_e, id) => cb(id)),
   termInput: (id, data) => ipcRenderer.send('term:input', id, data),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),

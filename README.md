@@ -164,6 +164,10 @@ janela própria (útil para ver duas sessões lado a lado ou em outro monitor). 
 reiniciada: a tela é redesenhada e o processo segue. Na janela separada, **Devolver à janela
 principal** traz a aba de volta; o compartilhamento com o agente vai junto.
 
+**Fechar a janela separada** (X ou Alt+F4) também devolve as abas à janela principal, sem
+reiniciar as sessões; para encerrar uma sessão, feche a **aba**. Fechar a janela principal encerra o
+MultTerm, inclusive as janelas separadas.
+
 ### Servidores
 
 **Ferramentas → Servidores** inicia e para servidores locais, cada um com porta, pasta raiz,

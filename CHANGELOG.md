@@ -15,6 +15,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   aba, não só nas de terminal. (#45)
 - Arrastar uma aba de terminal para fora da barra de abas a destaca numa janela própria, aberta
   onde a aba foi solta. (#49)
+- Fechar uma janela separada devolve as abas à janela principal, sem reiniciar as sessões; só
+  fechar a aba encerra a sessão. Fechar a janela principal encerra o MultTerm, inclusive as janelas
+  separadas. (#50)
 
 ## [0.5.0] - 2026-10-14
 

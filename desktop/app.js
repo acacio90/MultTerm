@@ -483,7 +483,7 @@ function closeTab(tab, { keepProcess = false } = {}) {
   if (activeTab === tab) {
     const next = tabsById.get(panes[focusedPane]) ?? panes.slice(0, paneCount()).map((id) => tabsById.get(id)).find(Boolean);
     if (next) showTab(next);
-    else if (api.isDetached) window.close(); // janela destacada sem abas: fecha
+    else if (api.isDetached) api.closeWindowNow(); // janela destacada sem abas: fecha
     else showEditor();
   } else if (at >= 0) {
     renderPanes();
@@ -842,6 +842,24 @@ api.onTermAdopt((offer) => {
   void openTerminalTab({ title: meta.title ?? 'terminal', tooltip: meta.tooltip ?? '', spec: meta.spec, endedText: meta.endedText, restartText: meta.restartText, adopt: offer });
 });
 if (api.isDetached) document.body.classList.add('detached');
+
+// Fechar a janela destacada (X, Alt+F4) devolve as abas de terminal à janela principal, sem
+// reiniciar as sessões; as outras abas só fecham. A janela fecha quando a última aba sai.
+let returningTabs = false;
+api.onReturnTabs(() => {
+  if (returningTabs) return;
+  returningTabs = true;
+  for (const t of [...tabsById.values()]) {
+    if (t.term) {
+      api.termReattach(t.id, tabMeta(t)).catch(() => closeTab(t));
+    } else {
+      closeTab(t);
+    }
+  }
+  if (!tabsById.size) api.closeWindowNow();
+  // Se alguma aba não for adotada a tempo, fecha mesmo assim (não deixa a janela presa).
+  setTimeout(() => api.closeWindowNow(), 5000);
+});
 
 const LOCAL_TITLES = { powershell: 'PowerShell', cmd: 'Prompt de comando', wsl: 'WSL', agent: 'Agente' };
 
