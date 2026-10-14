@@ -67,9 +67,11 @@ jobs:
           rpcinfo -p 127.0.0.1
           showmount -e 127.0.0.1
 
-      - name: Montar e ler por TCP e UDP; gravar é recusado
+      - name: Montar e ler; gravar é recusado
         run: |
-          for proto in tcp udp; do
+          # O kernel do Ubuntu vem sem NFS sobre UDP (CONFIG_NFS_DISABLE_UDP_SUPPORT): monta por TCP;
+          # o UDP é conferido com o rpcinfo (cliente RPC real) logo abaixo.
+          for proto in tcp; do
             echo "== $proto"
             sudo mkdir -p /mnt/$proto
             sudo mount -t nfs -o vers=3,proto=$proto,mountproto=$proto,nolock 127.0.0.1:/ /mnt/$proto
@@ -82,6 +84,9 @@ jobs:
             grep -qi "read-only" /tmp/touch.err
             sudo umount /mnt/$proto
           done
+          rpcinfo -u 127.0.0.1 100003 3
+          rpcinfo -u 127.0.0.1 100005 3
+          rpcinfo -t 127.0.0.1 100003 3
 
       - name: Log do servidor
         if: always()
