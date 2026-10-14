@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { embeddedRdpArgs, embeddedSshCommand, rdpExitMessage, rdpStdin, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
+import { embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
 
 const WIN: LaunchEnv = {
   platform: 'win32',
@@ -149,4 +149,29 @@ test('rdp numa aba: senha pela entrada padrão (domínio vazio quando não veio 
   assert.equal(rdpStdin('ana', 's3nha'), '\ns3nha\n');
   assert.equal(rdpStdin('ana@empresa.local', 's3nha'), '\ns3nha\n');
   assert.equal(rdpStdin(undefined, ''), '\n\n');
+});
+
+test('ssh: algoritmos antigos só quando a sessão permite, e só os que o ssh local conhece', () => {
+  const env = { home: 'C:\\Users\\pedro', fileExists: () => false };
+  const sw: Session = { name: 'SW', folder: '', type: 'ssh', host: '172.17.0.2', user: 'admin' };
+  assert.deepEqual(sshArgs(sw, env).args, ['--', 'admin@172.17.0.2']);
+  const all = sshArgs({ ...sw, legacySsh: true }, env).args;
+  assert.deepEqual(all.slice(0, 2), ['-o', 'KexAlgorithms=+diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1']);
+  assert.ok(all.includes('HostKeyAlgorithms=+ssh-rsa,ssh-dss'));
+  assert.ok(all.includes('Ciphers=+aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc'));
+  assert.deepEqual(all.slice(-2), ['--', 'admin@172.17.0.2']);
+  // ssh sem group1 nem ssh-dss nem MACs antigos: ficam de fora (o ssh recusaria nomes desconhecidos).
+  const limited = legacySshOptions({
+    kex: ['diffie-hellman-group14-sha1', 'curve25519-sha256'],
+    cipher: ['aes128-cbc', 'aes256-gcm@openssh.com'],
+    mac: ['hmac-sha2-256'],
+    key: ['ssh-rsa', 'ssh-ed25519'],
+  });
+  assert.deepEqual(limited, [
+    '-o', 'KexAlgorithms=+diffie-hellman-group14-sha1',
+    '-o', 'HostKeyAlgorithms=+ssh-rsa',
+    '-o', 'PubkeyAcceptedAlgorithms=+ssh-rsa',
+    '-o', 'Ciphers=+aes128-cbc',
+  ]);
+  assert.deepEqual(parseSshQuery('diffie-hellman-group1-sha1\r\ncurve25519-sha256\r\n\r\n'), ['diffie-hellman-group1-sha1', 'curve25519-sha256']);
 });

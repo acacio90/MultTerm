@@ -10,6 +10,39 @@ export interface LaunchEnv {
   fileExists: (path: string) => boolean;
   /** %SystemRoot% (Windows). */
   systemRoot?: string;
+  /** Algoritmos que o ssh local suporta ("ssh -Q"); sem isso, pede todos os antigos da lista. */
+  sshAlgorithms?: SshAlgorithms;
+}
+
+export interface SshAlgorithms {
+  kex: string[];
+  cipher: string[];
+  mac: string[];
+  key: string[];
+}
+
+/** Algoritmos antigos que equipamentos de rede ainda usam e o OpenSSH desliga por padrão. */
+export const LEGACY_SSH: SshAlgorithms = {
+  kex: ['diffie-hellman-group-exchange-sha1', 'diffie-hellman-group14-sha1', 'diffie-hellman-group1-sha1'],
+  cipher: ['aes128-cbc', 'aes192-cbc', 'aes256-cbc', '3des-cbc'],
+  mac: ['hmac-sha1', 'hmac-sha1-96', 'hmac-md5'],
+  key: ['ssh-rsa', 'ssh-dss'],
+};
+
+/**
+ * Opções "-o" que acrescentam (+) os algoritmos antigos aos padrões do ssh. Só os que o ssh local
+ * conhece: um nome desconhecido faz o ssh recusar a linha de comando inteira.
+ */
+export function legacySshOptions(supported?: SshAlgorithms): string[] {
+  const pick = (kind: keyof SshAlgorithms) => LEGACY_SSH[kind].filter((a) => !supported || supported[kind].includes(a));
+  const opts: [string, string[]][] = [
+    ['KexAlgorithms', pick('kex')],
+    ['HostKeyAlgorithms', pick('key')],
+    ['PubkeyAcceptedAlgorithms', pick('key')],
+    ['Ciphers', pick('cipher')],
+    ['MACs', pick('mac')],
+  ];
+  return opts.filter(([, list]) => list.length).flatMap(([name, list]) => ['-o', `${name}=+${list.join(',')}`]);
 }
 
 /**
@@ -55,11 +88,12 @@ export function expandHome(path: string, home: string): string {
 
 export function sshArgs(
   s: Session,
-  env: Pick<LaunchEnv, 'home' | 'fileExists'>,
+  env: Pick<LaunchEnv, 'home' | 'fileExists' | 'sshAlgorithms'>,
 ): { args: string[]; warnings: string[] } {
   const args: string[] = [];
   const warnings: string[] = [];
   if (effectivePort(s) !== DEFAULT_PORTS.ssh) args.push('-p', String(effectivePort(s)));
+  if (s.legacySsh) args.push(...legacySshOptions(env.sshAlgorithms));
   if (s.identityFile) {
     const key = expandHome(s.identityFile, env.home);
     if (/\.ppk$/i.test(key)) {
@@ -119,7 +153,7 @@ export function planLaunch(s: Session, env: LaunchEnv): LaunchPlan {
 /** Comando para rodar a sessão SSH dentro de um terminal embutido (pseudo-terminal). */
 export function embeddedSshCommand(
   s: Session,
-  env: Pick<LaunchEnv, 'platform' | 'home' | 'fileExists' | 'systemRoot'>,
+  env: Pick<LaunchEnv, 'platform' | 'home' | 'fileExists' | 'systemRoot' | 'sshAlgorithms'>,
 ) {
   if (s.type !== 'ssh') throw new SessionError(`${s.name}: só sessões SSH abrem no terminal embutido`);
   const { args, warnings } = sshArgs(s, env);
@@ -184,6 +218,11 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
 export function rdpStdin(user: string | undefined, password: string): string {
   const hasDomain = !!user && user.indexOf('\\') > 0;
   return `${hasDomain ? '' : '\n'}${password}\n`;
+}
+
+/** "ssh -Q <tipo>": uma linha por algoritmo. */
+export function parseSshQuery(stdout: string): string[] {
+  return stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
 
 // Códigos de saída do wfreerdp = último erro do FreeRDP: (classe << 16) | tipo.

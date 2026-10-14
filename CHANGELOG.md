@@ -6,6 +6,13 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- SSH com equipamentos antigos (switches que só oferecem troca de chaves SHA-1, ssh-rsa, CBC):
+  quando o ssh recusa ("no matching key exchange method found"), a aba oferece permitir os
+  algoritmos antigos só naquela sessão, e reconecta. Também no formulário, como **Aceitar
+  algoritmos antigos**. (#41)
+
 ### Alterado
 
 - Menu do topo em português e útil: **Arquivo** (nova sessão/pasta, abrir/recarregar o arquivo de

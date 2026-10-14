@@ -67,6 +67,7 @@
             <label>Porta <input name="port" type="number" min="1" max="65535"></label>
             <label>Usuário <input name="user"></label>
             <label class="ssh-only wide">Chave privada <input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"></label>
+            <label class="ssh-only check wide"><input type="checkbox" name="legacySsh"> Aceitar algoritmos antigos (SHA-1, ssh-rsa, CBC) — só para switches e servidores antigos</label>
             <label class="rdp-only check wide"><input type="checkbox" name="legacyTls"> Aceitar TLS antigo (1.0) — só para servidores Windows antigos que não falam TLS 1.2</label>
             <label>MAC (Wake-on-LAN) <input name="mac" placeholder="opcional, ex.: aa:bb:cc:dd:ee:ff" autocomplete="off"></label>
             <label>VPN <input name="vpn" list="vpn-sites" placeholder="opcional: site da VPN" autocomplete="off"></label>

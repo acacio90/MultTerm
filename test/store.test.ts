@@ -103,3 +103,14 @@ test('legacyTls: só em sessões RDP, gravado só quando ligado', () => {
   const yaml = serializeSessions([rdp, { ...C }]);
   assert.equal(yaml.match(/legacyTls: true/g)?.length, 1);
 });
+
+test('legacySsh: só em sessões SSH, gravado só quando ligado', () => {
+  const [ssh, rdp] = validateSessions([
+    { name: 'SW', type: 'ssh', host: '172.17.0.2', legacySsh: true },
+    { name: 'AD', type: 'rdp', host: '10.0.0.9', legacySsh: true },
+  ], 'teste');
+  assert.equal(ssh.legacySsh, true);
+  assert.equal(rdp.legacySsh, undefined);
+  assert.throws(() => validateSessions([{ name: 'SW', type: 'ssh', host: '1.2.3.4', legacySsh: 1 }], 'teste'), /legacySsh/);
+  assert.match(serializeSessions([ssh]), /legacySsh: true/);
+});
