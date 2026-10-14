@@ -6,6 +6,7 @@ import { McpServer, type ShareMode, type SharedTerminal } from '../agent/mcp.ts'
 import { startAgentHttp, type AgentHttp } from '../agent/http.ts';
 import { timestamp } from '../servers/common.ts';
 import { terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
+import { agentLaunchCommand } from './local-terminal.ts';
 
 /*
  * Agente MCP: servidor local (HTTP em 127.0.0.1 + ponte stdio) que expõe só as abas de terminal
@@ -25,13 +26,15 @@ interface Share {
 const shares = new Map<string, Share>();
 const activity: string[] = [];
 let http: AgentHttp | undefined;
-let prefs: { enabled?: boolean; port?: number; tokenSealed?: string } = {};
+let prefs: { enabled?: boolean; port?: number; tokenSealed?: string; agentCommand?: string } = {};
 let token = '';
 
 const prefsFile = () => join(app.getPath('userData'), 'agent.json');
 /** Arquivo lido pela ponte stdio (porta e token do servidor em execução). */
 export const connectionFile = () => join(app.getPath('userData'), 'agent-connection.json');
 const DEFAULT_PORT = 47830;
+/** Configuração MCP (stdio) para o comando do agente: o {mcp} do comando aponta para cá. */
+export const mcpConfigFile = () => join(app.getPath('userData'), 'agent-mcp.json');
 
 function broadcast(extra: Record<string, unknown> = {}) {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -81,6 +84,8 @@ function status() {
     token,
     stdio: stdioCommand(),
     shares: [...shares.values()].map((s) => ({ tab: s.tab, mode: s.mode, title: s.title })),
+    agentCommand: prefs.agentCommand ?? '',
+    mcpConfig: mcpConfigFile(),
   };
 }
 
@@ -155,6 +160,7 @@ async function enable() {
     throw new Error(e.code === 'EADDRINUSE' ? `a porta ${prefs.port ?? DEFAULT_PORT} já está em uso; escolha outra` : e.message);
   }
   await writeFile(connectionFile(), JSON.stringify({ port: http.port, token }), { mode: 0o600 });
+  await writeFile(mcpConfigFile(), JSON.stringify({ mcpServers: { multterm: stdioCommand() } }, null, 2));
   prefs.enabled = true;
   await savePrefs();
   log(`agente ligado em ${status().url}`);
@@ -172,6 +178,12 @@ async function disable(remember = true) {
   }
   log('agente desligado');
   broadcast();
+}
+
+/** Liga o servidor (se preciso) e devolve a linha de comando do agente numa aba local. */
+export async function agentLaunch(): Promise<{ file: string; args: string[] }> {
+  await enable();
+  return agentLaunchCommand(prefs.agentCommand ?? '', mcpConfigFile());
 }
 
 export function registerAgentIpc(): void {
@@ -200,6 +212,15 @@ export function registerAgentIpc(): void {
     prefs.port = n;
     await savePrefs();
     if (was) await enable();
+    return status();
+  });
+  ipcMain.handle('agent:set-command', async (_e, cmd: unknown) => {
+    const text = typeof cmd === 'string' ? cmd.trim() : '';
+    // eslint-disable-next-line no-control-regex
+    if (/[\r\n\x00]/.test(text) || text.length > 2000) throw new Error('comando do agente inválido (uma linha)');
+    prefs.agentCommand = text;
+    await savePrefs();
+    broadcast();
     return status();
   });
   ipcMain.handle('agent:new-token', async () => {

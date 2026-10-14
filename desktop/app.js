@@ -482,6 +482,19 @@ async function openTerminalTab({ title, tooltip, open, endedText = 'sessão ence
   return tab;
 }
 
+const LOCAL_TITLES = { powershell: 'PowerShell', cmd: 'Prompt de comando', wsl: 'WSL', agent: 'Agente' };
+
+/** Terminal local (PowerShell, cmd, WSL) ou o agente numa aba local. */
+function openLocalTab(kind) {
+  return openTerminalTab({
+    title: LOCAL_TITLES[kind] ?? kind,
+    tooltip: kind === 'agent' ? 'agente de IA (o shell continua aberto quando ele termina)' : 'terminal local',
+    open: (id, cols, rows) => api.termOpenLocal(id, kind, cols, rows),
+    endedText: kind === 'agent' ? 'agente encerrado' : 'terminal encerrado',
+    restartText: 'abrir de novo',
+  });
+}
+
 function openSessionTab(session) {
   return openTerminalTab({
     title: session.name,
@@ -901,7 +914,7 @@ function openToolTab(kind, target) {
   const host = target?.host ?? session?.host;
   const ctx = {
     api, cleanError, host, network: target?.network ?? guessNetwork(host), newSession: newSessionFrom,
-    mac: target?.mac ?? session?.mac, sessions: state.sessions, openTool: openToolTab,
+    mac: target?.mac ?? session?.mac, sessions: state.sessions, openTool: openToolTab, openLocal: openLocalTab,
     terminalTabs: () => [...tabsById.values()].filter((t) => t.term).map((t) => ({ id: t.id, title: t.title, detail: t.tooltip || undefined })),
     vpnSite: target?.vpnSite ?? session?.vpn, vpnNotice: target?.vpnNotice, vpnThen: target?.vpnThen,
   };
@@ -1005,6 +1018,7 @@ toolsMenu.addEventListener('click', (e) => {
   if (!kind) return;
   setToolsMenu(false);
   if (kind === 'ping' || kind === 'traceroute') openDiagDialog(kind);
+  else if (kind.startsWith('local-')) openLocalTab(kind.slice(6));
   else openToolTab(kind);
 });
 document.addEventListener('click', () => setToolsMenu(false));

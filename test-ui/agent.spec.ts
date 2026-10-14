@@ -133,3 +133,34 @@ test('agente: sem abas abertas explica o que fazer e lembra que estava ligado', 
   expect(prefs.enabled).toBe(true);
   expect(JSON.stringify(prefs)).not.toContain((await connection()).token); // token só cifrado
 });
+
+test('terminal local e abrir o agente numa aba com a configuração MCP', async () => {
+  // PowerShell local.
+  await page.click('#btn-tools');
+  await page.click('#tools-menu [data-tool="local-powershell"]');
+  const ps = page.locator('#tabs .tab', { hasText: 'PowerShell' });
+  await expect(ps).toHaveClass(/active/);
+  const rows = page.locator('.term-panel:not([hidden]) .xterm-rows');
+  await expect(rows).toContainText('PS ', { timeout: 20_000 });
+  await page.locator('.term-panel:not([hidden]) .xterm-helper-textarea').focus();
+  await page.keyboard.type('Write-Output (6*7)\r');
+  await expect(rows).toContainText(/\(6\*7\)\s*42/, { timeout: 20_000 });
+
+  // "Agente" de teste: mostra o arquivo de configuração que recebeu no lugar de {mcp}.
+  await page.click('#btn-agent');
+  const panel = page.locator('.panel:not([hidden])').last();
+  await panel.locator('[name=port]').fill(String(await freePort()));
+  await panel.locator('button', { hasText: 'Trocar porta' }).click();
+  await expect(panel.locator('button', { hasText: 'Abrir o agente' })).toBeDisabled();
+  await panel.locator('[name=agentCommand]').fill('Get-Content {mcp}');
+  await panel.locator('button', { hasText: 'Abrir o agente' }).click();
+  const agentTab = page.locator('#tabs .tab', { hasText: /^Agente/ }).filter({ hasNot: page.locator('.nada') }).last();
+  await expect(agentTab).toHaveClass(/active/);
+  await expect(rows).toContainText('"mcpServers"', { timeout: 20_000 });
+  await expect(rows).toContainText('stdio-main.js');
+  await expect(page.locator('#agent-badge')).toBeVisible(); // ligou o servidor sozinho
+  const cfg = JSON.parse(await readFile(join(ctx.dir, 'userdata', 'agent-mcp.json'), 'utf8'));
+  expect(cfg.mcpServers.multterm.env).toEqual({ ELECTRON_RUN_AS_NODE: '1' });
+  const prefs = JSON.parse(await readFile(join(ctx.dir, 'userdata', 'agent.json'), 'utf8'));
+  expect(prefs.agentCommand).toBe('Get-Content {mcp}');
+});

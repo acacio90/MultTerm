@@ -654,6 +654,33 @@ function agentPanel(ctx) {
 
     logBox = el('pre', { className: 'dns-result server-log', textContent: (s.log ?? []).join('\n') });
 
+    // Abrir o próprio agente numa aba local, já apontado para este servidor.
+    const command = el('input', {
+      name: 'agentCommand', value: s.agentCommand ?? '', autocomplete: 'off', spellcheck: false,
+      placeholder: 'ex.: meu-agente --mcp-config {mcp}',
+    });
+    const saveCommand = el('button', { type: 'button', textContent: 'Salvar' });
+    const launch = el('button', { type: 'button', className: 'primary', textContent: 'Abrir o agente', disabled: !s.agentCommand });
+    command.addEventListener('input', () => { launch.disabled = !command.value.trim(); });
+    saveCommand.addEventListener('click', async () => {
+      try {
+        state = { ...state, ...(await ctx.api.agentSetCommand(command.value)) };
+        status.textContent = 'Comando salvo.';
+        render();
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+    launch.addEventListener('click', async () => {
+      status.textContent = '';
+      try {
+        if (command.value.trim() !== (s.agentCommand ?? '')) await ctx.api.agentSetCommand(command.value);
+        await ctx.openLocal('agent');
+      } catch (err) {
+        status.textContent = ctx.cleanError(err);
+      }
+    });
+
     // Redesenha sem perder a posição da rolagem.
     const scroller = body.closest('.panel');
     const top = scroller?.scrollTop ?? 0;
@@ -663,6 +690,13 @@ function agentPanel(ctx) {
           'terminais que você compartilhar. Só as abas marcadas abaixo ficam visíveis; nada é compartilhado por padrão.',
       }),
       el('div', { className: 'actions' }, toggle, el('span', { className: `agent-state ${s.enabled ? 'on' : 'off'}`, textContent: s.enabled ? `ligado em ${s.url}` : 'desligado' })),
+      el('h3', { textContent: 'Abrir o agente no MultTerm' }),
+      el('div', { className: 'tool-form' }, el('label', { className: 'wide' }, 'Comando do agente', command), el('div', { className: 'actions' }, saveCommand, launch)),
+      el('p', {
+        className: 'muted',
+        textContent: 'O agente abre numa aba de terminal local (PowerShell), já ligado a este servidor. Use {mcp} no comando onde o seu ' +
+          `agente espera o arquivo de configuração MCP: o MultTerm troca por ${s.mcpConfig}. Converse com ele nessa aba; ele opera as abas que você compartilhar.`,
+      }),
       el('h3', { textContent: 'Terminais compartilhados' }),
       terms.length
         ? el('table', { className: 'results agent-shares' }, el('tbody', {}, ...shareRows))

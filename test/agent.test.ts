@@ -160,3 +160,15 @@ test('HTTP: token, Origin, Host, notificações e ponte stdio', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('terminais locais e comando do agente', async () => {
+  const { localShellCommand, agentLaunchCommand } = await import('../src/desktop/local-terminal.ts');
+  assert.deepEqual(localShellCommand('cmd', 'C:\Win'), { file: join('C:\Win', 'System32', 'cmd.exe'), args: [] });
+  assert.equal(localShellCommand('powershell', 'C:\Win').file, join('C:\Win', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'));
+  assert.deepEqual(localShellCommand('wsl', 'C:\Win').args, ['--cd', '~']);
+  const a = agentLaunchCommand("meu-agente --mcp-config {mcp}", "C:\Users\d'Ávila\agent-mcp.json", 'C:\Win');
+  assert.deepEqual(a.args, ['-NoLogo', '-NoExit', '-Command', "meu-agente --mcp-config 'C:\Users\d''Ávila\agent-mcp.json'"]);
+  assert.deepEqual(agentLaunchCommand('outro-agente', 'x').args.at(-1), 'outro-agente');
+  assert.throws(() => agentLaunchCommand('  ', 'x'), /configure o comando/);
+  assert.throws(() => agentLaunchCommand('a\nb', 'x'), /inválido/);
+});

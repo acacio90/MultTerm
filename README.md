@@ -120,6 +120,15 @@ abertos. O MultTerm não fala com nenhum serviço de IA: ele só expõe ferramen
   A tela do agente mostra a configuração pronta para colar: **stdio** (o próprio executável do
   MultTerm faz a ponte) ou **HTTP** (endereço e token).
 - Tudo o que o agente lê ou envia fica no registro de atividade.
+- **Abrir o agente no MultTerm**: informe o comando do seu agente (uma vez) e clique em **Abrir o
+  agente** — ele abre numa aba de terminal local, já ligado ao servidor. Onde o agente espera o
+  arquivo de configuração MCP, use `{mcp}` (ex.: `meu-agente --mcp-config {mcp}`); o MultTerm troca
+  pelo arquivo que ele gera.
+
+### Terminal local
+
+**Ferramentas → Terminal local** abre PowerShell, Prompt de comando ou WSL numa aba, com a mesma
+cópia/cola e reabertura (**R**) das abas SSH.
 
 ### Servidores
 

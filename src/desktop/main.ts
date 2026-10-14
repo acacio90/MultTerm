@@ -19,7 +19,8 @@ import { closeTerminal, closeTerminalsOf, openTerminal, resizeTerminal, writeTer
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { registerVpnIpc } from './vpn.ts';
 import { registerServersIpc } from './servers.ts';
-import { registerAgentIpc } from './agent.ts';
+import { agentLaunch, registerAgentIpc } from './agent.ts';
+import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
@@ -161,6 +162,17 @@ function registerIpc(): void {
   });
 
   // Terminal embutido (abas).
+  // Terminal local (PowerShell, cmd, WSL) ou o agente numa aba local.
+  ipcMain.handle('term:open-local', async (e, id: unknown, kind: unknown, cols: unknown, rows: unknown) => {
+    const size = (n: unknown, fallback: number) => (Number.isInteger(n) && (n as number) > 0 ? (n as number) : fallback);
+    const shells: LocalShell[] = ['powershell', 'cmd', 'wsl'];
+    const cmd = kind === 'agent' ? await agentLaunch()
+      : shells.includes(kind as LocalShell) ? localShellCommand(kind as LocalShell) : undefined;
+    if (!cmd) throw new Error('tipo de terminal local inválido');
+    if (!existsSync(cmd.file)) throw new Error(kind === 'wsl' ? 'o WSL não está instalado' : `não encontrado: ${cmd.file}`);
+    openTerminal(e.sender, id, cmd.file, cmd.args, { cols: size(cols, 80), rows: size(rows, 24), cwd: homedir() });
+  });
+
   ipcMain.handle('term:open', (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
     const [session] = validateSessions([raw], 'conexão');
     const { file, args, warnings } = embeddedSshCommand(session, {

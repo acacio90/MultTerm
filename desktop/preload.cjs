@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('multterm', {
   connect: (session) => ipcRenderer.invoke('session:connect', session),
 
   termOpen: (id, session, cols, rows) => ipcRenderer.invoke('term:open', id, session, cols, rows),
+  termOpenLocal: (id, kind, cols, rows) => ipcRenderer.invoke('term:open-local', id, kind, cols, rows),
   termInput: (id, data) => ipcRenderer.send('term:input', id, data),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
   termClose: (id) => ipcRenderer.send('term:close', id),
@@ -38,6 +39,7 @@ contextBridge.exposeInMainWorld('multterm', {
   agentEnable: (on) => ipcRenderer.invoke('agent:enable', on),
   agentSetPort: (port) => ipcRenderer.invoke('agent:set-port', port),
   agentNewToken: () => ipcRenderer.invoke('agent:new-token'),
+  agentSetCommand: (cmd) => ipcRenderer.invoke('agent:set-command', cmd),
   agentShare: (tab, mode, title, detail) => ipcRenderer.invoke('agent:share', tab, mode, title, detail),
   agentUnshareAll: () => ipcRenderer.invoke('agent:unshare-all'),
   onAgentEvent: (cb) => ipcRenderer.on('agent:event', (_e, ev) => cb(ev)),
