@@ -8,12 +8,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const VERSION = '3.32.2';
-const SHA256 = '18278040aee6de31fdafe5b8f237c4bf97e00e23879330975e62bf335ecded85';
-const URL = `https://github.com/acacio90/MultTerm/releases/download/freerdp-${VERSION}/freerdp-${VERSION}-win64.zip`;
+const BUILD = 2; // configuração do build no workflow freerdp.yml
+const SHA256 = '1295badfe1e9592bd26803008d29de7ecb9a2cbe74b70cbe11154326824c8f6d';
+const URL = `https://github.com/acacio90/MultTerm/releases/download/freerdp-${VERSION}/freerdp-${VERSION}-win64-${BUILD}.zip`;
 
 const dest = join(import.meta.dirname, '..', 'vendor', 'freerdp');
 const stamp = join(dest, 'VERSION');
-if (existsSync(join(dest, 'wfreerdp.exe')) && existsSync(stamp) && readFileSync(stamp, 'utf8').trim() === `${VERSION} ${SHA256}`) {
+if (existsSync(join(dest, 'wfreerdp.exe')) && existsSync(stamp) && readFileSync(stamp, 'utf8').trim() === `${VERSION}-${BUILD} ${SHA256}`) {
   console.log(`fetch-freerdp: FreeRDP ${VERSION} já está em vendor/freerdp`);
   process.exit(0);
 }
@@ -32,5 +33,5 @@ const ps = (s) => `'${s.replace(/'/g, "''")}'`;
 execFileSync('powershell.exe', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath ${ps(tmp)} -DestinationPath ${ps(dest)} -Force`], { stdio: 'inherit' });
 rmSync(tmp, { force: true });
 if (!existsSync(join(dest, 'wfreerdp.exe'))) throw new Error('fetch-freerdp: o pacote não tem wfreerdp.exe');
-writeFileSync(stamp, `${VERSION} ${SHA256}\n`);
+writeFileSync(stamp, `${VERSION}-${BUILD} ${SHA256}\n`);
 console.log(`fetch-freerdp: FreeRDP ${VERSION} em vendor/freerdp`);

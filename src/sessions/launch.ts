@@ -168,9 +168,10 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
     '+clipboard',
     `/title:${s.name}`,
   );
-  // Só quando o usuário permitiu nesta sessão: servidores que falam apenas TLS 1.0, que o
-  // OpenSSL 3 recusa no nível padrão. A versão continua a mais alta que os dois lados suportam.
-  if (s.legacyTls) args.push('/tls:seclevel:0');
+  // Só quando o usuário permitiu nesta sessão: servidores que falam apenas TLS 1.0. O FreeRDP
+  // exige TLS 1.2 por padrão e o OpenSSL 3 recusa TLS 1.0 acima do nível 0. Cada /tls: aceita uma
+  // opção só (a última vence), por isso o nível vai pela forma antiga /tls-seclevel.
+  if (s.legacyTls) args.push('/tls:enforce:1.0', '/tls-seclevel:0');
   return args;
 }
 
