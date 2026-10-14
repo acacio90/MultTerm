@@ -1,0 +1,88 @@
+name: FreeRDP
+
+# Compila o cliente RDP (wfreerdp.exe) que o MultTerm usa para abrir sessões RDP numa aba.
+# O código-fonte oficial é conferido pelo SHA-256 fixado abaixo; o executável sai estático
+# (sem DLLs nem runtime do Visual C++) e é publicado numa release auxiliar deste repositório,
+# de onde scripts/fetch-freerdp.mjs o baixa (também conferindo o hash).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/freerdp.yml]
+
+permissions:
+  contents: write
+
+env:
+  FREERDP_VERSION: 3.32.2
+  FREERDP_SHA256: e95a505c0057e4d06a3b120477c421028769deba4db9c639ef3465d050f0955c
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Código-fonte (conferido pelo hash)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/FreeRDP/FreeRDP/releases/download/$env:FREERDP_VERSION/freerdp-$env:FREERDP_VERSION.tar.gz"
+          Invoke-WebRequest $url -OutFile freerdp.tar.gz
+          $hash = (Get-FileHash freerdp.tar.gz -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:FREERDP_SHA256) { throw "hash do código-fonte não confere: $hash" }
+          tar xzf freerdp.tar.gz
+
+      - name: Dependências (OpenSSL e zlib estáticos)
+        shell: pwsh
+        run: vcpkg install openssl:x64-windows-static zlib:x64-windows-static
+
+      - name: Configurar
+        shell: pwsh
+        run: >
+          cmake -S "freerdp-$env:FREERDP_VERSION" -B build -G "Visual Studio 17 2022" -A x64
+          "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF
+          -DWITH_CLIENT_WINDOWS=ON -DWITH_CLIENT_SDL=OFF -DWITH_CLIENT_INTERFACE=OFF
+          -DWITH_SERVER=OFF -DWITH_SERVER_INTERFACE=OFF -DWITH_SAMPLE=OFF -DWITH_PROXY=OFF
+          -DWITH_SHADOW=OFF -DWITH_PLATFORM_SERVER=OFF -DWITH_WINPR_TOOLS=OFF
+          -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_DSP_FFMPEG=OFF -DWITH_VIDEO_FFMPEG=OFF
+          -DWITH_CAIRO=OFF -DWITH_JPEG=OFF -DWITH_OPUS=OFF -DWITH_FAAC=OFF -DWITH_FAAD2=OFF
+          -DWITH_LAME=OFF -DWITH_SOXR=OFF -DWITH_JSON_DISABLED=ON -DWITH_AAD=OFF
+          -DWITH_PKCS11=OFF -DWITH_KRB5=OFF -DCHANNEL_URBDRC=OFF -DWITH_WEBVIEW=OFF
+          -DWITH_MANPAGES=OFF -DWITH_CCACHE=OFF -DWITH_CLANG_FORMAT=OFF
+
+      - name: Compilar
+        run: cmake --build build --config Release --target wfreerdp --parallel
+
+      - name: Empacotar
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build -Recurse -Filter wfreerdp.exe | Where-Object FullName -match 'Release' | Select-Object -First 1
+          if (-not $exe) { throw 'wfreerdp.exe não encontrado' }
+          New-Item -ItemType Directory out | Out-Null
+          Copy-Item $exe.FullName out/wfreerdp.exe
+          Copy-Item "freerdp-$env:FREERDP_VERSION/LICENSE" out/LICENSE.txt
+          # Só DLLs do sistema: o MultTerm distribui um único executável.
+          $dumpbin = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe | Where-Object FullName -match 'Hostx64\\x64' | Select-Object -First 1
+          & $dumpbin.FullName /dependents out/wfreerdp.exe
+          Compress-Archive out/* "freerdp-$env:FREERDP_VERSION-win64.zip"
+          (Get-FileHash "freerdp-$env:FREERDP_VERSION-win64.zip" -Algorithm SHA256).Hash.ToLower()
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freerdp-win64
+          path: freerdp-*-win64.zip
+
+      - name: Publicar na release auxiliar
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "freerdp-$env:FREERDP_VERSION"
+          gh release view $tag -R $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag -R $env:GITHUB_REPOSITORY --prerelease --target $env:GITHUB_SHA --title "FreeRDP $env:FREERDP_VERSION (componente do MultTerm)" --notes "Cliente RDP (wfreerdp.exe) compilado a partir do código-fonte oficial do FreeRDP $env:FREERDP_VERSION (Apache 2.0) pelo workflow freerdp.yml. Não é uma versão do MultTerm."
+          }
+          gh release upload $tag "freerdp-$env:FREERDP_VERSION-win64.zip" -R $env:GITHUB_REPOSITORY --clobber
