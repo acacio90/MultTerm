@@ -35,7 +35,7 @@ const menuLabels = () => page.locator('#tree-menu button').allTextContents();
 
 test('menu da sessão: Wake-on-LAN só com MAC; atalhos usam o host da sessão', async () => {
   await session('srv').click({ button: 'right' });
-  expect(await menuLabels()).toEqual(['Conectar', 'Janela externa', 'Ping…', 'Traceroute…', 'Scanner de portas', 'Consulta SNMP', 'Editar']);
+  expect(await menuLabels()).toEqual(['Conectar', 'Janela externa', 'Ping…', 'Traceroute…', 'Scanner de portas', 'Consulta SNMP', 'Editar', 'Excluir…']);
   await page.click('#tree-menu [data-action="ping"]');
   await expect(page.locator('#diag-dialog [name=host]')).toHaveValue('10.0.0.60');
   await page.click('#diag-cancel');

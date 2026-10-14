@@ -283,16 +283,86 @@ async function save(event) {
   }
 }
 
-async function remove() {
-  const session = state.sessions.find((s) => keyOf(s) === state.editing);
-  if (!session || !confirm(`Excluir a sessão "${session.name}"?`)) return;
+/**
+ * Confirmação do MultTerm (no lugar do confirm do navegador): título, texto, lista de itens e um
+ * botão de ação em vermelho. O foco começa em Cancelar, para Enter não confirmar por engano.
+ */
+function askConfirm({ title, text, items = [], note = '', confirmLabel = 'Excluir' }) {
+  const dialog = $('confirm-dialog');
+  $('confirm-title').textContent = title;
+  const parts = [Object.assign(document.createElement('p'), { textContent: text })];
+  if (items.length) {
+    const ul = document.createElement('ul');
+    const shown = items.slice(0, 12);
+    for (const it of shown) ul.append(Object.assign(document.createElement('li'), { textContent: it }));
+    if (items.length > shown.length) ul.append(Object.assign(document.createElement('li'), { textContent: `… e mais ${items.length - shown.length}` }));
+    parts.push(ul);
+  }
+  if (note) parts.push(Object.assign(document.createElement('p'), { className: 'muted', textContent: note }));
+  $('confirm-body').replaceChildren(...parts);
+  $('confirm-ok').textContent = confirmLabel;
+  return new Promise((resolve) => {
+    const done = (ok) => {
+      $('confirm-form').onsubmit = null;
+      $('confirm-cancel').onclick = null;
+      dialog.oncancel = null;
+      dialog.close();
+      resolve(ok);
+    };
+    $('confirm-form').onsubmit = (e) => {
+      e.preventDefault();
+      done(true);
+    };
+    $('confirm-cancel').onclick = () => done(false);
+    dialog.oncancel = (e) => {
+      e.preventDefault();
+      done(false);
+    };
+    dialog.showModal();
+    $('confirm-cancel').focus();
+  });
+}
+
+/** Abas abertas de uma sessão (terminal SSH ou RDP). */
+function tabsOfSession(session) {
+  const key = keyOf(session);
+  return [...tabsById.values()].filter((t) => {
+    const s = t.spec?.type === 'ssh' ? t.spec.session : t.kind === 'rdp' ? t.session : null;
+    return s && keyOf(s) === key;
+  });
+}
+
+/** Exclui sessões do arquivo depois de confirmar (uma ou várias). As abas abertas continuam. */
+async function deleteSessions(sessions) {
+  if (!sessions.length) return;
+  const one = sessions.length === 1;
+  const describe = (s) => `${s.name} — ${s.folder ? `${s.folder} · ` : ''}${s.type.toUpperCase()} ${s.host}`;
+  const withTabs = sessions.filter((s) => tabsOfSession(s).length);
+  const ok = await askConfirm({
+    title: one ? 'Excluir sessão' : `Excluir ${sessions.length} sessões`,
+    text: one ? 'A sessão abaixo será removida do arquivo de sessões:' : 'As sessões abaixo serão removidas do arquivo de sessões:',
+    items: sessions.map(describe),
+    note: withTabs.length
+      ? `${withTabs.length === 1 ? 'Há uma aba aberta' : `Há abas abertas de ${withTabs.length} delas`}: as abas continuam abertas; só a sessão sai do arquivo.`
+      : '',
+  });
+  if (!ok) return;
+  showEditor();
   clearMessages();
+  const gone = new Set(sessions.map(keyOf));
   try {
-    apply(await api.save(state.sessions.filter((s) => keyOf(s) !== state.editing)));
-    message(`Sessão "${session.name}" excluída.`);
+    apply(await api.save(state.sessions.filter((s) => !gone.has(keyOf(s)))));
+    state.multi.clear();
+    renderTree();
+    message(one ? `Sessão "${sessions[0].name}" excluída.` : `${sessions.length} sessões excluídas.`);
   } catch (err) {
     message(cleanError(err), 'error');
   }
+}
+
+async function remove() {
+  const session = state.sessions.find((s) => keyOf(s) === state.editing);
+  if (session) await deleteSessions([session]);
 }
 
 /** SSH abre numa aba de terminal embutido; RDP (ou "Janela externa") abre fora do app. */
@@ -1525,6 +1595,8 @@ function openMultiMenu(e) {
   showTreeMenu(e, [
     ['connect-selected', `Conectar as ${chosen.length} selecionadas`, () => connectMany(chosen)],
     ['clear-selection', 'Limpar seleção', clearMulti],
+    '-',
+    ['delete-selected', `Excluir as ${chosen.length} selecionadas…`, () => deleteSessions(chosen)],
   ]);
 }
 
@@ -1543,6 +1615,8 @@ function openSessionMenu(e, session) {
     ['portscan', 'Scanner de portas', () => openToolTab('portscan', session)],
     ['snmp', 'Consulta SNMP', () => openToolTab('snmp', session)],
     ['edit', 'Editar', () => select(keyOf(session))],
+    '-',
+    ['delete', 'Excluir…', () => deleteSessions([session])],
   ];
   showTreeMenu(e, items);
 }
@@ -1551,7 +1625,9 @@ function openSessionMenu(e, session) {
 function showTreeMenu(e, items) {
   e.preventDefault();
   e.stopPropagation();
-  treeMenu.replaceChildren(...items.map(([action, label, run]) => {
+  treeMenu.replaceChildren(...items.map((entry) => {
+    if (entry === '-') return document.createElement('hr');
+    const [action, label, run] = entry;
     const b = document.createElement('button');
     b.type = 'button';
     b.setAttribute('role', 'menuitem');
@@ -1744,10 +1820,7 @@ const MENU_COMMANDS = {
     message(`A sessão "${s.name}" não tem endereço MAC; preencha o campo MAC para usar o Wake-on-LAN.`, 'warn');
   }),
   edit: () => withSession((s) => select(keyOf(s))),
-  delete: () => withSession((s) => {
-    select(keyOf(s));
-    return remove();
-  }),
+  delete: () => withSession((s) => deleteSessions([s])),
   'wol-tool': () => openToolTab('wol'),
   'toggle-sidebar': () => document.body.classList.toggle('no-sidebar'),
   help: openHelp,

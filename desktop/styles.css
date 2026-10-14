@@ -54,6 +54,10 @@ button {
 button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 button.danger { color: var(--danger); }
+/* Botão de ação destrutiva em destaque (ex.: confirmar exclusão). */
+button.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+#confirm-body ul { margin: 6px 0; padding-left: 18px; max-height: 220px; overflow: auto; }
+#confirm-body .muted { font-size: 12px; }
 button:disabled { opacity: 0.5; cursor: default; }
 button:disabled:hover { border-color: var(--border); }
 

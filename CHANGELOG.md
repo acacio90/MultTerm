@@ -18,6 +18,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Fechar uma janela separada devolve as abas à janela principal, sem reiniciar as sessões; só
   fechar a aba encerra a sessão. Fechar a janela principal encerra o MultTerm, inclusive as janelas
   separadas. (#50)
+- Excluir sessão pelo botão direito (e várias selecionadas de uma vez), com uma confirmação
+  própria que mostra nome, pasta e host, começa com o foco em Cancelar e avisa se há aba aberta. A
+  mesma confirmação vale no formulário e em Sessão → Excluir. (#47)
 
 ## [0.5.0] - 2026-10-14
 
