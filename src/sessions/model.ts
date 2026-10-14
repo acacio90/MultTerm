@@ -21,6 +21,8 @@ export interface Session {
   vpn?: string;
   /** RDP: aceita TLS 1.0/cifras antigas (servidores Windows antigos). Escolha explícita por sessão. */
   legacyTls?: boolean;
+  /** SSH: aceita algoritmos antigos (troca de chaves SHA-1, ssh-rsa, CBC). Escolha explícita por sessão. */
+  legacySsh?: boolean;
   tags?: string[];
 }
 
@@ -125,8 +127,10 @@ export function validateSession(raw: unknown, where: string): Session {
   if (macText !== undefined && !mac) throw new SessionError(`${where}: "mac" inválido (${macText})`);
   const vpn = optionalString(obj, 'vpn', where)?.trim() || undefined;
   if (vpn !== undefined && !isSafeSiteName(vpn)) throw new SessionError(`${where}: "vpn" inválido (${vpn})`);
-  if (obj.legacyTls !== undefined && obj.legacyTls !== null && typeof obj.legacyTls !== 'boolean') {
-    throw new SessionError(`${where}: "legacyTls" deve ser true ou false`);
+  for (const flag of ['legacyTls', 'legacySsh']) {
+    if (obj[flag] !== undefined && obj[flag] !== null && typeof obj[flag] !== 'boolean') {
+      throw new SessionError(`${where}: "${flag}" deve ser true ou false`);
+    }
   }
   // Campos opcionais ausentes ficam fora do objeto (comparação e IPC mais limpos).
   if (port !== undefined) session.port = port;
@@ -135,6 +139,7 @@ export function validateSession(raw: unknown, where: string): Session {
   if (mac !== undefined) session.mac = mac;
   if (vpn !== undefined) session.vpn = vpn;
   if (obj.legacyTls === true && session.type === 'rdp') session.legacyTls = true;
+  if (obj.legacySsh === true && session.type === 'ssh') session.legacySsh = true;
   if (tags !== undefined) session.tags = tags;
   return session;
 }

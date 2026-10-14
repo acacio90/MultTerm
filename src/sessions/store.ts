@@ -5,7 +5,7 @@ import { DEFAULT_PORTS, normalizeFolder, SessionError, sessionKey, validateSessi
 export const FILE_VERSION = 1;
 
 const HEADER = `# Sessões do MultTerm — arquivo versionável, sem limite de sessões.
-# Campos: name, folder ("Pasta/Subpasta"), type (ssh|rdp), host, port, user, identityFile, mac, vpn, legacyTls, tags
+# Campos: name, folder ("Pasta/Subpasta"), type (ssh|rdp), host, port, user, identityFile, mac, vpn, legacyTls, legacySsh, tags
 `;
 
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -59,6 +59,7 @@ export function serializeSessions(sessions: Session[]): string {
     if (s.mac) out.mac = s.mac;
     if (s.vpn) out.vpn = s.vpn;
     if (s.legacyTls) out.legacyTls = true;
+    if (s.legacySsh) out.legacySsh = true;
     if (s.tags?.length) out.tags = s.tags;
     return out;
   });

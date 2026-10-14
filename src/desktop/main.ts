@@ -8,11 +8,13 @@ import { dirname, join, resolve } from 'node:path';
 import {
   embeddedSshCommand,
   parseAgentList,
+  parseSshQuery,
   planLaunch,
   sshAddProgram,
   sshProgram,
   type AgentStatus,
   type LaunchPlan,
+  type SshAlgorithms,
 } from '../sessions/launch.ts';
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
 import { closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
@@ -45,6 +47,27 @@ async function resolveSessionsPath(): Promise<string> {
     // sem config: usa o padrão
   }
   return join(app.getPath('userData'), 'sessions.yaml');
+}
+
+/**
+ * Algoritmos que o ssh local suporta ("ssh -Q"), consultados uma vez: sessões com "algoritmos
+ * antigos" só pedem os que existem (um nome desconhecido faria o ssh recusar a linha de comando).
+ */
+let sshAlgorithmsCache: Promise<SshAlgorithms | undefined> | undefined;
+function sshAlgorithms(): Promise<SshAlgorithms | undefined> {
+  sshAlgorithmsCache ??= (async () => {
+    const program = sshProgram({ platform: process.platform, fileExists: existsSync, systemRoot: process.env.SystemRoot });
+    const query = (kind: string) => new Promise<string[]>((resolve, reject) => {
+      execFile(program, ['-Q', kind], { timeout: 5000, windowsHide: true }, (err, stdout) => (err ? reject(err) : resolve(parseSshQuery(stdout))));
+    });
+    try {
+      const [kex, cipher, mac, key] = await Promise.all(['kex', 'cipher', 'mac', 'key'].map(query));
+      return { kex, cipher, mac, key };
+    } catch {
+      return undefined; // sem a consulta, pede todos os da lista (o ssh avisa se algum não existir)
+    }
+  })();
+  return sshAlgorithmsCache;
 }
 
 async function snapshot() {
@@ -185,6 +208,7 @@ function registerIpc(): void {
       tmp: tmpdir(),
       fileExists: existsSync,
       systemRoot: process.env.SystemRoot,
+      sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
     };
     let plan = planLaunch(session, env);
     if (plan.file) {
@@ -217,13 +241,14 @@ function registerIpc(): void {
     openTerminal(e.sender, id, cmd.file, cmd.args, { cols: size(cols, 80), rows: size(rows, 24), cwd: homedir() });
   });
 
-  ipcMain.handle('term:open', (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
+  ipcMain.handle('term:open', async (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
     const [session] = validateSessions([raw], 'conexão');
     const { file, args, warnings } = embeddedSshCommand(session, {
       platform: process.platform,
       home: homedir(),
       fileExists: existsSync,
       systemRoot: process.env.SystemRoot,
+      sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
     });
     const size = (n: unknown, fallback: number) => (Number.isInteger(n) && (n as number) > 0 ? (n as number) : fallback);
     openTerminal(e.sender, id, file, args, { cols: size(cols, 80), rows: size(rows, 24), cwd: homedir() });

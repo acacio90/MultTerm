@@ -83,6 +83,10 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
 - Botão do meio do mouse fecha a aba; quando a sessão termina, **R** reconecta.
 - Chave `.ppk` (PuTTY): o app usa a versão OpenSSH com o mesmo nome ao lado, se existir.
 - **Janela externa** abre a sessão no Windows Terminal.
+- Switches e servidores antigos que só falam algoritmos SHA-1/ssh-rsa/CBC (o ssh recusa com
+  "no matching key exchange method found"): a aba oferece **Permitir algoritmos antigos nesta
+  sessão e reconectar**, que vale só para aquela sessão (opção *Aceitar algoritmos antigos* no
+  formulário, gravada como `legacySsh: true`). Só entram os algoritmos que o `ssh` local suporta.
 - **F1** ou o botão **Ajuda** abre a tela de ajuda.
 
 ### Ferramentas de rede

@@ -184,6 +184,7 @@ function showForm(session) {
   form.mac.value = session?.mac ?? '';
   form.vpn.value = session?.vpn ?? '';
   form.legacyTls.checked = session?.legacyTls === true;
+  form.legacySsh.checked = session?.legacySsh === true;
   form.tags.value = (session?.tags ?? []).join(', ');
   $('btn-connect').disabled = !session;
   $('btn-external').disabled = !session;
@@ -212,6 +213,7 @@ function readForm() {
   if (form.mac.value.trim()) session.mac = form.mac.value.trim();
   if (form.vpn.value.trim()) session.vpn = form.vpn.value.trim();
   if (form.type.value === 'rdp' && form.legacyTls.checked) session.legacyTls = true;
+  if (form.type.value === 'ssh' && form.legacySsh.checked) session.legacySsh = true;
   if (tags.length) session.tags = tags;
   return session;
 }
@@ -773,14 +775,19 @@ function endRdp(tab, end) {
   });
 }
 
+/** Grava uma opção numa sessão (só nela) e devolve a sessão atualizada. */
+async function updateSession(session, patch) {
+  const key = keyOf(session);
+  const updated = { ...session, ...patch };
+  apply(await api.save(state.sessions.map((s) => (keyOf(s) === key ? updated : s))));
+  if (state.editing === key) showForm(updated);
+  return updated;
+}
+
 /** Grava "aceitar TLS antigo" na sessão (só nela) e reconecta. */
 async function allowLegacyTls(tab) {
-  const key = keyOf(tab.session);
-  const updated = { ...tab.session, legacyTls: true };
   try {
-    apply(await api.save(state.sessions.map((s) => (keyOf(s) === key ? updated : s))));
-    if (state.editing === key) showForm(updated);
-    tab.session = updated;
+    tab.session = await updateSession(tab.session, { legacyTls: true });
     await startRdp(tab);
   } catch (err) {
     rdpStatus(tab, 'Não foi possível gravar a sessão.', { error: cleanError(err) });
@@ -837,11 +844,46 @@ api.onRdpExit((id, code, end) => {
   if (tab?.kind === 'rdp' && tab.running) endRdp(tab, { ...end, code });
 });
 
-api.onTermData((id, data) => tabsById.get(id)?.term?.write(data));
+// O ssh recusou os algoritmos do servidor (equipamento antigo): a aba oferece aceitar os antigos.
+const SSH_NEGOTIATION_FAILED = /Unable to negotiate with .+?: no matching (key exchange method|host key type|cipher|MAC) found/;
+
+api.onTermData((id, data) => {
+  const tab = tabsById.get(id);
+  if (!tab?.term) return;
+  tab.term.write(data);
+  if (tab.spec?.type === 'ssh' && !tab.spec.session.legacySsh) tab.tail = ((tab.tail ?? '') + data).slice(-4000);
+});
 api.onTermExit((id, code) => {
   const tab = tabsById.get(id);
-  if (tab?.running) markEnded(tab, code);
+  if (!tab?.running) return;
+  markEnded(tab, code);
+  if (tab.spec?.type === 'ssh' && SSH_NEGOTIATION_FAILED.test(tab.tail ?? '')) offerLegacySsh(tab);
+  tab.tail = '';
 });
+
+/** Faixa na aba: o servidor só fala algoritmos antigos; um clique os permite nesta sessão. */
+function offerLegacySsh(tab) {
+  const text = document.createElement('span');
+  text.textContent = 'O servidor só oferece algoritmos antigos (SHA-1, ssh-rsa, CBC), que o SSH recusa por padrão. Comum em switches e equipamentos antigos.';
+  const allow = document.createElement('button');
+  allow.type = 'button';
+  allow.className = 'primary';
+  allow.textContent = 'Permitir algoritmos antigos nesta sessão e reconectar';
+  allow.addEventListener('click', async () => {
+    try {
+      const session = await updateSession(tab.spec.session, { legacySsh: true });
+      tab.spec = { ...tab.spec, session };
+      tab.open = openFor(tab.spec);
+      tab.notice.hidden = true;
+      tab.term.writeln('');
+      await startTab(tab);
+    } catch (err) {
+      tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`);
+    }
+  });
+  tab.notice.replaceChildren(text, allow);
+  tab.notice.hidden = false;
+}
 
 $('tab-editor').addEventListener('click', showEditor);
 $('terminals').hidden = true;
