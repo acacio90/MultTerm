@@ -308,6 +308,11 @@ function agentStatus(sshAdd: string): Promise<AgentStatus> {
   });
 }
 
+// Saindo do app: as janelas fecham sem devolver abas (as sessões são encerradas).
+let quitting = false;
+// Janelas destacadas que já devolveram as abas (ou ficaram vazias) e podem fechar de verdade.
+const closingForReal = new WeakSet<BrowserWindow>();
+
 // Janela principal (com a árvore de sessões); as demais são abas destacadas.
 let mainWindow: BrowserWindow | undefined;
 
@@ -342,8 +347,19 @@ async function createWindow(opts: { detached?: boolean; title?: string; near?: {
   });
   if (!opts.detached) mainWindow = win;
   win.on('closed', () => {
-    if (mainWindow === win) mainWindow = undefined;
+    if (mainWindow !== win) return;
+    mainWindow = undefined;
+    // A janela principal é o app: fechá-la encerra o MultTerm (e as janelas destacadas).
+    if (!quitting) app.quit();
   });
+  if (opts.detached) {
+    // Fechar a janela destacada devolve as abas à principal; só fechar a aba encerra a sessão.
+    win.on('close', (e) => {
+      if (quitting || closingForReal.has(win) || !mainWindow || mainWindow.isDestroyed() || win.webContents.isDestroyed()) return;
+      e.preventDefault();
+      win.webContents.send('window:return-tabs');
+    });
+  }
   const contents = win.webContents;
   contents.on('destroyed', () => {
     closeTerminalsOf(contents);
@@ -384,6 +400,16 @@ function offerTab(from: Electron.WebContents, id: number, meta: unknown, target:
 }
 
 function registerDetachIpc() {
+  app.on('before-quit', () => {
+    quitting = true;
+  });
+  // A janela destacada ficou sem abas (devolvidas ou fechadas): agora fecha.
+  ipcMain.on('window:close-now', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win || win === mainWindow) return;
+    closingForReal.add(win);
+    win.close();
+  });
   ipcMain.handle('term:detach', async (e, id: unknown, meta: unknown) => {
     if (!Number.isInteger(id)) throw new Error('aba inválida');
     const m = (typeof meta === 'object' && meta !== null ? meta : {}) as { title?: unknown; position?: { x?: unknown; y?: unknown } };
