@@ -1,7 +1,7 @@
 {
   "name": "multterm",
   "productName": "MultTerm",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Gerenciador de sessões SSH/RDP com terminal em abas",
   "author": "acacio90",
