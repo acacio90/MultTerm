@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.8.0] - 2026-10-18
+
 ### Adicionado
 
 - **RDP em todos os monitores**: no botão direito da sessão ou da aba RDP, **Abrir em todos os
@@ -219,7 +221,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.7.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.8.0...develop
+[0.8.0]: https://github.com/acacio90/MultTerm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/acacio90/MultTerm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/acacio90/MultTerm/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/acacio90/MultTerm/compare/v0.4.1...v0.5.0
