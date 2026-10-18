@@ -174,7 +174,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   const args = embeddedRdpArgs(session, { parent: String(container), width: view.width, height: view.height });
   const proc = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: false });
   proc.stdin?.on('error', () => {});
-  proc.stdin?.end(rdpStdin(session.user, credentials.password));
+  proc.stdin?.end(rdpStdin(credentials.password));
   const s: RdpSession = { owner, id: id as number, window: parent, container, proc, view, log: [] };
   sessions.set(key, s);
   follow(win, owner);

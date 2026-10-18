@@ -144,11 +144,11 @@ test('rdp numa aba: TLS antigo só quando a sessão permite', () => {
   assert.equal(legacy.filter((a) => a.startsWith('/tls:')).length, 1);
 });
 
-test('rdp numa aba: senha pela entrada padrão (domínio vazio quando não veio no usuário)', () => {
-  assert.equal(rdpStdin('EMPRESA\\ana', 's3nha'), 's3nha\n');
-  assert.equal(rdpStdin('ana', 's3nha'), '\ns3nha\n');
-  assert.equal(rdpStdin('ana@empresa.local', 's3nha'), '\ns3nha\n');
-  assert.equal(rdpStdin(undefined, ''), '\n\n');
+test('rdp numa aba: só a senha na entrada padrão, com ou sem domínio no usuário', () => {
+  // O FreeRDP lê a senha como a primeira linha (/from-stdin:force); uma linha a mais antes dela
+  // virava senha vazia nas sessões sem domínio (#60).
+  assert.equal(rdpStdin('s3nha'), 's3nha\n');
+  assert.equal(rdpStdin(''), '\n');
 });
 
 test('ssh: algoritmos antigos só quando a sessão permite, e só os que o ssh local conhece', () => {

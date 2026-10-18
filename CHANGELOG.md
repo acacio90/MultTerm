@@ -6,6 +6,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Corrigido
+
+- RDP: sessões cujo usuário não tem domínio (ex.: `pedro`) falhavam com "usuário ou senha
+  incorretos" mesmo com a senha certa — o cliente RDP recebia a senha vazia. (#60)
+
 ## [0.6.0] - 2026-10-15
 
 ### Adicionado
