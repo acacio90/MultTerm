@@ -1184,6 +1184,16 @@ function offerLegacySsh(tab) {
 }
 
 $('tab-editor').addEventListener('click', showEditor);
+// Expandir para todas as telas (botão no canto da barra de abas e Exibir → Expandir...).
+function renderSpan(spanned) {
+  const b = $('btn-span');
+  b.setAttribute('aria-pressed', String(spanned));
+  b.title = spanned ? 'Voltar ao tamanho anterior' : 'Expandir para todas as telas';
+}
+$('btn-span').addEventListener('click', async () => renderSpan(await api.windowSpanToggle()));
+api.onWindowSpan(renderSpan);
+api.windowSpanState().then(renderSpan, () => {});
+
 $('layout-picker').addEventListener('click', (e) => {
   const next = e.target.closest('[data-layout]')?.dataset.layout;
   if (next) setLayout(next);
@@ -1823,6 +1833,7 @@ const MENU_COMMANDS = {
   delete: () => withSession((s) => deleteSessions([s])),
   'wol-tool': () => openToolTab('wol'),
   'toggle-sidebar': () => document.body.classList.toggle('no-sidebar'),
+  'span-displays': () => api.windowSpanToggle(),
   help: openHelp,
   'check-updates': async () => {
     await openHelp();

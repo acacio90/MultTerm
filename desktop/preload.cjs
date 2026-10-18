@@ -39,6 +39,10 @@ contextBridge.exposeInMainWorld('multterm', {
   onRdpReady: (cb) => ipcRenderer.on('rdp:ready', (_e, id) => cb(id)),
   onRdpExit: (cb) => ipcRenderer.on('rdp:exit', (_e, id, code, end) => cb(id, code, end)),
   // Comandos do menu do topo (Arquivo, Sessão, Ferramentas...).
+  // Expandir a janela para todas as telas (e voltar).
+  windowSpanToggle: () => ipcRenderer.invoke('window:span-toggle'),
+  windowSpanState: () => ipcRenderer.invoke('window:span-state'),
+  onWindowSpan: (cb) => ipcRenderer.on('window:span-changed', (_e, spanned) => cb(spanned)),
   onMenuCommand: (cb) => {
     menuCb = cb;
     for (const command of menuQueue.splice(0)) cb(command);

@@ -89,6 +89,9 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
   para a esquerda/direita/início/fim**) ou **Ctrl+Shift+PageUp/PageDown** na aba ativa.
 - **Arrastar uma aba de terminal para fora da barra de abas** a destaca numa janela própria, aberta
   onde a aba foi solta (soltar perto da barra não destaca).
+- **Expandir para todas as telas** (ícone de dois monitores no canto da barra de abas, ou Exibir →
+  Expandir para todas as telas): a janela cobre a área útil de todos os monitores juntos; clicar de
+  novo volta ao tamanho de antes. Se um monitor for conectado ou desconectado, a janela volta sozinha.
 - **Layout da área de abas** (ícones no canto direito da barra de abas): uma aba, duas lado a
   lado ou duas empilhadas. Na tela dividida, clicar numa aba a coloca na metade em foco (com
   borda destacada) e clicar dentro de uma metade passa o foco para ela. O layout fica lembrado.
