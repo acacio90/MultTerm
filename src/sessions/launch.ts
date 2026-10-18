@@ -202,6 +202,9 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
     '/dynamic-resolution',
     '+clipboard',
     '/from-stdin:force',
+    // Registra a abertura dos canais dinâmicos: o MultTerm sabe se o servidor tem o ajuste de
+    // resolução (canal Display Control) ou se precisa reconectar ao mudar o tamanho.
+    '/log-filters:com.freerdp.channels.drdynvc.client:DEBUG',
     `/title:${s.name}`,
   );
   // Só quando o usuário permitiu nesta sessão: servidores que falam apenas TLS 1.0. O FreeRDP
@@ -224,6 +227,9 @@ export function rdpStdin(password: string): string {
 export function parseSshQuery(stdout: string): string[] {
   return stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
+
+/** Linha do registro do FreeRDP que indica o canal de ajuste de resolução (Display Control). */
+export const RDP_DISPLAY_CONTROL = /Microsoft::Windows::RDS::DisplayControl/;
 
 // Códigos de saída do wfreerdp = último erro do FreeRDP: (classe << 16) | tipo.
 // Classe 1: o servidor encerrou (ERRINFO_*); classe 2: falha ao conectar (ERRCONNECT_*).

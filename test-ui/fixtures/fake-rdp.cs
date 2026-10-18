@@ -98,6 +98,9 @@ static class FakeRdp
             case 0x0202: // WM_LBUTTONUP
                 ReleaseCapture();
                 return IntPtr.Zero;
+            case 0x0232: // WM_EXITSIZEMOVE: o wfreerdp pede a resolução nova ao servidor
+                Log("exitsizemove");
+                return IntPtr.Zero;
         }
         return DefWindowProc(hwnd, msg, w, l);
     }
@@ -155,6 +158,12 @@ static class FakeRdp
         // Pior caso: a janela do cliente chega a ter o foco; ao perdê-lo, a entrada fica suspensa
         // até um WM_SETFOCUS (o contêiner do MultTerm precisa devolver isso).
         SetFocus(hwnd);
+        // Servidor moderno: o canal de ajuste de resolução abre logo depois de conectar.
+        if (Environment.GetEnvironmentVariable("FAKE_RDP_DISP") == "1")
+        {
+            Console.Out.WriteLine("[DEBUG][com.freerdp.channels.drdynvc.client] - listener Microsoft::Windows::RDS::DisplayControl created new channel 3");
+            Console.Out.Flush();
+        }
         Log("hwnd " + hwnd.ToInt64());
         Msg msg;
         while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0) { TranslateMessage(ref msg); DispatchMessage(ref msg); }
