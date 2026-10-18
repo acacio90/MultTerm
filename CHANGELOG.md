@@ -6,6 +6,20 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- **RDP em todos os monitores**: no botão direito da sessão ou da aba RDP, **Abrir em todos os
+  monitores** abre o cliente do Windows em tela cheia nos monitores todos, e o Windows remoto
+  enxerga cada um. A opção *Abrir sempre em todos os monitores* da sessão faz o duplo clique abrir
+  assim. (#65)
+- **Enviar Ctrl+Alt+Del** no botão direito da aba RDP: pelo teclado, a combinação fica na máquina
+  local. (#69)
+
+### Removido
+
+- **Expandir para todas as telas** (#62): esticava só a janela do MultTerm, e a sessão remota
+  continuava vendo um monitor só. Use **Abrir em todos os monitores** na sessão RDP.
+
 ### Corrigido
 
 - RDP numa aba: a sessão ficava 26 px acima da área da aba, cobrindo a barra de abas (o menu do

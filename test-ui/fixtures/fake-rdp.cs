@@ -107,7 +107,7 @@ static class FakeRdp
 
     static IntPtr Hook(int code, IntPtr w, IntPtr l)
     {
-        if (code == 0 && (int)w == 0x100) // WM_KEYDOWN
+        if (code == 0 && ((int)w == 0x100 || (int)w == 0x104)) // WM_KEYDOWN, WM_SYSKEYDOWN (com Alt)
         {
             int vk = Marshal.ReadInt32(l);
             if (!ParentFocused()) Log("tecla-ignorada-foco " + vk);

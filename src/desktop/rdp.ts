@@ -34,7 +34,7 @@ const MA_ACTIVATE = 1;
 const HOST_CLASS = 'MultTermRdpHost';
 
 type Fn = (...args: unknown[]) => unknown;
-let user32: Record<'CreateWindowExW' | 'DestroyWindow' | 'SetWindowPos' | 'ShowWindow' | 'GetWindow' | 'PostMessageW' | 'IsWindow', Fn> | undefined;
+let user32: Record<'CreateWindowExW' | 'DestroyWindow' | 'SetWindowPos' | 'ShowWindow' | 'GetWindow' | 'PostMessageW' | 'IsWindow' | 'SetFocus' | 'keybd_event', Fn> | undefined;
 // Mantém o procedimento de janela registrado vivo (o Windows o chama enquanto houver contêiner).
 let hostProc: unknown;
 
@@ -98,6 +98,8 @@ function win32() {
     GetWindow: u.func('__stdcall', 'GetWindow', 'intptr', ['intptr', 'uint32']),
     PostMessageW: u.func('__stdcall', 'PostMessageW', 'bool', ['intptr', 'uint32', 'uintptr', 'intptr']),
     IsWindow: u.func('__stdcall', 'IsWindow', 'bool', ['intptr']),
+    SetFocus: u.func('__stdcall', 'SetFocus', 'intptr', ['intptr']),
+    keybd_event: u.func('__stdcall', 'keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr']),
   };
   return user32;
 }
@@ -297,6 +299,22 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   proc.on('exit', (code) => finish(code));
 }
 
+/**
+ * Ctrl+Alt+Del para a sessão remota. Pelo teclado, a combinação vai para o Windows local (que não
+ * a repassa); simulada, o Windows local a ignora e o gancho de teclado do wfreerdp a envia ao
+ * servidor, desde que o contêiner esteja com o foco.
+ */
+function sendCtrlAltDel(s: RdpSession) {
+  if (!s.child) return;
+  const w = win32();
+  w.SetFocus(s.container);
+  const KEYUP = 0x0002;
+  const EXTENDED = 0x0001;
+  const keys: [number, number, number][] = [[0x11, 0x1d, 0], [0x12, 0x38, 0], [0x2e, 0x53, EXTENDED]]; // Ctrl, Alt, Delete
+  for (const [vk, scan, flags] of keys) w.keybd_event(vk, scan, flags, 0);
+  for (const [vk, scan, flags] of keys.reverse()) w.keybd_event(vk, scan, flags | KEYUP, 0);
+}
+
 export function registerRdpIpc(): void {
   ipcMain.handle('rdp:open', (e, id: unknown, session: unknown, view: unknown, credentials: unknown) => open(e.sender, id, session, view, credentials));
   ipcMain.on('rdp:view', (e, id: unknown, view: unknown) => {
@@ -307,6 +325,10 @@ export function registerRdpIpc(): void {
   });
   ipcMain.handle('rdp:close', (e, id: unknown) => {
     if (Number.isInteger(id)) close(keyOf(e.sender, id as number));
+  });
+  ipcMain.handle('rdp:ctrl-alt-del', (e, id: unknown) => {
+    const s = Number.isInteger(id) ? sessions.get(keyOf(e.sender, id as number)) : undefined;
+    if (s) sendCtrlAltDel(s);
   });
   ipcMain.handle('rdp:available', () => process.platform === 'win32' && existsSync(freerdpPath()));
   app.on('before-quit', () => {

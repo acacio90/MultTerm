@@ -125,4 +125,13 @@ test('cliente RDP encaixado: posição, clique e teclado nativos, senha', async 
   w.key(0x42, 0, 0, 0);
   w.key(0x42, 0, 2, 0);
   await expect.poll(lines, { timeout: 5000 }).toContain('tecla 66');
+
+  // Ctrl+Alt+Del pelo botão direito na aba: as três teclas chegam à sessão (o gancho de baixo
+  // nível recebe Ctrl e Alt como as teclas da esquerda, VK_LCONTROL e VK_LMENU).
+  await page.locator('#tabs .tab', { hasText: 'SRV' }).click({ button: 'right' });
+  await page.locator('.tab-menu button', { hasText: 'Enviar Ctrl+Alt+Del' }).click();
+  await expect.poll(async () => {
+    const l = await lines();
+    return [/^tecla (17|162)$/, /^tecla (18|164)$/, /^tecla 46$/].filter((k) => l.some((x) => k.test(x))).length;
+  }, { timeout: 5000 }).toBe(3);
 });

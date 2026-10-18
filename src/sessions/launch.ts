@@ -12,6 +12,8 @@ export interface LaunchEnv {
   systemRoot?: string;
   /** Algoritmos que o ssh local suporta ("ssh -Q"); sem isso, pede todos os antigos da lista. */
   sshAlgorithms?: SshAlgorithms;
+  /** Cliente RDP do Windows (padrão mstsc.exe; os testes trocam). */
+  mstsc?: string;
 }
 
 export interface SshAlgorithms {
@@ -117,9 +119,15 @@ export function sshArgs(
   return { args, warnings };
 }
 
-export function rdpFileContent(s: Session): string {
+export interface RdpFileOptions {
+  /** Tela cheia em todos os monitores: o Windows remoto enxerga cada monitor. */
+  multimon?: boolean;
+}
+
+export function rdpFileContent(s: Session, opts: RdpFileOptions = {}): string {
   const lines = [`full address:s:${s.host}:${effectivePort(s)}`, 'prompt for credentials:i:1'];
   if (s.user) lines.push(`username:s:${s.user}`);
+  if (opts.multimon) lines.push('screen mode id:i:2', 'use multimon:i:1');
   return lines.join('\r\n') + '\r\n';
 }
 
@@ -127,14 +135,16 @@ function safeFileName(name: string): string {
   return name.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'sessao';
 }
 
-export function planLaunch(s: Session, env: LaunchEnv): LaunchPlan {
+export function planLaunch(s: Session, env: LaunchEnv, opts: RdpFileOptions = {}): LaunchPlan {
   if (s.type === 'rdp') {
+    const multimon = opts.multimon ?? s.multimon === true;
     if (env.platform === 'win32') {
       const path = join(env.tmp, 'multterm-rdp', `${safeFileName(s.name)}.rdp`);
-      return { command: 'mstsc.exe', args: [path], file: { path, content: rdpFileContent(s) }, warnings: [] };
+      return { command: env.mstsc ?? 'mstsc.exe', args: [path], file: { path, content: rdpFileContent(s, { multimon }) }, warnings: [] };
     }
     const args = [`/v:${s.host}:${effectivePort(s)}`];
     if (s.user) args.push(`/u:${s.user}`);
+    if (multimon) args.push('/f', '/multimon');
     return { command: 'xfreerdp', args, warnings: [] };
   }
 
