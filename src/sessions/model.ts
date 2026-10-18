@@ -21,6 +21,8 @@ export interface Session {
   vpn?: string;
   /** RDP: aceita TLS 1.0/cifras antigas (servidores Windows antigos). Escolha explícita por sessão. */
   legacyTls?: boolean;
+  /** RDP: conectar abre o cliente do Windows em tela cheia usando todos os monitores. */
+  multimon?: boolean;
   /** SSH: aceita algoritmos antigos (troca de chaves SHA-1, ssh-rsa, CBC). Escolha explícita por sessão. */
   legacySsh?: boolean;
   tags?: string[];
@@ -127,7 +129,7 @@ export function validateSession(raw: unknown, where: string): Session {
   if (macText !== undefined && !mac) throw new SessionError(`${where}: "mac" inválido (${macText})`);
   const vpn = optionalString(obj, 'vpn', where)?.trim() || undefined;
   if (vpn !== undefined && !isSafeSiteName(vpn)) throw new SessionError(`${where}: "vpn" inválido (${vpn})`);
-  for (const flag of ['legacyTls', 'legacySsh']) {
+  for (const flag of ['legacyTls', 'legacySsh', 'multimon']) {
     if (obj[flag] !== undefined && obj[flag] !== null && typeof obj[flag] !== 'boolean') {
       throw new SessionError(`${where}: "${flag}" deve ser true ou false`);
     }
@@ -140,6 +142,7 @@ export function validateSession(raw: unknown, where: string): Session {
   if (vpn !== undefined) session.vpn = vpn;
   if (obj.legacyTls === true && session.type === 'rdp') session.legacyTls = true;
   if (obj.legacySsh === true && session.type === 'ssh') session.legacySsh = true;
+  if (obj.multimon === true && session.type === 'rdp') session.multimon = true;
   if (tags !== undefined) session.tags = tags;
   return session;
 }

@@ -89,9 +89,6 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
   para a esquerda/direita/início/fim**) ou **Ctrl+Shift+PageUp/PageDown** na aba ativa.
 - **Arrastar uma aba de terminal para fora da barra de abas** a destaca numa janela própria, aberta
   onde a aba foi solta (soltar perto da barra não destaca).
-- **Expandir para todas as telas** (ícone de dois monitores no canto da barra de abas, ou Exibir →
-  Expandir para todas as telas): a janela cobre a área útil de todos os monitores juntos; clicar de
-  novo volta ao tamanho de antes. Se um monitor for conectado ou desconectado, a janela volta sozinha.
 - **Layout da área de abas** (ícones no canto direito da barra de abas): uma aba, duas lado a
   lado ou duas empilhadas. Na tela dividida, clicar numa aba a coloca na metade em foco (com
   borda destacada) e clicar dentro de uma metade passa o foco para ela. O layout fica lembrado.
@@ -309,6 +306,14 @@ que vem com o instalador encaixado na área da aba:
   oferece **Permitir TLS antigo nesta sessão e reconectar**, que vale só para aquela sessão
   (opção *Aceitar TLS antigo* no formulário, gravada como `legacyTls: true`).
 - **Janela externa (cliente do Windows)** no botão direito abre no `mstsc`, como antes.
+- **Abrir em todos os monitores** (botão direito na sessão ou na aba RDP): abre o cliente do
+  Windows em tela cheia usando todos os monitores, e o Windows remoto enxerga cada monitor
+  separado. Se a sessão estava numa aba, a aba fecha (a conexão nova assume a sessão remota). Com a
+  opção *Abrir sempre em todos os monitores* no formulário (`multimon: true`), o duplo clique já
+  abre assim.
+- **Enviar Ctrl+Alt+Del** (botão direito na aba RDP): pelo teclado, essa combinação fica no
+  Windows local; pelo menu, vai para a sessão remota (bloquear, trocar a senha, gerenciador de
+  tarefas).
 - Abas RDP não podem ir para uma janela separada.
 
 O `wfreerdp.exe` é compilado pelo workflow `.github/workflows/freerdp.yml` a partir do

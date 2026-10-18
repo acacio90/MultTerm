@@ -91,6 +91,17 @@ test('sessionsInFolder e exportFileName', () => {
   assert.equal(exportFileName('Servidores/Produção', day), 'multterm-Servidores-Produção-2026-10-13.yaml');
 });
 
+test('multimon: só em sessões RDP, gravado só quando ligado', () => {
+  const [rdp, ssh] = validateSessions([
+    { name: 'AD', type: 'rdp', host: '10.0.0.9', multimon: true },
+    { name: 'web', type: 'ssh', host: '10.0.0.1', multimon: true },
+  ], 'teste');
+  assert.equal(rdp.multimon, true);
+  assert.equal(ssh.multimon, undefined);
+  assert.throws(() => validateSessions([{ name: 'AD', type: 'rdp', host: '10.0.0.9', multimon: 'sim' }], 'teste'), /multimon/);
+  assert.equal(serializeSessions([rdp, ssh]).match(/multimon: true/g)?.length, 1);
+});
+
 test('legacyTls: só em sessões RDP, gravado só quando ligado', () => {
   const [rdp, ssh] = validateSessions([
     { name: 'AD', type: 'rdp', host: '10.0.0.9', legacyTls: true },

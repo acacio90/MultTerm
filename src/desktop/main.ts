@@ -24,7 +24,6 @@ import { exportServerConfigs, importServerConfigs, registerServersIpc } from './
 import { agentLaunch, exportAgentPrefs, importAgentPrefs, registerAgentIpc } from './agent.ts';
 import { closeRdpOf, registerRdpIpc } from './rdp.ts';
 import { buildAppMenu } from './menu.ts';
-import { registerSpanIpc } from './window-span.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
@@ -200,8 +199,10 @@ function registerIpc(): void {
     return { ...snap, added: added.length, skipped: skipped.length, sites, servers };
   });
 
-  ipcMain.handle('session:connect', async (_e, raw: unknown) => {
+  ipcMain.handle('session:connect', async (_e, raw: unknown, rawOpts: unknown) => {
     const [session] = validateSessions([raw], 'conexão');
+    const o = (typeof rawOpts === 'object' && rawOpts !== null ? rawOpts : {}) as Record<string, unknown>;
+    const opts = typeof o.multimon === 'boolean' ? { multimon: o.multimon } : {};
     const env = {
       platform: process.platform,
       windowsTerminal: hasWindowsTerminal(),
@@ -210,8 +211,9 @@ function registerIpc(): void {
       fileExists: existsSync,
       systemRoot: process.env.SystemRoot,
       sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
+      mstsc: process.env.MULTTERM_MSTSC || undefined,
     };
-    let plan = planLaunch(session, env);
+    let plan = planLaunch(session, env, opts);
     if (plan.file) {
       await mkdir(dirname(plan.file.path), { recursive: true });
       await writeFile(plan.file.path, plan.file.content, 'utf8');
@@ -453,7 +455,6 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerAgentIpc();
   registerDetachIpc();
   registerRdpIpc();
-  registerSpanIpc();
   Menu.setApplicationMenu(buildAppMenu({
     // Os comandos agem na janela principal (abre de novo se só restaram janelas destacadas).
     send: async (command) => {

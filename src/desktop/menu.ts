@@ -14,7 +14,7 @@ export type MenuCommand =
   | 'local-powershell' | 'local-cmd' | 'local-wsl'
   | 'ping' | 'traceroute' | 'dns' | 'snmp' | 'portscan' | 'netscan' | 'localports' | 'capture'
   | 'wol-tool' | 'servers' | 'vpn' | 'agent'
-  | 'toggle-sidebar' | 'span-displays' | 'help' | 'check-updates';
+  | 'toggle-sidebar' | 'help' | 'check-updates';
 
 export interface MenuActions {
   send: (command: MenuCommand) => void;
@@ -108,7 +108,6 @@ export function buildAppMenu({ send, openProject, about }: MenuActions): Menu {
         { role: 'resetZoom', label: 'Zoom normal' },
         sep,
         { role: 'togglefullscreen', label: 'Tela cheia' },
-        cmd('span-displays', 'Expandir para todas as telas'),
         ...(app.isPackaged ? [] : [sep, { role: 'toggleDevTools', label: 'Ferramentas do desenvolvedor' } as MenuItemConstructorOptions]),
       ],
     },

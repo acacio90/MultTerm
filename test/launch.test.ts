@@ -61,6 +61,18 @@ test('rdp no windows: grava .rdp e abre com mstsc', () => {
   assert.equal(plan.file?.content, 'full address:s:10.0.0.9:3389\r\nprompt for credentials:i:1\r\nusername:s:admin\r\n');
 });
 
+test('rdp em todos os monitores: tela cheia com multimon (pela opção da sessão ou pedido na hora)', () => {
+  const rdp = { name: 'AD', folder: '', type: 'rdp' as const, host: '10.0.0.9' };
+  const multi = 'full address:s:10.0.0.9:3389\r\nprompt for credentials:i:1\r\nscreen mode id:i:2\r\nuse multimon:i:1\r\n';
+  assert.equal(planLaunch(rdp, WIN, { multimon: true }).file?.content, multi);
+  assert.equal(planLaunch({ ...rdp, multimon: true }, WIN).file?.content, multi);
+  // "Janela externa" pede sem multimon mesmo com a opção ligada.
+  assert.doesNotMatch(planLaunch({ ...rdp, multimon: true }, WIN, { multimon: false }).file!.content, /multimon/);
+  assert.equal(planLaunch(rdp, { ...WIN, mstsc: 'C:\\teste\\mstsc.exe' }).command, 'C:\\teste\\mstsc.exe');
+  const linux = planLaunch(rdp, { ...WIN, platform: 'linux', tmp: '/tmp' }, { multimon: true });
+  assert.deepEqual(linux.args, ['/v:10.0.0.9:3389', '/f', '/multimon']);
+});
+
 test('rdpFileContent respeita porta customizada', () => {
   assert.match(rdpFileContent({ name: 'x', folder: '', type: 'rdp', host: 'h', port: 3390 }), /^full address:s:h:3390\r\n/);
 });

@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('multterm', {
   exportSessions: (folder) => ipcRenderer.invoke('sessions:export', folder),
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   importBackup: () => ipcRenderer.invoke('backup:import'),
-  connect: (session) => ipcRenderer.invoke('session:connect', session),
+  connect: (session, opts) => ipcRenderer.invoke('session:connect', session, opts),
 
   termOpen: (id, session, cols, rows) => ipcRenderer.invoke('term:open', id, session, cols, rows),
   termOpenLocal: (id, kind, cols, rows) => ipcRenderer.invoke('term:open-local', id, kind, cols, rows),
@@ -37,13 +37,11 @@ contextBridge.exposeInMainWorld('multterm', {
   rdpView: (id, view) => ipcRenderer.send('rdp:view', id, view),
   rdpClose: (id) => ipcRenderer.invoke('rdp:close', id),
   onRdpReady: (cb) => ipcRenderer.on('rdp:ready', (_e, id) => cb(id)),
+  rdpCtrlAltDel: (id) => ipcRenderer.invoke('rdp:ctrl-alt-del', id),
   onRdpReconnectSize: (cb) => ipcRenderer.on('rdp:reconnect-size', (_e, id) => cb(id)),
   onRdpExit: (cb) => ipcRenderer.on('rdp:exit', (_e, id, code, end) => cb(id, code, end)),
   // Comandos do menu do topo (Arquivo, Sessão, Ferramentas...).
   // Expandir a janela para todas as telas (e voltar).
-  windowSpanToggle: () => ipcRenderer.invoke('window:span-toggle'),
-  windowSpanState: () => ipcRenderer.invoke('window:span-state'),
-  onWindowSpan: (cb) => ipcRenderer.on('window:span-changed', (_e, spanned) => cb(spanned)),
   onMenuCommand: (cb) => {
     menuCb = cb;
     for (const command of menuQueue.splice(0)) cb(command);

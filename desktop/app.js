@@ -185,6 +185,7 @@ function showForm(session) {
   form.vpn.value = session?.vpn ?? '';
   form.legacyTls.checked = session?.legacyTls === true;
   form.legacySsh.checked = session?.legacySsh === true;
+  form.multimon.checked = session?.multimon === true;
   form.tags.value = (session?.tags ?? []).join(', ');
   $('btn-connect').disabled = !session;
   $('btn-external').disabled = !session;
@@ -214,6 +215,7 @@ function readForm() {
   if (form.vpn.value.trim()) session.vpn = form.vpn.value.trim();
   if (form.type.value === 'rdp' && form.legacyTls.checked) session.legacyTls = true;
   if (form.type.value === 'ssh' && form.legacySsh.checked) session.legacySsh = true;
+  if (form.type.value === 'rdp' && form.multimon.checked) session.multimon = true;
   if (tags.length) session.tags = tags;
   return session;
 }
@@ -365,14 +367,17 @@ async function remove() {
   if (session) await deleteSessions([session]);
 }
 
-/** SSH abre numa aba de terminal embutido; RDP (ou "Janela externa") abre fora do app. */
-async function connect(session, { external = false } = {}) {
+/**
+ * SSH abre numa aba de terminal embutido; RDP numa aba, ou fora do app ("Janela externa" e
+ * "Abrir em todos os monitores", que usam o cliente do Windows).
+ */
+async function connect(session, { external = false, multimon = session.type === 'rdp' && session.multimon === true } = {}) {
   // Sessão atrás de uma VPN: conecta a VPN primeiro e depois abre a sessão.
   if (session.vpn && !(vpnStatus?.site === session.vpn && vpnStatus.state === 'connected')) {
     openToolTab('vpn', {
       vpnSite: session.vpn,
       vpnNotice: `A sessão "${session.name}" usa a VPN "${session.vpn}". Ela abre assim que a VPN conectar.`,
-      vpnThen: () => connect(session, { external }),
+      vpnThen: () => connect(session, { external, multimon }),
     });
     return;
   }
@@ -380,14 +385,18 @@ async function connect(session, { external = false } = {}) {
     await openSessionTab(session);
     return;
   }
-  if (session.type === 'rdp' && !external && await api.rdpAvailable()) {
+  if (multimon) {
+    // A conexão nova assumiria a sessão remota da aba: fecha a aba antes.
+    for (const tab of tabsOfSession(session)) if (tab.kind === 'rdp') closeTab(tab);
+  }
+  if (session.type === 'rdp' && !external && !multimon && await api.rdpAvailable()) {
     await openRdpTab(session);
     return;
   }
   showEditor();
   clearMessages();
   try {
-    const { warnings } = await api.connect(session);
+    const { warnings } = await api.connect(session, session.type === 'rdp' ? { multimon } : undefined);
     message(`Conectando a ${session.name}…`);
     for (const w of warnings) message(w, 'warn');
   } catch (err) {
@@ -886,6 +895,14 @@ function openTabMenu(e, tab) {
       ? item('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
       : item('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))));
   }
+  if (tab.kind === 'rdp') {
+    tabMenu.append(
+      // Pelo teclado, Ctrl+Alt+Del fica no Windows local.
+      Object.assign(item('Enviar Ctrl+Alt+Del', () => sendCtrlAltDel(tab)), { disabled: !tab.running }),
+      item('Abrir em todos os monitores', () => connect(tab.session, { multimon: true })),
+      document.createElement('hr'),
+    );
+  }
   tabMenu.append(item('Fechar aba', () => closeTab(tab)));
   tabMenu.style.left = `${e.clientX}px`;
   tabMenu.style.top = `${e.clientY}px`;
@@ -1068,7 +1085,7 @@ function endRdp(tab, end) {
     actions: [
       ...(tlsFailed ? [['Permitir TLS antigo nesta sessão e reconectar', () => allowLegacyTls(tab), true]] : []),
       ['Reconectar', () => startRdp(tab), !tlsFailed],
-      ['Abrir no cliente do Windows', () => connect(tab.session, { external: true })],
+      ['Abrir no cliente do Windows', () => connect(tab.session, { external: true, multimon: false })],
     ],
   });
 }
@@ -1126,6 +1143,14 @@ async function openRdpTab(session) {
   showTab(tab);
   await startRdp(tab);
   return tab;
+}
+
+/** Envia Ctrl+Alt+Del à sessão depois que o menu fecha e a sessão volta a aparecer. */
+function sendCtrlAltDel(tab) {
+  tab.sync();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (tab.running) void api.rdpCtrlAltDel(tab.id);
+  }));
 }
 
 const rdpTabs = () => [...tabsById.values()].filter((t) => t.kind === 'rdp');
@@ -1192,15 +1217,6 @@ function offerLegacySsh(tab) {
 }
 
 $('tab-editor').addEventListener('click', showEditor);
-// Expandir para todas as telas (botão no canto da barra de abas e Exibir → Expandir...).
-function renderSpan(spanned) {
-  const b = $('btn-span');
-  b.setAttribute('aria-pressed', String(spanned));
-  b.title = spanned ? 'Voltar ao tamanho anterior' : 'Expandir para todas as telas';
-}
-$('btn-span').addEventListener('click', async () => renderSpan(await api.windowSpanToggle()));
-api.onWindowSpan(renderSpan);
-api.windowSpanState().then(renderSpan, () => {});
 
 $('layout-picker').addEventListener('click', (e) => {
   const next = e.target.closest('[data-layout]')?.dataset.layout;
@@ -1626,7 +1642,8 @@ function openSessionMenu(e, session) {
   clearMulti();
   const items = [
     ['connect', 'Conectar', () => connect(session)],
-    ['external', session.type === 'rdp' ? 'Janela externa (cliente do Windows)' : 'Janela externa', () => connect(session, { external: true })],
+    ['external', session.type === 'rdp' ? 'Janela externa (cliente do Windows)' : 'Janela externa', () => connect(session, { external: true, multimon: false })],
+    ...(session.type === 'rdp' ? [['multimon', 'Abrir em todos os monitores', () => connect(session, { multimon: true })]] : []),
     ...(session.mac ? [['wol', 'Ligar (Wake-on-LAN)', () => wakeSession(session)]] : []),
     ['ping', 'Ping…', () => openDiagDialog('ping', session.host)],
     ['traceroute', 'Traceroute…', () => openDiagDialog('traceroute', session.host)],
@@ -1830,7 +1847,7 @@ const MENU_COMMANDS = {
   'export-vpn': exportVpnSites,
   'export-backup': exportBackup,
   connect: () => withSession((s) => connect(s)),
-  external: () => withSession((s) => connect(s, { external: true })),
+  external: () => withSession((s) => connect(s, { external: true, multimon: false })),
   wol: () => withSession((s) => {
     if (s.mac) return wakeSession(s);
     showEditor();
@@ -1841,7 +1858,6 @@ const MENU_COMMANDS = {
   delete: () => withSession((s) => deleteSessions([s])),
   'wol-tool': () => openToolTab('wol'),
   'toggle-sidebar': () => document.body.classList.toggle('no-sidebar'),
-  'span-displays': () => api.windowSpanToggle(),
   help: openHelp,
   'check-updates': async () => {
     await openHelp();
