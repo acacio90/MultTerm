@@ -212,12 +212,12 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
 }
 
 /**
- * O que escrever na entrada padrão do FreeRDP (/from-stdin:force): ele pergunta, em ordem, o
- * domínio (só se não veio em /d:, isto é, usuário sem "DOMINIO\") e a senha.
+ * O que escrever na entrada padrão do FreeRDP (/from-stdin:force): só a senha, numa linha. Com o
+ * ":force", ele lê a senha ao interpretar a linha de comando, como a primeira linha da entrada,
+ * sem perguntar o domínio (usuário sem "DOMINIO\" segue sem domínio, como no cliente do Windows).
  */
-export function rdpStdin(user: string | undefined, password: string): string {
-  const hasDomain = !!user && user.indexOf('\\') > 0;
-  return `${hasDomain ? '' : '\n'}${password}\n`;
+export function rdpStdin(password: string): string {
+  return `${password}\n`;
 }
 
 /** "ssh -Q <tipo>": uma linha por algoritmo. */
