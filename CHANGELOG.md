@@ -6,6 +6,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Expandir para todas as telas**: botão no canto da barra de abas (e em Exibir) que estica a
+  janela sobre todos os monitores e, no segundo clique, volta ao tamanho anterior. (#62)
+
 ### Corrigido
 
 - RDP: sessões cujo usuário não tem domínio (ex.: `pedro`) falhavam com "usuário ou senha

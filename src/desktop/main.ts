@@ -24,6 +24,7 @@ import { exportServerConfigs, importServerConfigs, registerServersIpc } from './
 import { agentLaunch, exportAgentPrefs, importAgentPrefs, registerAgentIpc } from './agent.ts';
 import { closeRdpOf, registerRdpIpc } from './rdp.ts';
 import { buildAppMenu } from './menu.ts';
+import { registerSpanIpc } from './window-span.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
@@ -452,6 +453,7 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerAgentIpc();
   registerDetachIpc();
   registerRdpIpc();
+  registerSpanIpc();
   Menu.setApplicationMenu(buildAppMenu({
     // Os comandos agem na janela principal (abre de novo se só restaram janelas destacadas).
     send: async (command) => {
