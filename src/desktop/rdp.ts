@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { embeddedRdpArgs, rdpExitMessage, rdpStdin } from '../sessions/launch.ts';
+import { embeddedRdpArgs, RDP_DISPLAY_CONTROL, rdpExitMessage, rdpStdin } from '../sessions/launch.ts';
 import { validateSessions } from '../sessions/store.ts';
 
 /*
@@ -124,6 +124,12 @@ interface RdpSession {
   poll?: NodeJS.Timeout;
   resizeTimer?: NodeJS.Timeout;
   log: string[];
+  /** Resolução pedida na conexão. */
+  size: { width: number; height: number };
+  /** O servidor abriu o canal de ajuste de resolução (Display Control). */
+  dynamic: boolean;
+  readyAt?: number;
+  reconnectTimer?: NodeJS.Timeout;
 }
 
 const sessions = new Map<string, RdpSession>();
@@ -158,6 +164,27 @@ function place(s: RdpSession) {
   s.resizeTimer = setTimeout(() => {
     if (s.child) w.PostMessageW(s.child, WM_EXITSIZEMOVE, 0, 0);
   }, 300);
+  scheduleReconnect(s);
+}
+
+/**
+ * Servidor sem o ajuste de resolução (Windows anterior ao 2012 R2/8.1): quando a aba muda de
+ * tamanho e para de mudar, a interface reconecta na resolução nova (como o mstsc faz).
+ */
+function scheduleReconnect(s: RdpSession) {
+  clearTimeout(s.reconnectTimer);
+  const { width, height } = s.view;
+  const changed = Math.abs(width - s.size.width) > 16 || Math.abs(height - s.size.height) > 16;
+  if (!changed || !s.view.visible) return;
+  s.reconnectTimer = setTimeout(() => {
+    if (sessions.get(keyOf(s.owner, s.id)) !== s || s.dynamic) return;
+    // O canal abre logo depois de conectar: espera um pouco antes de concluir que não existe.
+    if (!s.readyAt || Date.now() - s.readyAt < 5000) {
+      scheduleReconnect(s);
+      return;
+    }
+    if (!s.owner.isDestroyed()) s.owner.send('rdp:reconnect-size', s.id);
+  }, 1500);
 }
 
 function close(key: string) {
@@ -166,6 +193,7 @@ function close(key: string) {
   sessions.delete(key);
   clearInterval(s.poll);
   clearTimeout(s.resizeTimer);
+  clearTimeout(s.reconnectTimer);
   if (s.proc.exitCode === null) s.proc.kill();
   const w = win32();
   if (w.IsWindow(s.container)) w.DestroyWindow(s.container);
@@ -227,14 +255,17 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   const proc = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: false });
   proc.stdin?.on('error', () => {});
   proc.stdin?.end(rdpStdin(credentials.password));
-  const s: RdpSession = { owner, id: id as number, container, proc, view, log: [] };
+  const size = { width: Math.max(200, Math.round(view.width)), height: Math.max(200, Math.round(view.height)) };
+  const s: RdpSession = { owner, id: id as number, container, proc, view, log: [], size, dynamic: false };
   sessions.set(key, s);
   follow(win, owner);
 
   const collect = (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split(/\r?\n/)) {
       // Avisos fixos do FreeRDP (contatos, opções de build) só escondem o que importa.
-      if (line.trim() && !/warn_contact_details|log_build_warn/.test(line)) s.log.push(line.trim());
+      if (RDP_DISPLAY_CONTROL.test(line)) s.dynamic = true;
+      // Avisos fixos e o registro de depuração dos canais só escondem o que importa.
+      if (line.trim() && !/warn_contact_details|log_build_warn|\[DEBUG\]/.test(line)) s.log.push(line.trim());
     }
     if (s.log.length > 200) s.log.splice(0, s.log.length - 200);
   };
@@ -248,6 +279,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
     s.child = child;
     clearInterval(s.poll);
     place(s);
+    s.readyAt = Date.now();
     if (!owner.isDestroyed()) owner.send('rdp:ready', s.id);
   }, 200);
 

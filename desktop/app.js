@@ -1137,6 +1137,14 @@ window.addEventListener('resize', () => {
   for (const t of rdpTabs()) t.sync();
 });
 api.onRdpReady((id) => tabsById.get(id)?.sync?.());
+// Servidor sem ajuste de resolução: reconecta no tamanho novo da aba (a senha está na memória).
+api.onRdpReconnectSize(async (id) => {
+  const tab = tabsById.get(id);
+  if (tab?.kind !== 'rdp' || !tab.running) return;
+  tab.running = false;
+  await api.rdpClose(tab.id);
+  await startRdp(tab);
+});
 api.onRdpExit((id, code, end) => {
   const tab = tabsById.get(id);
   if (tab?.kind === 'rdp' && tab.running) endRdp(tab, { ...end, code });

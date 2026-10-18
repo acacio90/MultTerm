@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('multterm', {
   rdpView: (id, view) => ipcRenderer.send('rdp:view', id, view),
   rdpClose: (id) => ipcRenderer.invoke('rdp:close', id),
   onRdpReady: (cb) => ipcRenderer.on('rdp:ready', (_e, id) => cb(id)),
+  onRdpReconnectSize: (cb) => ipcRenderer.on('rdp:reconnect-size', (_e, id) => cb(id)),
   onRdpExit: (cb) => ipcRenderer.on('rdp:exit', (_e, id, code, end) => cb(id, code, end)),
   // Comandos do menu do topo (Arquivo, Sessão, Ferramentas...).
   // Expandir a janela para todas as telas (e voltar).

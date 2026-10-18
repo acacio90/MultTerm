@@ -19,6 +19,10 @@ const require = createRequire(import.meta.url);
 let dir: string;
 let exe: string;
 let logFile: string;
+// Cliques e teclas nativos: se outra janela pegar o primeiro plano no meio (alguém usando a
+// máquina), o clique cai nela; uma nova tentativa resolve.
+test.describe.configure({ retries: 2 });
+
 let ctx: LaunchedApp;
 
 test.beforeAll(async () => {
@@ -62,6 +66,13 @@ test('cliente RDP encaixado: posição, clique e teclado nativos, senha', async 
   await expect.poll(log, { timeout: 15_000 }).toMatch(/hwnd \d+/);
   expect(await log()).toContain('senha s3nha');
   const hwnd = BigInt((await log()).match(/hwnd (\d+)/)![1]);
+  // Os cliques são nativos: a janela do teste fica por cima de tudo (outra janela na frente
+  // receberia o clique).
+  await ctx.app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    win.setAlwaysOnTop(true);
+    win.focus();
+  });
 
   // Posição: a janela do RDP cobre exatamente a área da aba (pixels físicos da tela).
   const expected = async () => {

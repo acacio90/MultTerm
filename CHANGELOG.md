@@ -11,6 +11,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - RDP numa aba: a sessão ficava 26 px acima da área da aba, cobrindo a barra de abas (o menu do
   topo fica dentro da janela). Ao clicar fora e voltar, a sessão podia parar de receber teclado e
   cliques: o contêiner agora recebe os cliques, toma o foco e devolve a entrada ao cliente RDP. (#64)
+- RDP numa aba com servidor antigo (anterior ao Windows Server 2012 R2/8.1, sem ajuste de
+  resolução): ao maximizar ou redimensionar, a área de trabalho remota ficava no tamanho original,
+  com o resto preto. Agora o MultTerm reconecta sozinho na resolução nova quando a aba para de
+  mudar de tamanho, sem pedir a senha de novo; em servidores modernos a resolução continua se
+  ajustando sem reconectar. (#67)
 
 ## [0.7.0] - 2026-10-18
 

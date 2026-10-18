@@ -113,7 +113,7 @@ test('parseAgentList: chaves, agente vazio e sem agente', () => {
 test('rdp numa aba: argumentos do FreeRDP encaixado na janela do app', () => {
   const rdp: Session = { name: 'AD WIN', folder: '', type: 'rdp', host: '10.0.0.9' };
   const view = { parent: '1234', width: 1280.4, height: 719.6 };
-  assert.deepEqual(embeddedRdpArgs(rdp, view), ['/v:10.0.0.9', '/parent-window:1234', '/size:1280x720', '/dynamic-resolution', '+clipboard', '/from-stdin:force', '/title:AD WIN']);
+  assert.deepEqual(embeddedRdpArgs(rdp, view), ['/v:10.0.0.9', '/parent-window:1234', '/size:1280x720', '/dynamic-resolution', '+clipboard', '/from-stdin:force', '/log-filters:com.freerdp.channels.drdynvc.client:DEBUG', '/title:AD WIN']);
   // Porta fora do padrão, DOMINIO\usuario e usuario@dominio.
   const args = embeddedRdpArgs({ ...rdp, port: 3390, user: 'EMPRESA\\ana' }, view);
   assert.deepEqual(args.slice(0, 3), ['/v:10.0.0.9:3390', '/d:EMPRESA', '/u:ana']);
