@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.7.0] - 2026-10-18
+
 ### Adicionado
 
 - **Expandir para todas as telas**: botão no canto da barra de abas (e em Exibir) que estica a
@@ -192,7 +194,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.6.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.7.0...develop
+[0.7.0]: https://github.com/acacio90/MultTerm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/acacio90/MultTerm/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/acacio90/MultTerm/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/acacio90/MultTerm/compare/v0.4.0...v0.4.1
