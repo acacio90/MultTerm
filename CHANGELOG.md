@@ -6,6 +6,12 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Corrigido
+
+- RDP numa aba: a sessão ficava 26 px acima da área da aba, cobrindo a barra de abas (o menu do
+  topo fica dentro da janela). Ao clicar fora e voltar, a sessão podia parar de receber teclado e
+  cliques: o contêiner agora recebe os cliques, toma o foco e devolve a entrada ao cliente RDP. (#64)
+
 ## [0.7.0] - 2026-10-18
 
 ### Adicionado
