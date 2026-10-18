@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, type WebContents } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -20,7 +20,6 @@ const require = createRequire(import.meta.url);
 const WS_POPUP = 0x80000000;
 const WS_CLIPCHILDREN = 0x02000000;
 const WS_EX_TOOLWINDOW = 0x80; // sem botão na barra de tarefas
-const SS_BLACKRECT = 0x4;
 const SW_HIDE = 0;
 const SW_SHOWNA = 8;
 const HWND_TOP = 0;
@@ -28,17 +27,69 @@ const SWP_NOACTIVATE = 0x10;
 const SWP_NOZORDER = 0x4;
 const GW_CHILD = 5;
 const WM_EXITSIZEMOVE = 0x232;
+const WM_ACTIVATE = 0x0006;
+const WM_MOUSEACTIVATE = 0x0021;
+const WM_SETFOCUS = 0x0007;
+const MA_ACTIVATE = 1;
+const HOST_CLASS = 'MultTermRdpHost';
 
 type Fn = (...args: unknown[]) => unknown;
-let user32: Record<'CreateWindowExW' | 'DestroyWindow' | 'SetWindowPos' | 'ShowWindow' | 'GetWindow' | 'PostMessageW' | 'IsWindow' | 'ClientToScreen', Fn> | undefined;
+let user32: Record<'CreateWindowExW' | 'DestroyWindow' | 'SetWindowPos' | 'ShowWindow' | 'GetWindow' | 'PostMessageW' | 'IsWindow', Fn> | undefined;
+// Mantém o procedimento de janela registrado vivo (o Windows o chama enquanto houver contêiner).
+let hostProc: unknown;
+
+/*
+ * Classe de janela do contêiner. O wfreerdp encaixado só manda o teclado à sessão quando a janela
+ * com foco na thread em primeiro plano é a janela-pai dele (wf_ll_kbd_proc); por isso o contêiner
+ * toma o foco ao ser clicado (WM_MOUSEACTIVATE, que chega quando se clica na janela do RDP) ou
+ * ativado. E, diferente de um controle STATIC (que responde HTTRANSPARENT), recebe os cliques.
+ * Ao ganhar o foco, avisa a janela do wfreerdp com um WM_SETFOCUS: se ela chegou a ter o
+ * foco e o perdeu (WM_KILLFOCUS), a entrada fica suspensa (FreeRDP_SuspendInput) até esse aviso.
+ */
+function registerHostClass(koffi: any, u: any) {
+  const k32 = koffi.load('kernel32.dll');
+  const gdi = koffi.load('gdi32.dll');
+  const WNDPROC = koffi.proto('__stdcall', 'MULTTERM_WNDPROC', 'intptr', ['intptr', 'uint32', 'uintptr', 'intptr']);
+  const WNDCLASSEXW = koffi.struct('MULTTERM_WNDCLASSEXW', {
+    cbSize: 'uint32', style: 'uint32', lpfnWndProc: koffi.pointer(WNDPROC), cbClsExtra: 'int', cbWndExtra: 'int',
+    hInstance: 'intptr', hIcon: 'intptr', hCursor: 'intptr', hbrBackground: 'intptr',
+    lpszMenuName: 'str16', lpszClassName: 'str16', hIconSm: 'intptr',
+  });
+  const DefWindowProcW = u.func('__stdcall', 'DefWindowProcW', 'intptr', ['intptr', 'uint32', 'uintptr', 'intptr']);
+  const SetFocus = u.func('__stdcall', 'SetFocus', 'intptr', ['intptr']);
+  const RegisterClassExW = u.func('__stdcall', 'RegisterClassExW', 'uint16', [koffi.pointer(WNDCLASSEXW)]);
+  const LoadCursorW = u.func('__stdcall', 'LoadCursorW', 'intptr', ['intptr', 'intptr']);
+  const GetModuleHandleW = k32.func('__stdcall', 'GetModuleHandleW', 'intptr', ['str16']);
+  const GetWindow = u.func('__stdcall', 'GetWindow', 'intptr', ['intptr', 'uint32']);
+  const SendMessageTimeoutW = u.func('__stdcall', 'SendMessageTimeoutW', 'intptr',
+    ['intptr', 'uint32', 'uintptr', 'intptr', 'uint32', 'uint32', koffi.out(koffi.pointer('uintptr'))]);
+  const GetStockObject = gdi.func('__stdcall', 'GetStockObject', 'intptr', ['int']);
+  hostProc = koffi.register((hwnd: unknown, msg: number, wParam: unknown, lParam: unknown) => {
+    if (msg === WM_MOUSEACTIVATE) {
+      SetFocus(hwnd);
+      return MA_ACTIVATE;
+    }
+    if (msg === WM_ACTIVATE && (Number(wParam) & 0xffff) !== 0) SetFocus(hwnd);
+    if (msg === WM_SETFOCUS) {
+      const child = GetWindow(hwnd, GW_CHILD);
+      // Síncrono (com limite): o aviso precisa chegar antes do clique que ativou o contêiner.
+      if (child) SendMessageTimeoutW(child, WM_SETFOCUS, 0, 0, 0x0002, 200, [0]); // SMTO_ABORTIFHUNG
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+  }, koffi.pointer(WNDPROC));
+  RegisterClassExW({
+    cbSize: koffi.sizeof(WNDCLASSEXW), style: 0, lpfnWndProc: hostProc, cbClsExtra: 0, cbWndExtra: 0,
+    hInstance: GetModuleHandleW(null), hIcon: 0, hCursor: LoadCursorW(0, 32512), hbrBackground: GetStockObject(4), // BLACK_BRUSH
+    lpszMenuName: null, lpszClassName: HOST_CLASS, hIconSm: 0,
+  });
+}
 
 function win32() {
   if (user32) return user32;
   const koffi = require('koffi');
   const u = koffi.load('user32.dll');
-  const POINT = koffi.struct('MULTTERM_POINT', { x: 'int', y: 'int' });
+  registerHostClass(koffi, u);
   user32 = {
-    ClientToScreen: u.func('__stdcall', 'ClientToScreen', 'bool', ['intptr', koffi.inout(koffi.pointer(POINT))]),
     CreateWindowExW: u.func('__stdcall', 'CreateWindowExW', 'intptr',
       ['uint32', 'str16', 'str16', 'uint32', 'int', 'int', 'int', 'int', 'intptr', 'intptr', 'intptr', 'intptr']),
     DestroyWindow: u.func('__stdcall', 'DestroyWindow', 'bool', ['intptr']),
@@ -66,8 +117,6 @@ interface View {
 interface RdpSession {
   owner: WebContents;
   id: number;
-  /** Janela do app (dona do contêiner): a posição da aba é relativa à área cliente dela. */
-  window: bigint;
   container: number | bigint;
   proc: ChildProcess;
   view: View;
@@ -95,10 +144,13 @@ function place(s: RdpSession) {
     w.ShowWindow(s.container, SW_HIDE);
     return;
   }
-  // A aba informa a posição na área cliente da janela; o contêiner é de nível superior (tela).
-  const pt = { x, y };
-  w.ClientToScreen(s.window, pt);
-  w.SetWindowPos(s.container, HWND_TOP, pt.x, pt.y, width, height, SWP_NOACTIVATE);
+  // A aba informa a posição na página (pixels físicos); o contêiner é de nível superior (tela). A
+  // origem é a da área do conteúdo — o menu do topo fica dentro da área cliente da janela.
+  const win = BrowserWindow.fromWebContents(s.owner);
+  if (!win || win.isDestroyed()) return;
+  const c = win.getContentBounds();
+  const origin = screen.dipToScreenPoint({ x: c.x, y: c.y });
+  w.SetWindowPos(s.container, HWND_TOP, origin.x + x, origin.y + y, width, height, SWP_NOACTIVATE);
   w.ShowWindow(s.container, SW_SHOWNA);
   w.SetWindowPos(s.child, 0, 0, 0, width, height, SWP_NOACTIVATE | SWP_NOZORDER);
   // O wfreerdp pede a nova resolução ao servidor ao fim de um redimensionamento.
@@ -167,7 +219,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   const w = win32();
   const parent = win.getNativeWindowHandle().readBigUInt64LE(0);
   // Popup "owned" pela janela do app (o parâmetro de pai vira o dono); criada escondida.
-  const container = w.CreateWindowExW(WS_EX_TOOLWINDOW, 'STATIC', '', WS_POPUP | WS_CLIPCHILDREN | SS_BLACKRECT,
+  const container = w.CreateWindowExW(WS_EX_TOOLWINDOW, HOST_CLASS, '', WS_POPUP | WS_CLIPCHILDREN,
     0, 0, Math.max(1, view.width), Math.max(1, view.height), parent, 0, 0, 0) as number | bigint;
   if (!container) throw new Error('não foi possível criar a área da sessão RDP');
 
@@ -175,7 +227,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   const proc = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: false });
   proc.stdin?.on('error', () => {});
   proc.stdin?.end(rdpStdin(credentials.password));
-  const s: RdpSession = { owner, id: id as number, window: parent, container, proc, view, log: [] };
+  const s: RdpSession = { owner, id: id as number, container, proc, view, log: [] };
   sessions.set(key, s);
   follow(win, owner);
 
