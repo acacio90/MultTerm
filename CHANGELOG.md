@@ -14,6 +14,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Servidor SSH/SFTP: em cerca de 1 a cada 250 instalações, a chave de host gerada saía malformada e
   o servidor não iniciava (sempre). A chave agora é gerada de novo até ser válida, e uma chave
   gravada que não pode ser lida é trocada por uma nova (a antiga fica como `.invalida`). (#80)
+- Servidor NFS com porta automática (0): podia falhar ao iniciar no Windows com "EACCES", quando
+  a porta escolhida estava numa faixa reservada só para UDP. Agora tenta outra porta. (#73)
+- VPN: os argumentos do processo auxiliar que roda como administrador passam a ser citados pela
+  regra da linha de comando do Windows (barras invertidas antes de aspas). Alerta do CodeQL, sem
+  exploração conhecida. (#74)
 
 ## [0.8.0] - 2026-10-18
 

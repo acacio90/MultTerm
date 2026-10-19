@@ -170,6 +170,20 @@ export interface RpcListener {
 
 /** Atende os programas por UDP e TCP na mesma porta (0 = qualquer livre, igual nas duas). */
 export async function listenRpc(port: number, host: string | undefined, programs: RpcProgram[]): Promise<RpcListener> {
+  // Porta automática: a livre em TCP pode estar proibida em UDP (o Windows reserva faixas por
+  // protocolo, "netsh int ipv4 show excludedportrange protocol=udp"); tenta outra.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await listenPair(port, host, programs);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      const udpRefused = (err as { udp?: boolean }).udp && (code === 'EACCES' || code === 'EADDRINUSE');
+      if (port !== 0 || !udpRefused || attempt >= 20) throw err;
+    }
+  }
+}
+
+async function listenPair(port: number, host: string | undefined, programs: RpcProgram[]): Promise<RpcListener> {
   const tcp: Server = createServer((sock) => serveTcp(sock, programs));
   const sockets = new Set<Socket>();
   tcp.on('connection', (s) => {
@@ -194,8 +208,8 @@ export async function listenRpc(port: number, host: string | undefined, programs
       });
     });
   } catch (err) {
-    tcp.close();
-    throw err;
+    await new Promise<void>((r) => tcp.close(() => r()));
+    throw Object.assign(err as Error, { udp: true });
   }
   udp.on('message', (msg, rinfo) => {
     void dispatch(msg, programs, rinfo.address, 'udp').then((reply) => {
