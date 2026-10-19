@@ -11,6 +11,9 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 - Build: o workflow do cliente RDP recompilou e substituiu o pacote já publicado, e a conferência
   de hash passou a recusá-lo. O pacote publicado não é mais substituído (um build novo sobe o
   número do build), e o workflow só roda manualmente. (#78)
+- Servidor SSH/SFTP: em cerca de 1 a cada 250 instalações, a chave de host gerada saía malformada e
+  o servidor não iniciava (sempre). A chave agora é gerada de novo até ser válida, e uma chave
+  gravada que não pode ser lida é trocada por uma nova (a antiga fica como `.invalida`). (#80)
 
 ## [0.8.0] - 2026-10-18
 
