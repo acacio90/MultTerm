@@ -34,9 +34,12 @@ test.afterEach(async () => {
 async function openTool(name: string) {
   await page.click('#btn-tools');
   await page.click(`#tools-menu [data-tool="${name}"]`);
+  // Só segue com o painel da ferramenta aberto e visível (os localizadores abaixo dependem dele).
+  // Ping e traceroute abrem numa aba de terminal.
+  if (!['ping', 'traceroute'].includes(name)) await expect(page.locator('.tool-panel:not([hidden])')).toHaveCount(1);
 }
 
-const activePanel = () => page.locator('.panel:not([hidden])').last();
+const activePanel = () => page.locator('.tool-panel:not([hidden])');
 
 test('menu Ferramentas abre e fecha', async () => {
   await page.click('#btn-tools');
@@ -72,7 +75,12 @@ test('scanner de portas encontra a porta aberta e a fechada', async () => {
   const panel = activePanel();
   await panel.locator('[name=host]').fill('127.0.0.1');
   await panel.locator('[name=ports]').fill(`${openPort},1`);
+  // Máquina carregada (suíte inteira): até o localhost pode passar do timeout padrão.
+  await panel.locator('[name=timeout]').fill('8000');
   await panel.locator('label.check input').uncheck(); // mostrar todas
+  // Os valores precisam estar no formulário antes de enviar (sem isso, vale a predefinição "comuns").
+  await expect(panel.locator('[name=ports]')).toHaveValue(`${openPort},1`);
+  await expect(panel.locator('[name=host]')).toHaveValue('127.0.0.1');
   await panel.locator('button[type=submit]').click();
   await expect(panel.locator('.tool-status')).toContainText('Concluído: 1 aberta(s), 1 fechada(s)');
   await expect(panel.locator('table.results tbody tr')).toHaveText([/^1.*fechada$/, new RegExp(`^${openPort}.*aberta$`)]);
