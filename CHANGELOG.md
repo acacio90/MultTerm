@@ -6,6 +6,12 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Corrigido
+
+- Build: o workflow do cliente RDP recompilou e substituiu o pacote já publicado, e a conferência
+  de hash passou a recusá-lo. O pacote publicado não é mais substituído (um build novo sobe o
+  número do build), e o workflow só roda manualmente. (#78)
+
 ## [0.8.0] - 2026-10-18
 
 ### Adicionado
