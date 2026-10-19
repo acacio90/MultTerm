@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, we
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import {
@@ -207,11 +207,13 @@ function registerIpc(): void {
       platform: process.platform,
       windowsTerminal: hasWindowsTerminal(),
       home: homedir(),
-      tmp: tmpdir(),
+      // O .rdp do mstsc fica na pasta de dados do app (caminho previsível no TEMP não).
+      tmp: app.getPath('userData'),
       fileExists: existsSync,
       systemRoot: process.env.SystemRoot,
       sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
-      mstsc: process.env.MULTTERM_MSTSC || undefined,
+      // Gancho de teste: troca o executável; não vale no app instalado.
+      mstsc: (!app.isPackaged && process.env.MULTTERM_MSTSC) || undefined,
     };
     let plan = planLaunch(session, env, opts);
     if (plan.file) {

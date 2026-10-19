@@ -32,7 +32,7 @@ test('menu do topo em português, sem atalhos que roubem teclas do terminal', as
     }
   };
   flat(menu);
-  expect(all.some((i) => /recarregar a página|reload$/i.test(i.label))).toBe(false);
+  expect(all.some((i) => /(recarregar a página|reload)$/i.test(i.label))).toBe(false);
   const registered = all.filter((i) => i.accel && i.registered).map((i) => i.accel);
   for (const a of registered) expect(a).toMatch(/^(CommandOrControl\+(Plus|-|0|=)|F11|Control\+(Plus|-|0)|Ctrl\+(Plus|-|0)|.*Shift.*)$/i);
 

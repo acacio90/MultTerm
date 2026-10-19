@@ -3,7 +3,7 @@
 // Uso: node scripts/fetch-freerdp.mjs   (não faz nada se a versão certa já está lá)
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,13 +25,15 @@ const zip = Buffer.from(await res.arrayBuffer());
 const hash = createHash('sha256').update(zip).digest('hex');
 if (hash !== SHA256) throw new Error(`fetch-freerdp: hash não confere (${hash}); o arquivo foi trocado?`);
 
-const tmp = join(tmpdir(), `multterm-freerdp-${process.pid}.zip`);
+// Pasta exclusiva (nome imprevisível): ninguém troca o zip entre conferir o hash e extrair.
+const tmpDir = mkdtempSync(join(tmpdir(), 'multterm-freerdp-'));
+const tmp = join(tmpDir, 'freerdp.zip');
 writeFileSync(tmp, zip);
 rmSync(dest, { recursive: true, force: true });
 mkdirSync(dest, { recursive: true });
 const ps = (s) => `'${s.replace(/'/g, "''")}'`;
 execFileSync('powershell.exe', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath ${ps(tmp)} -DestinationPath ${ps(dest)} -Force`], { stdio: 'inherit' });
-rmSync(tmp, { force: true });
+rmSync(tmpDir, { recursive: true, force: true });
 if (!existsSync(join(dest, 'wfreerdp.exe'))) throw new Error('fetch-freerdp: o pacote não tem wfreerdp.exe');
 writeFileSync(stamp, `${VERSION}-${BUILD} ${SHA256}\n`);
 console.log(`fetch-freerdp: FreeRDP ${VERSION} em vendor/freerdp`);

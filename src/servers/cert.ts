@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 /*
@@ -16,9 +16,8 @@ export interface PfxCert {
 
 /** Gera o PFX em `path` (se ainda não existir) e devolve o conteúdo. */
 export async function ensureSelfSignedPfx(path: string, passphrase: string | undefined): Promise<PfxCert & { created: boolean }> {
-  if (passphrase && (await stat(path).then((s) => s.isFile(), () => false))) {
-    return { pfx: await readFile(path), passphrase, created: false };
-  }
+  const saved = passphrase ? await readFile(path).catch(() => undefined) : undefined;
+  if (passphrase && saved) return { pfx: saved, passphrase, created: false };
   if (!/^[\w:\\/ .()-]+$/.test(path)) throw new Error('caminho do certificado inválido');
   const pass = randomBytes(24).toString('hex');
   await mkdir(dirname(path), { recursive: true });

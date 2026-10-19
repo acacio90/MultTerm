@@ -198,10 +198,11 @@ export async function startTftp(cfg: TftpConfig, log: LogFn): Promise<RunningSer
     if (!write) {
       let fh: FileHandle | undefined;
       try {
-        const st = await stat(path);
+        fh = await open(path, 'r');
+        // Confere o arquivo já aberto: entre conferir pelo caminho e abrir, ele poderia ser trocado.
+        const st = await fh.stat();
         if (!st.isFile()) throw Object.assign(new Error('não é um arquivo'), { code: 'EISDIR' });
         if (req.options.has('tsize') && req.mode === 'octet') accepted.set('tsize', String(st.size));
-        fh = await open(path, 'r');
         let data: Buffer | undefined;
         if (req.mode === 'netascii') data = toNetascii(await fh.readFile());
         if (accepted.size) await exchange(oack(), isAck(0));
