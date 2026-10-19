@@ -11,13 +11,27 @@ import { XdrReader, XdrWriter } from '../src/servers/rpc.ts';
 
 const { PORTMAP, MOUNT, NFS } = NFS_PROGRAMS;
 
-const freePort = () => new Promise<number>((resolve) => {
+const freeTcpPort = () => new Promise<number>((resolve) => {
   const s = createServer();
   s.listen(0, '127.0.0.1', () => {
     const p = (s.address() as { port: number }).port;
     s.close(() => resolve(p));
   });
 });
+
+/** Porta livre em TCP e em UDP (o Windows reserva faixas de portas só para um dos protocolos). */
+async function freePort(): Promise<number> {
+  for (;;) {
+    const p = await freeTcpPort();
+    const udp = createSocket('udp4');
+    const ok = await new Promise<boolean>((resolve) => {
+      udp.once('error', () => resolve(false));
+      udp.bind(p, '127.0.0.1', () => resolve(true));
+    });
+    await new Promise<void>((r) => (ok ? udp.close(() => r()) : r()));
+    if (ok) return p;
+  }
+}
 
 let xidSeq = 1;
 
