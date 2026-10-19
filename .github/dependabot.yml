@@ -1,0 +1,43 @@
+# Atualizações das dependências: PRs para a develop, agrupados por semana. As correções de
+# segurança chegam na hora (não esperam a semana nem o prazo de carência).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    # Versão recém-publicada espera uma semana (pacote comprometido costuma ser retirado antes).
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    open-pull-requests-limit: 5
+    groups:
+      # O Electron sai sozinho: traz o Chromium e pede atenção aos testes de interface.
+      electron:
+        patterns: [electron]
+      producao:
+        dependency-type: production
+        update-types: [minor, patch]
+      desenvolvimento:
+        dependency-type: development
+        update-types: [minor, patch]
+        exclude-patterns: [electron]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ['*']

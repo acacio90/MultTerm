@@ -1,0 +1,31 @@
+name: Workflows
+
+# Análise de segurança dos workflows (zizmor): permissões, actions sem hash fixo, injeção de
+# expressões, credenciais expostas. Os achados aparecem em Security → Code scanning e no PR.
+
+on:
+  push:
+    branches: [develop, main]
+    paths: [.github/workflows/**, .github/dependabot.yml]
+  pull_request:
+    paths: [.github/workflows/**, .github/dependabot.yml]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout
+      security-events: write # enviar os achados ao Code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
