@@ -105,7 +105,7 @@ function win32() {
 }
 
 /** Cliente RDP distribuído com o app. MULTTERM_FREERDP troca o executável (testes). */
-export const freerdpPath = () => process.env.MULTTERM_FREERDP
+export const freerdpPath = () => (!app.isPackaged && process.env.MULTTERM_FREERDP)
   || join(app.isPackaged ? join(process.resourcesPath, 'freerdp') : join(app.getAppPath(), 'vendor', 'freerdp'), 'wfreerdp.exe');
 
 interface View {

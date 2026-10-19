@@ -20,6 +20,13 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   regra da linha de comando do Windows (barras invertidas antes de aspas). Alerta do CodeQL, sem
   exploração conhecida. (#74)
 
+### Segurança
+
+- Ajustes apontados pela análise de código (CodeQL): o servidor TFTP confere o arquivo já aberto
+  (não pelo caminho, que poderia ser trocado entre conferir e abrir); o arquivo `.rdp` do cliente do
+  Windows fica na pasta de dados do MultTerm, não no TEMP; as variáveis de teste que trocam
+  executáveis não valem no app instalado. (#82)
+
 ## [0.8.0] - 2026-10-18
 
 ### Adicionado

@@ -36,9 +36,8 @@ test.afterEach(async () => {
 
 async function start(name: string) {
   const logFile = join(dir, `log-${Date.now()}.txt`);
-  const rdpFile = join(tmpdir(), 'multterm-rdp', `${name}.rdp`);
-  await rm(rdpFile, { force: true });
   ctx = await launchApp(`version: 1\nsessions:\n  - {name: ${name}, type: rdp, host: 127.0.0.1, user: pedro}\n`, { MULTTERM_FREERDP: exe, FAKE_RDP_LOG: logFile, MULTTERM_MSTSC: NOOP });
+  const rdpFile = join(ctx.dir, 'userdata', 'multterm-rdp', `${name}.rdp`);
   const rdp = async () => (existsSync(rdpFile) ? readFile(rdpFile, 'utf8') : '');
   return { rdp, session: ctx.page.locator('#tree li.session', { hasText: name }) };
 }
@@ -75,7 +74,7 @@ test('opção da sessão: o duplo clique abre em todos os monitores, sem aba', a
   await expect(page.locator('#tabs .tab', { hasText: 'MM_OPCAO' })).toHaveCount(0);
 
   // Janela externa continua abrindo sem tela cheia.
-  await rm(join(tmpdir(), 'multterm-rdp', 'MM_OPCAO.rdp'));
+  await rm(join(ctx.dir, 'userdata', 'multterm-rdp', 'MM_OPCAO.rdp'));
   await session.click({ button: 'right' });
   await page.locator('#tree-menu [data-action="external"]').click();
   await expect.poll(rdp, { timeout: 10_000 }).toContain('full address');
