@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.8.1] - 2026-10-19
+
 ### Corrigido
 
 - Servidor SSH/SFTP: em cerca de 1 a cada 250 instalações, a chave de host gerada saía malformada e
@@ -239,7 +241,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.8.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.8.1...develop
+[0.8.1]: https://github.com/acacio90/MultTerm/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/acacio90/MultTerm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/acacio90/MultTerm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/acacio90/MultTerm/compare/v0.5.0...v0.6.0
