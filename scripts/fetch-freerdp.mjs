@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 const VERSION = '3.32.2';
 const BUILD = 2; // configuração do build no workflow freerdp.yml
-const SHA256 = '1295badfe1e9592bd26803008d29de7ecb9a2cbe74b70cbe11154326824c8f6d';
+const SHA256 = '505ee9c11044b0d6fa6043aa73f92ff8f98d74bf75cb49a8cff815266a447ead';
 const URL = `https://github.com/acacio90/MultTerm/releases/download/freerdp-${VERSION}/freerdp-${VERSION}-win64-${BUILD}.zip`;
 
 const dest = join(import.meta.dirname, '..', 'vendor', 'freerdp');
