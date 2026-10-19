@@ -43,6 +43,18 @@ test('validação e chave de host reutilizada', async () => {
     assert.equal(b.created, false);
     assert.equal(a.fingerprint, b.fingerprint);
     assert.match(a.fingerprint, /^SHA256:[A-Za-z0-9+/]{43}$/);
+    // Muitas chaves seguidas: o gerador do ssh2 erra 1 em 256; nenhuma pode sair malformada.
+    for (let i = 0; i < 600; i++) {
+      const p = join(dir, 'n', String(i));
+      assert.equal((await ensureHostKey(p)).created, true);
+    }
+    // Chave gravada que não pode ser lida: fica guardada e uma nova é gerada.
+    const bad = join(dir, 'k', 'ruim');
+    await writeFile(bad, '-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----\n');
+    const c = await ensureHostKey(bad);
+    assert.equal(c.created, true);
+    assert.match(await readFile(`${bad}.invalida`, 'utf8'), /AAAA/);
+    assert.equal((await ensureHostKey(bad)).fingerprint, c.fingerprint);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

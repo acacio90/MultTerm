@@ -38,12 +38,32 @@ export function validateSsh(raw: Record<string, unknown>): Omit<SshConfig, 'host
   return { root: checkRoot(raw.root), port: checkPort(raw.port, 22), host: checkHost(raw.host), user, password, shell: raw.shell === 'cmd' ? 'cmd' : 'powershell' };
 }
 
-/** Lê a chave de host em `path` ou gera uma ed25519 nova. */
+/**
+ * Gera uma chave ed25519 que o ssh2 consegue ler de volta. O gerador do ssh2 perde um byte zero
+ * inicial da chave pública (1 em 256 chaves) e a chave sai malformada: gera de novo.
+ */
+function generateHostKey(): string {
+  for (let i = 0; i < 20; i++) {
+    const key = utils.generateKeyPairSync('ed25519').private;
+    if (!(utils.parseKey(key) instanceof Error)) return key;
+  }
+  throw new Error('não foi possível gerar a chave de host');
+}
+
+/**
+ * Lê a chave de host em `path` ou gera uma ed25519 nova. Uma chave gravada que não pode ser lida
+ * (gerada malformada por versões anteriores) nunca deixou o servidor iniciar, então nenhum cliente
+ * confia nela: fica guardada como ".invalida" e uma nova é gerada.
+ */
 export async function ensureHostKey(path: string): Promise<{ key: string; fingerprint: string; created: boolean }> {
   let key = await readFile(path, 'utf8').catch(() => '');
   let created = false;
+  if (key && utils.parseKey(key) instanceof Error) {
+    await rename(path, `${path}.invalida`);
+    key = '';
+  }
   if (!key) {
-    key = utils.generateKeyPairSync('ed25519').private;
+    key = generateHostKey();
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, key, { mode: 0o600 });
     created = true;
