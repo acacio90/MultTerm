@@ -4,6 +4,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
+import { quoteWindowsArg } from '../sessions/launch.ts';
 import { HELPER_FLAG, type HelperStart } from '../vpn/helper.ts';
 import type { NativeVpnOptions } from '../vpn/site-config.ts';
 import type { NetSetup, TunnelStats } from '../vpn/tunnel.ts';
@@ -22,7 +23,7 @@ export const wintunDllPath = () => join(
 
 /** Abre o auxiliar como administrador (UAC). Resolve quando o processo foi iniciado. */
 function elevate(args: string[]): Promise<void> {
-  const quoted = args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ');
+  const quoted = args.map(quoteWindowsArg).join(' ');
   const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
   const command = `Start-Process -FilePath ${ps(process.execPath)} -ArgumentList ${ps(quoted)} -Verb RunAs -WindowStyle Hidden`;
   return new Promise((resolve, reject) => {

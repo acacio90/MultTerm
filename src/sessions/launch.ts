@@ -76,6 +76,15 @@ export function quoteForCmd(arg: string): string {
 }
 
 /**
+ * Cita um argumento para a linha de comando de um programa do Windows (regra do
+ * CommandLineToArgvW): barras invertidas só se dobram antes de aspas ou do fim entre aspas.
+ */
+export function quoteWindowsArg(arg: string): string {
+  if (arg && !/[\s"]/.test(arg)) return arg;
+  return `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+}
+
+/**
  * Abre um programa de console numa janela própria via "cmd /c start".
  * (spawn com detached:true no Windows cria o processo SEM console: o ssh ficaria invisível.)
  */
