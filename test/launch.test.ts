@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, expandHome, parseAgentList, planLaunch, quoteForCmd, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
+import { embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, expandHome, parseAgentList, planLaunch, quoteForCmd, quoteWindowsArg, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
 
 const WIN: LaunchEnv = {
   platform: 'win32',
@@ -71,6 +71,19 @@ test('rdp em todos os monitores: tela cheia com multimon (pela opção da sessã
   assert.equal(planLaunch(rdp, { ...WIN, mstsc: 'C:\\teste\\mstsc.exe' }).command, 'C:\\teste\\mstsc.exe');
   const linux = planLaunch(rdp, { ...WIN, platform: 'linux', tmp: '/tmp' }, { multimon: true });
   assert.deepEqual(linux.args, ['/v:10.0.0.9:3389', '/f', '/multimon']);
+});
+
+test('quoteWindowsArg segue a regra do CommandLineToArgvW', () => {
+  assert.equal(quoteWindowsArg('simples'), 'simples');
+  assert.equal(quoteWindowsArg(''), '""');
+  assert.equal(quoteWindowsArg('com espaço'), '"com espaço"');
+  // Aspas: escapadas; barras antes delas, dobradas.
+  assert.equal(quoteWindowsArg('a"b'), '"a\\"b"');
+  assert.equal(quoteWindowsArg('a\\"b'), '"a\\\\\\"b"');
+  // Barra no fim, entre aspas: dobrada (senão escaparia a aspa de fechamento).
+  assert.equal(quoteWindowsArg('C:\\Program Files\\'), '"C:\\Program Files\\\\"');
+  // Barras no meio ficam como estão.
+  assert.equal(quoteWindowsArg('C:\\a b\\c'), '"C:\\a b\\c"');
 });
 
 test('rdpFileContent respeita porta customizada', () => {

@@ -41,7 +41,7 @@ function fakeTerminals(modes: Record<string, SharedTerminal['mode']>) {
       written.push([id, data]);
       const b = buffers.get(id)!;
       setTimeout(() => {
-        b.push(data.replace('\r', '\r\n'));
+        b.push(data.replaceAll('\r', '\r\n'));
         const m = /^echo (.*)\r$/.exec(data);
         if (m) b.push(`${m[1]}\r\nuser@srv:~$ `);
       }, 20);
