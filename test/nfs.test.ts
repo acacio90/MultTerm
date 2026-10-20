@@ -51,7 +51,7 @@ async function rpc(transport: 'udp' | 'tcp', port: number, prog: number, vers: n
     : await new Promise<Buffer>((resolve, reject) => {
       const s = connect(port, '127.0.0.1');
       let buf = Buffer.alloc(0);
-      s.on('data', (d) => {
+      s.on('data', (d: Buffer) => {
         buf = Buffer.concat([buf, d]);
         if (buf.length >= 4 && buf.length >= 4 + (buf.readUInt32BE(0) & 0x7fffffff)) {
           s.end();

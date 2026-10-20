@@ -22,7 +22,7 @@ function reader(sock: Socket) {
   let buf = Buffer.alloc(0);
   let wake: (() => void) | undefined;
   let closed = false;
-  sock.on('data', (d) => {
+  sock.on('data', (d: Buffer) => {
     buf = Buffer.concat([buf, d]);
     wake?.();
   });

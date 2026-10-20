@@ -235,7 +235,7 @@ function serveTcp(sock: Socket, programs: RpcProgram[]) {
   let queue = Promise.resolve();
   const client = (sock.remoteAddress ?? '').replace(/^::ffff:/, '');
   sock.on('error', () => {});
-  sock.on('data', (chunk) => {
+  sock.on('data', (chunk: Buffer) => {
     pending = Buffer.concat([pending, chunk]);
     while (pending.length >= 4) {
       const header = pending.readUInt32BE(0);
