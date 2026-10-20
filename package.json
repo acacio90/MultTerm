@@ -100,7 +100,7 @@
   "devDependencies": {
     "@playwright/test": "^1.64.0",
     "@types/net-snmp": "^3.23.0",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.5",
     "@types/ssh2": "^1.15.6",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
