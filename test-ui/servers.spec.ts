@@ -248,7 +248,7 @@ test('VNC: senha obrigatória; inicia pelo painel e entrega a tela real a um cli
   // Cliente RFB mínimo: versão, senha, ServerInit e um quadro inteiro (Raw).
   const sock = connect(port, '127.0.0.1');
   let buf = Buffer.alloc(0);
-  sock.on('data', (d) => { buf = Buffer.concat([buf, d]); });
+  sock.on('data', (d: Buffer) => { buf = Buffer.concat([buf, d]); });
   const read = async (n: number) => {
     await expect.poll(() => buf.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(n);
     const out = buf.subarray(0, n);

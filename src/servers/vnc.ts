@@ -417,7 +417,7 @@ export async function startVnc(cfg: VncConfig, deps: VncDeps, log: LogFn): Promi
       }
     };
 
-    sock.on('data', (d) => {
+    sock.on('data', (d: Buffer) => {
       buf = Buffer.concat([buf, d]);
       if (buf.length > 2 * 1024 * 1024) {
         sock.destroy();
