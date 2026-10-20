@@ -322,71 +322,8 @@ código-fonte oficial (hash conferido) e publicado numa release auxiliar (`freer
 
 ## Desenvolvimento
 
-O motor de VPN tem testes de interoperabilidade contra um gateway strongSwan em Docker
-(`npm run test:ipsec`) e um teste da pilha completa no Windows, que pede UAC:
-`npm run test:ipsec -- --keep && npm run build && node test/ipsec-gateway/e2e-elevated.ts`.
-
-
-Requer Node.js 22.18+.
-
-```sh
-npm install
-npm run fetch:freerdp  # cliente RDP (uma vez; o npm run release baixa sozinho)
-npm start            # compila e abre o app
-npm test             # testes de unidade
-npm run test:ui      # testes de interface (abre o app com Playwright)
-npm run typecheck
-npm run icon         # regenera desktop/icon.png a partir de desktop/icon.svg
-npm run multterm -- list
-npm run multterm -- import outro.yaml --dry-run
-npm run multterm -- import inventario.ini --folder Ansible --dry-run
-```
-
-### Commits
-
-As mensagens seguem o [Conventional Commits](https://www.conventionalcommits.org/pt-br/):
-`tipo(escopo opcional): descrição`, com tipo em `feat`, `fix`, `docs`, `style`,
-`refactor`, `perf`, `test`, `build`, `ci`, `chore` ou `revert` (`!` após o tipo/escopo
-indica mudança incompatível). O `npm install` instala um hook `commit-msg` que recusa
-mensagens fora do padrão.
-
-```text
-feat(terminal): reconecta a sessão com a tecla R
-fix(sessions): rejeita host iniciado por "-"
-docs: explica a configuração do agente SSH
-```
-
-### Branches
-
-- `develop`: desenvolvimento do dia a dia; todo trabalho novo entra aqui.
-- `main`: só versões lançadas; cada merge em `main` corresponde a uma tag `vX.Y.Z` e a uma
-  release no GitHub.
-
-### Gerar e publicar uma versão
-
-1. Em `develop`: suba a `version` no `package.json` e registre as mudanças no `CHANGELOG.md`
-   (commit `chore(release): X.Y.Z`).
-2. Leve para a `main` e crie a tag:
-   `git checkout main && git merge --ff-only develop && git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`
-3. `npm run release` cria o rascunho da release da tag, gera o instalador e envia o `.exe`, o
-   `.blockmap` e o `latest.yml`. Usa o login do `gh` (ou `GH_TOKEN`) e recusa versões já
-   publicadas; `node scripts/release.mjs --dry-run` só confere.
-4. Confira os arquivos do rascunho, escreva as notas e publique. Os apps instalados encontram a
-   versão nova em **Ajuda → Buscar atualizações**.
-5. Feche o milestone da versão e volte para `develop`.
-
-### Grafo de código (code-review-graph)
-
-O projeto usa o [code-review-graph](https://github.com/tirth8205/code-review-graph) (MCP + hooks)
-para manter um grafo do código atualizado:
-
-```sh
-uv tool install code-review-graph==2.3.9
-code-review-graph build     # indexa só arquivos conhecidos pelo git (git add -N em arquivos novos)
-```
-
-O grafo é atualizado pelo hook `pre-commit` do git; o banco local fica em
-`.code-review-graph/` (ignorado).
+Ambiente, padrão de commits e branches, fluxo de PRs, testes e como gerar uma versão estão no
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licença
 
