@@ -432,14 +432,18 @@ let activeTab = null; // null = aba "Sessão"
 
 /*
  * Layout da área de abas: uma aba, duas lado a lado ou duas empilhadas. Na tela dividida cada
- * metade mostra uma aba; clicar numa aba a coloca na metade em foco e clicar dentro de uma metade
- * passa o foco para ela.
+ * metade mostra uma aba e só muda de aba de propósito: arrastando a aba para a metade, pelo menu
+ * de contexto da aba ou, ao clicar numa aba fora de vista com as duas metades ocupadas, escolhendo
+ * a metade num menu. Clicar dentro de uma metade passa o foco para ela.
  */
 const LAYOUTS = ['single', 'cols', 'rows'];
 let layout = readLayout();
 let panes = [null, null]; // id da aba em cada metade
 let focusedPane = 0;
 const paneCount = () => (layout === 'single' ? 1 : 2);
+const paneName = (i) => (layout === 'rows' ? ['de cima', 'de baixo'] : ['esquerda', 'direita'])[i];
+/** Primeira metade sem aba (começando pela em foco), ou -1. */
+const emptyPane = () => [focusedPane, 1 - focusedPane].find((i) => i < paneCount() && !tabsById.has(panes[i])) ?? -1;
 
 function readLayout() {
   try {
@@ -474,7 +478,7 @@ function renderPanes() {
     }
     if (!empty) {
       empty = Object.assign(document.createElement('div'), { id: `pane-empty-${i}`, className: 'pane-empty' });
-      empty.textContent = 'Clique numa aba para mostrá-la aqui.';
+      empty.textContent = 'Arraste uma aba para cá ou clique numa aba.';
       empty.addEventListener('mousedown', () => {
         focusedPane = i;
         renderPanes();
@@ -521,11 +525,17 @@ function showEditor() {
   }
 }
 
+/**
+ * Mostra a aba. Já está numa metade: ela ganha o foco. Senão, entra numa metade vazia ou, sem
+ * nenhuma, na metade em foco (abas novas; o clique na barra passa por clickTab).
+ */
 function showTab(tab) {
-  // Já está numa metade: ela ganha o foco. Senão, entra na metade em foco.
   const at = panes.slice(0, paneCount()).indexOf(tab.id);
   if (at >= 0) focusedPane = at;
-  else panes[focusedPane] = tab.id;
+  else {
+    if (emptyPane() >= 0) focusedPane = emptyPane();
+    panes[focusedPane] = tab.id;
+  }
   activeTab = tab;
   $('tab-editor').classList.remove('active');
   $('panel-editor').hidden = true;
@@ -538,6 +548,34 @@ function showTab(tab) {
       else t?.onShow?.();
     }
     if (tab.term) tab.term.focus();
+  });
+}
+
+/** Coloca a aba na metade `pane`; se ela estava na outra metade, as duas trocam de lugar. */
+function showTabIn(tab, pane) {
+  const from = panes.slice(0, paneCount()).indexOf(tab.id);
+  if (from >= 0 && from !== pane) panes[from] = panes[pane];
+  panes[pane] = tab.id;
+  showTab(tab);
+}
+
+/** Clique na aba: com as duas metades ocupadas por outras abas, pergunta em qual mostrar. */
+function clickTab(tab) {
+  const shown = panes.slice(0, paneCount());
+  if (paneCount() === 1 || shown.includes(tab.id) || emptyPane() >= 0) {
+    showTab(tab);
+    return;
+  }
+  const r = tab.button.getBoundingClientRect();
+  showMenu(r.left, r.bottom, paneItems(tab));
+}
+
+/** Itens "Mostrar na metade X" (dizendo qual aba sai de lá). */
+function paneItems(tab) {
+  return [0, 1].map((i) => {
+    const there = tabsById.get(panes[i]);
+    const label = `Mostrar na metade ${paneName(i)}${there && there !== tab ? ` (no lugar de ${there.title})` : ''}`;
+    return Object.assign(menuItem(label, () => showTabIn(tab, i)), { disabled: there === tab });
   });
 }
 
@@ -598,7 +636,7 @@ function createTab({ title, tooltip = '', panelClass }) {
   close.textContent = '×';
   close.title = 'Fechar';
   tab.button.append(label, close);
-  tab.button.addEventListener('click', (e) => (e.target === close ? closeTab(tab) : showTab(tab)));
+  tab.button.addEventListener('click', (e) => (e.target === close ? closeTab(tab) : clickTab(tab)));
   tab.button.addEventListener('auxclick', (e) => {
     if (e.button === 1) closeTab(tab); // botão do meio fecha, como no navegador
   });
@@ -665,7 +703,13 @@ function droppedAwayFromTabBar(e) {
 }
 
 function clearDropMarks() {
-  for (const b of $('tabs').querySelectorAll('.drop-before, .drop-after')) b.classList.remove('drop-before', 'drop-after');
+  for (const b of document.querySelectorAll('.drop-before, .drop-after, .drop-pane')) b.classList.remove('drop-before', 'drop-after', 'drop-pane');
+}
+
+/** A metade da tela dividida sob o ponteiro (o elemento e o índice), ou null. */
+function paneAt(e) {
+  const el = e.target.closest?.('.terminals > .panel:not([hidden]), .terminals > .pane-empty');
+  return el && paneCount() > 1 ? { el, index: Number(el.style.order) } : null;
 }
 
 /** Onde a aba arrastada cairia: antes ou depois da aba sob o ponteiro. */
@@ -702,6 +746,28 @@ $('tabs').addEventListener('drop', (e) => {
     index = order.indexOf(over) + (target.after ? 1 : 0);
   }
   moveTab(tab, index);
+});
+
+// Soltar a aba numa metade da tela dividida a mostra lá (em vez de destacá-la em outra janela).
+$('terminals').addEventListener('dragover', (e) => {
+  const pane = draggedTab && paneAt(e);
+  if (!pane) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (!pane.el.classList.contains('drop-pane')) {
+    clearDropMarks();
+    pane.el.classList.add('drop-pane');
+  }
+});
+$('terminals').addEventListener('dragleave', (e) => {
+  if (!$('terminals').contains(e.relatedTarget)) clearDropMarks();
+});
+$('terminals').addEventListener('drop', (e) => {
+  const pane = draggedTab && paneAt(e);
+  if (!pane) return;
+  e.preventDefault();
+  clearDropMarks();
+  showTabIn(draggedTab, pane.index);
 });
 
 // Ctrl+Shift+PageUp/PageDown move a aba ativa (como no Windows Terminal).
@@ -860,61 +926,72 @@ async function adoptInto(tab, { fromWc, fromId }) {
 /** Dados para recriar a aba em outra janela. */
 const tabMeta = (tab) => ({ title: tab.title, tooltip: tab.tooltip, spec: tab.spec, endedText: tab.endedText, restartText: tab.restartText });
 
-// Menu de contexto da aba de terminal: destacar em janela própria ou devolver à principal.
+// Menus das abas (contexto e escolha da metade): um aberto por vez, fecha ao clicar fora.
 let tabMenu = null;
-function openTabMenu(e, tab) {
+function closeMenu() {
   tabMenu?.remove();
-  const item = (label, fn) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('role', 'menuitem');
-    b.textContent = label;
-    b.addEventListener('click', () => {
-      tabMenu?.remove();
-      tabMenu = null;
-      fn();
-    });
-    return b;
-  };
+  tabMenu = null;
+}
+
+function menuItem(label, fn) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.setAttribute('role', 'menuitem');
+  b.textContent = label;
+  b.addEventListener('click', () => {
+    closeMenu();
+    fn();
+  });
+  return b;
+}
+
+function showMenu(x, y, nodes) {
+  closeMenu();
   tabMenu = document.createElement('div');
   tabMenu.className = 'menu tab-menu';
   tabMenu.setAttribute('role', 'menu');
+  tabMenu.append(...nodes);
+  tabMenu.style.left = `${x}px`;
+  tabMenu.style.top = `${y}px`;
+  document.body.append(tabMenu);
+  const menu = tabMenu;
+  const away = (ev) => {
+    if (tabMenu === menu && menu.contains(ev.target)) return;
+    if (tabMenu === menu) closeMenu();
+    document.removeEventListener('mousedown', away, true);
+  };
+  document.addEventListener('mousedown', away, true);
+}
+
+// Menu de contexto da aba: ordem, metade da tela dividida, janela própria e fechar.
+function openTabMenu(e, tab) {
   const order = orderedTabs();
   const at = order.indexOf(tab);
-  const moveItem = (label, enabled, fn) => Object.assign(item(label, fn), { disabled: !enabled });
-  tabMenu.append(
+  const moveItem = (label, enabled, fn) => Object.assign(menuItem(label, fn), { disabled: !enabled });
+  const nodes = [
     moveItem('Mover para a esquerda', at > 0, () => moveTab(tab, at - 1)),
     moveItem('Mover para a direita', at < order.length - 1, () => moveTab(tab, at + 1)),
     moveItem('Mover para o início', at > 0, () => moveTab(tab, 0)),
     moveItem('Mover para o fim', at < order.length - 1, () => moveTab(tab, order.length - 1)),
     document.createElement('hr'),
-  );
+  ];
+  if (paneCount() > 1) nodes.push(...paneItems(tab), document.createElement('hr'));
   // Só abas de terminal mudam de janela.
   if (tab.term) {
-    tabMenu.append(api.isDetached
-      ? item('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
-      : item('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))));
+    nodes.push(api.isDetached
+      ? menuItem('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
+      : menuItem('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))));
   }
   if (tab.kind === 'rdp') {
-    tabMenu.append(
+    nodes.push(
       // Pelo teclado, Ctrl+Alt+Del fica no Windows local.
-      Object.assign(item('Enviar Ctrl+Alt+Del', () => sendCtrlAltDel(tab)), { disabled: !tab.running }),
-      item('Abrir em todos os monitores', () => connect(tab.session, { multimon: true })),
+      Object.assign(menuItem('Enviar Ctrl+Alt+Del', () => sendCtrlAltDel(tab)), { disabled: !tab.running }),
+      menuItem('Abrir em todos os monitores', () => connect(tab.session, { multimon: true })),
       document.createElement('hr'),
     );
   }
-  tabMenu.append(item('Fechar aba', () => closeTab(tab)));
-  tabMenu.style.left = `${e.clientX}px`;
-  tabMenu.style.top = `${e.clientY}px`;
-  document.body.append(tabMenu);
-  const away = (ev) => {
-    if (tabMenu && !tabMenu.contains(ev.target)) {
-      tabMenu.remove();
-      tabMenu = null;
-      document.removeEventListener('mousedown', away, true);
-    }
-  };
-  document.addEventListener('mousedown', away, true);
+  nodes.push(menuItem('Fechar aba', () => closeTab(tab)));
+  showMenu(e.clientX, e.clientY, nodes);
 }
 
 // A outra janela assumiu a aba: tira daqui sem encerrar o processo.

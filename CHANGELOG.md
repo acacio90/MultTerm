@@ -6,6 +6,13 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Alterado
+
+- Tela dividida: clicar numa aba fora de vista não substitui mais a metade em foco. Com as duas
+  metades ocupadas, um menu pergunta em qual metade mostrar a aba (e qual sai de lá); a aba
+  também vai para uma metade arrastando-a até ela ou pelo botão direito (**Mostrar na metade…**).
+  Mandar uma aba para a outra metade troca as duas de lugar. (#94)
+
 ## [0.8.1] - 2026-10-19
 
 ### Corrigido

@@ -107,8 +107,11 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
 - **Arrastar uma aba de terminal para fora da barra de abas** a destaca numa janela própria, aberta
   onde a aba foi solta (soltar perto da barra não destaca).
 - **Layout da área de abas** (ícones no canto direito da barra de abas): uma aba, duas lado a
-  lado ou duas empilhadas. Na tela dividida, clicar numa aba a coloca na metade em foco (com
-  borda destacada) e clicar dentro de uma metade passa o foco para ela. O layout fica lembrado.
+  lado ou duas empilhadas. Na tela dividida, uma aba só muda de metade de propósito: arrastando
+  a aba para a metade, pelo botão direito na aba (**Mostrar na metade…**) ou, ao clicar numa aba
+  fora de vista com as duas metades ocupadas, escolhendo a metade no menu que aparece (ele diz
+  qual aba sai). Clicar dentro de uma metade passa o foco para ela (com borda destacada). O
+  layout fica lembrado.
 - Switches e servidores antigos que só falam algoritmos SHA-1/ssh-rsa/CBC (o ssh recusa com
   "no matching key exchange method found"): a aba oferece **Permitir algoritmos antigos nesta
   sessão e reconectar**, que vale só para aquela sessão (opção *Aceitar algoritmos antigos* no
