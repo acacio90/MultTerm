@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, expandHome, parseAgentList, planLaunch, quoteForCmd, quoteWindowsArg, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
+import { embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, collapseHome, expandHome, parseAgentList, planLaunch, quoteForCmd, quoteWindowsArg, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
 
 const WIN: LaunchEnv = {
   platform: 'win32',
@@ -41,6 +41,13 @@ test('ssh: .ppk sem versão OpenSSH é ignorada com instrução de conversão', 
 test('expandHome só mexe em "~" no início', () => {
   assert.equal(expandHome('~', '/h'), join('/h'));
   assert.equal(expandHome('a~/b', '/h'), 'a~/b');
+});
+
+test('collapseHome: arquivo na pasta do usuário vira ~/...', () => {
+  const home = join('/u', 'pedro');
+  assert.equal(collapseHome(join(home, '.ssh', 'id_ed25519'), home), '~/.ssh/id_ed25519');
+  assert.equal(collapseHome(join('/outra', 'k'), home), join('/outra', 'k'));
+  assert.equal(collapseHome(home, home), home);
 });
 
 test('windows: Windows Terminal quando disponível, senão ssh em console próprio', () => {

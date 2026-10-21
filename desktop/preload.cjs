@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('multterm', {
   load: () => ipcRenderer.invoke('sessions:load'),
   save: (sessions) => ipcRenderer.invoke('sessions:save', sessions),
   chooseFile: () => ipcRenderer.invoke('sessions:choose-file'),
+  chooseKeyFile: (current) => ipcRenderer.invoke('sessions:choose-key', current),
+  setDefaults: (defaults) => ipcRenderer.invoke('sessions:set-defaults', defaults),
   importSessions: () => ipcRenderer.invoke('sessions:import'),
   exportSessions: (folder) => ipcRenderer.invoke('sessions:export', folder),
   exportBackup: () => ipcRenderer.invoke('backup:export'),

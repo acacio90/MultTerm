@@ -55,13 +55,15 @@ O próprio app verifica novas versões ao abrir e em **Ajuda → Buscar atualiza
 
 ```yaml
 version: 1
+defaults:
+  identityFile: ~/.ssh/id_ed25519   # opcional: chave das sessões SSH sem chave própria
 sessions:
   - name: web-01
     folder: Servidores/Produção
     type: ssh            # ssh (padrão) ou rdp
     host: web-01.example.org
     user: deploy
-    identityFile: ~/.ssh/id_ed25519
+    identityFile: ~/.ssh/deploy      # opcional: vazio = chave padrão ou agente SSH
     vpn: Matriz          # opcional: site de VPN conectado antes de abrir
   - name: ad-01
     folder: Servidores/Infraestrutura
@@ -74,12 +76,18 @@ diffs limpos. No app, o arquivo padrão fica em `%APPDATA%\MultTerm\sessions.yam
 **Arquivo → Abrir arquivo de sessões…** para apontar para um arquivo versionado (a escolha é lembrada) ou defina
 a variável `MULTTERM_SESSIONS`.
 
+A chave privada de cada sessão SSH pode ser escolhida pelo explorador de arquivos (**Procurar…**
+ao lado do campo); um arquivo dentro da pasta do usuário é gravado como `~/...`, que vale em outra
+máquina. Em **Arquivo → Chave SSH padrão…** fica a chave usada por todas as sessões SSH que não têm
+a sua (gravada em `defaults` no arquivo de sessões, vai junto no backup completo); sem chave padrão
+nem própria, vale o agente SSH.
+
 ## Uso
 
 A barra superior tem só o que se usa toda hora: **+ Nova sessão** e **Ferramentas** à esquerda;
 **VPN**, **Agente** e **Ajuda** à direita. O resto fica no menu do topo:
 
-- **Arquivo**: nova sessão, nova pasta, abrir/recarregar o arquivo de sessões, **Importar** e
+- **Arquivo**: nova sessão, nova pasta, abrir/recarregar o arquivo de sessões, chave SSH padrão, **Importar** e
   **Exportar** (sessões, sites de VPN ou backup completo) e sair.
 - **Sessão**: conectar, janela externa, Wake-on-LAN, editar e excluir a sessão selecionada.
 - **Ferramentas**: terminal local, ferramentas de rede, servidores, VPN e agente.

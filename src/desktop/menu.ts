@@ -7,7 +7,7 @@ import { app, Menu, type MenuItemConstructorOptions } from 'electron';
  * O F1 aparece no menu mas é tratado pela página (que sabe se o foco está num terminal).
  */
 export type MenuCommand =
-  | 'new-session' | 'new-folder' | 'open-file' | 'reload'
+  | 'new-session' | 'new-folder' | 'open-file' | 'reload' | 'default-key'
   | 'import-sessions' | 'import-vpn' | 'import-backup'
   | 'export-sessions' | 'export-vpn' | 'export-backup'
   | 'connect' | 'external' | 'wol' | 'edit' | 'delete'
@@ -36,6 +36,7 @@ export function buildAppMenu({ send, openProject, about }: MenuActions): Menu {
         sep,
         cmd('open-file', 'Abrir arquivo de sessões…'),
         cmd('reload', 'Recarregar sessões do arquivo'),
+        cmd('default-key', 'Chave SSH padrão…'),
         sep,
         {
           label: 'Importar',

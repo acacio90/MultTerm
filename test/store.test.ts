@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { exportFileName, groupByFolder, loadSessionFile, mergeSessions, parseSessions, saveSessionFile, serializeSessions, sessionsInFolder, validateSessions } from '../src/sessions/store.ts';
+import { exportFileName, groupByFolder, loadSessionDefaults, loadSessionFile, mergeSessions, parseSessionFile, parseSessions, saveSessionFile, serializeSessions, sessionsInFolder, validateSessions, withDefaults } from '../src/sessions/store.ts';
 
 const A: Session = { name: 'ZABBIX', folder: 'Servidores/Monitoramento', type: 'ssh', host: 'zabbix.example.org', port: 22, user: 'pedro' };
 const B: Session = { name: 'ANSIBLE', folder: 'Servidores/Infraestrutura', type: 'ssh', host: 'ansible.example.org', port: 2222 };
@@ -124,4 +124,33 @@ test('legacySsh: só em sessões SSH, gravado só quando ligado', () => {
   assert.equal(rdp.legacySsh, undefined);
   assert.throws(() => validateSessions([{ name: 'SW', type: 'ssh', host: '1.2.3.4', legacySsh: 1 }], 'teste'), /legacySsh/);
   assert.match(serializeSessions([ssh]), /legacySsh: true/);
+});
+
+test('chave SSH padrão: gravada em "defaults", mantida ao salvar e usada só por SSH sem chave', async () => {
+  const text = serializeSessions([A, C], { identityFile: '~/.ssh/geral' });
+  assert.match(text, /defaults:\r?\n  identityFile: ~\/\.ssh\/geral\r?\n/);
+  assert.deepEqual(parseSessionFile(text).defaults, { identityFile: '~/.ssh/geral' });
+  assert.doesNotMatch(serializeSessions([A]), /^defaults:/m);
+  assert.deepEqual(parseSessionFile('sessions: []').defaults, {});
+  assert.throws(() => parseSessions('defaults: [1]'), /"defaults" deve ser um objeto/);
+  assert.throws(() => parseSessions('defaults: {identityFile: 3}'), /"defaults.identityFile" deve ser texto/);
+
+  const defaults = { identityFile: '~/.ssh/geral' };
+  assert.equal(withDefaults(A, defaults).identityFile, '~/.ssh/geral');
+  assert.equal(withDefaults({ ...A, identityFile: '~/.ssh/propria' }, defaults).identityFile, '~/.ssh/propria');
+  assert.equal(withDefaults(C, defaults).identityFile, undefined);
+  assert.equal(withDefaults(A, {}), A);
+
+  const dir = await mkdtemp(join(tmpdir(), 'multterm-'));
+  try {
+    const file = join(dir, 'sessions.yaml');
+    await saveSessionFile(file, [A], defaults);
+    await saveSessionFile(file, [A, B]); // sem defaults: mantém os do arquivo
+    assert.deepEqual(await loadSessionDefaults(file), defaults);
+    assert.equal((await loadSessionFile(file)).length, 2);
+    await saveSessionFile(file, [A], {});
+    assert.deepEqual(await loadSessionDefaults(file), {});
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

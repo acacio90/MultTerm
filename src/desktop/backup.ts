@@ -20,6 +20,8 @@ export interface Backup {
   createdAt: string;
   appVersion: string;
   sessions: unknown[];
+  /** Bloco "defaults" do arquivo de sessões (validado na importação, como as sessões). */
+  sessionDefaults?: unknown;
   vpnSites: BackupSite[];
   servers: Record<string, Record<string, unknown>>;
   agent: { port?: number; agent?: string };
@@ -68,6 +70,7 @@ export function parseBackup(text: string): Backup {
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : '',
     appVersion: typeof raw.appVersion === 'string' ? raw.appVersion : '',
     sessions,
+    ...(raw.sessionDefaults !== undefined ? { sessionDefaults: raw.sessionDefaults } : {}),
     vpnSites,
     servers,
     agent,

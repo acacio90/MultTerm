@@ -6,7 +6,14 @@ export const FILE_VERSION = 1;
 
 const HEADER = `# Sessões do MultTerm — arquivo versionável, sem limite de sessões.
 # Campos: name, folder ("Pasta/Subpasta"), type (ssh|rdp), host, port, user, identityFile, mac, vpn, legacyTls, legacySsh, multimon, tags
+# defaults.identityFile: chave das sessões SSH sem identityFile própria
 `;
+
+/** Valores que valem para todas as sessões do arquivo. */
+export interface SessionDefaults {
+  /** Chave privada das sessões SSH sem chave própria. */
+  identityFile?: string;
+}
 
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
 
@@ -15,22 +22,44 @@ export function compareSessions(a: Session, b: Session): number {
 }
 
 export function parseSessions(text: string, source = 'sessions.yaml'): Session[] {
+  return parseSessionFile(text, source).sessions;
+}
+
+export function parseSessionFile(text: string, source = 'sessions.yaml'): { sessions: Session[]; defaults: SessionDefaults } {
   let doc: unknown;
   try {
     doc = parse(text);
   } catch (err) {
     throw new SessionError(`${source}: YAML inválido — ${(err as Error).message}`);
   }
-  if (doc === null || doc === undefined) return [];
+  if (doc === null || doc === undefined) return { sessions: [], defaults: {} };
   if (typeof doc !== 'object' || Array.isArray(doc)) {
     throw new SessionError(`${source}: esperado um objeto com "version" e "sessions"`);
   }
-  const { version, sessions } = doc as { version?: unknown; sessions?: unknown };
+  const { version, sessions, defaults } = doc as { version?: unknown; sessions?: unknown; defaults?: unknown };
   if (version !== undefined && version !== FILE_VERSION) {
     throw new SessionError(`${source}: versão ${String(version)} não suportada (esperado ${FILE_VERSION})`);
   }
-  if (sessions === undefined || sessions === null) return [];
-  return validateSessions(sessions, source);
+  return {
+    sessions: sessions === undefined || sessions === null ? [] : validateSessions(sessions, source),
+    defaults: validateDefaults(defaults, source),
+  };
+}
+
+/** Valida o bloco "defaults" (ausente = sem padrões). */
+export function validateDefaults(raw: unknown, source: string): SessionDefaults {
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new SessionError(`${source}: "defaults" deve ser um objeto`);
+  const { identityFile } = raw as { identityFile?: unknown };
+  if (identityFile === undefined || identityFile === null) return {};
+  if (typeof identityFile !== 'string') throw new SessionError(`${source}: "defaults.identityFile" deve ser texto`);
+  return identityFile.trim() ? { identityFile: identityFile.trim() } : {};
+}
+
+/** A sessão como é conectada: SSH sem chave própria usa a chave padrão do arquivo. */
+export function withDefaults(session: Session, defaults: SessionDefaults): Session {
+  if (session.type !== 'ssh' || session.identityFile || !defaults.identityFile) return session;
+  return { ...session, identityFile: defaults.identityFile };
 }
 
 /** Valida uma lista vinda de qualquer origem (YAML, interface, importação) e rejeita duplicadas. */
@@ -47,7 +76,7 @@ export function validateSessions(sessions: unknown, source: string): Session[] {
 }
 
 /** Saída determinística (ordem e campos fixos) para diffs limpos no git. */
-export function serializeSessions(sessions: Session[]): string {
+export function serializeSessions(sessions: Session[], defaults: SessionDefaults = {}): string {
   const ordered = [...sessions].sort(compareSessions).map((s) => {
     const out: Record<string, unknown> = { name: s.name };
     if (s.folder) out.folder = s.folder;
@@ -64,22 +93,36 @@ export function serializeSessions(sessions: Session[]): string {
     if (s.tags?.length) out.tags = s.tags;
     return out;
   });
-  return HEADER + stringify({ version: FILE_VERSION, sessions: ordered }, { lineWidth: 0 });
+  const doc: Record<string, unknown> = { version: FILE_VERSION };
+  if (defaults.identityFile) doc.defaults = { identityFile: defaults.identityFile };
+  doc.sessions = ordered;
+  return HEADER + stringify(doc, { lineWidth: 0 });
 }
 
 export async function loadSessionFile(path: string): Promise<Session[]> {
+  return (await readSessionFile(path)).sessions;
+}
+
+export async function loadSessionDefaults(path: string): Promise<SessionDefaults> {
+  return (await readSessionFile(path)).defaults;
+}
+
+async function readSessionFile(path: string): Promise<{ sessions: Session[]; defaults: SessionDefaults }> {
   let text: string;
   try {
     text = await readFile(path, 'utf8');
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { sessions: [], defaults: {} };
     throw err;
   }
-  return parseSessions(text, path);
+  return parseSessionFile(text, path);
 }
 
-export async function saveSessionFile(path: string, sessions: Session[]): Promise<void> {
-  await writeFile(path, serializeSessions(sessions), 'utf8');
+/** Grava as sessões; sem `defaults`, mantém os padrões que já estão no arquivo. */
+export async function saveSessionFile(path: string, sessions: Session[], defaults?: SessionDefaults): Promise<void> {
+  // Um arquivo ilegível é sobrescrito como antes, só sem padrões.
+  const kept = defaults ?? await loadSessionDefaults(path).catch(() => ({}));
+  await writeFile(path, serializeSessions(sessions, kept), 'utf8');
 }
 
 export interface MergeResult {
