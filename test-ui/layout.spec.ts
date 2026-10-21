@@ -56,7 +56,7 @@ test('layout da área de abas: uma, lado a lado e empilhadas', async () => {
   await expect(tab('Consulta DNS')).toHaveClass(/active/);
   await expect(tab('Wake-on-LAN')).toHaveClass(/in-pane/);
 
-  // Uma aba nova entra na metade em foco (no lugar do DNS, que sai de vista).
+  // Uma aba nova entra na metade em foco (não há metade vazia) (no lugar do DNS, que sai de vista).
   await openTool('localports');
   await expect(visible).toHaveCount(2);
   await expect(tab('Portas locais')).toHaveClass(/active/);
@@ -72,10 +72,52 @@ test('layout da área de abas: uma, lado a lado e empilhadas', async () => {
   await tab('Wake-on-LAN').locator('.close').click();
   expect(await page.evaluate(() => localStorage.getItem('tabLayout'))).toBe('rows');
   await openTool('dns');
-  await expect(page.locator('.pane-empty')).toHaveText('Clique numa aba para mostrá-la aqui.');
+  await expect(page.locator('.pane-empty')).toHaveText('Arraste uma aba para cá ou clique numa aba.');
 
   // De volta a uma aba só.
   await layoutButton('single').click();
   await expect(visible).toHaveCount(1);
   await expect(page.locator('.pane-empty')).toHaveCount(0);
+});
+
+test('tela dividida: a aba só muda de metade de propósito', async () => {
+  await openTool('dns');
+  await openTool('wol');
+  await openTool('localports');
+  await layoutButton('cols').click();
+  const visible = page.locator('.terminals > .panel:not([hidden])');
+  const menu = page.locator('.tab-menu');
+  await expect(tab('Portas locais')).toHaveClass(/active/);
+  await expect(tab('Wake-on-LAN')).toHaveClass(/in-pane/);
+
+  // Clicar numa aba fora de vista não troca nada: pergunta em qual metade mostrar.
+  await tab('Consulta DNS').click();
+  await expect(menu.locator('button')).toHaveText([
+    'Mostrar na metade esquerda (no lugar de Portas locais)',
+    'Mostrar na metade direita (no lugar de Wake-on-LAN)',
+  ]);
+  await expect(tab('Portas locais')).toHaveClass(/active/);
+  await expect(tab('Consulta DNS')).not.toHaveClass(/active|in-pane/);
+  await menu.locator('button', { hasText: 'metade direita' }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(visible).toHaveCount(2);
+  await expect(tab('Consulta DNS')).toHaveClass(/active/);
+  await expect(tab('Wake-on-LAN')).not.toHaveClass(/active|in-pane/);
+  expect((await box('Consulta DNS')).x).toBeGreaterThan((await box('Portas locais')).x);
+
+  // Clicar numa aba que já está numa metade só passa o foco, sem menu.
+  await tab('Portas locais').click();
+  await expect(menu).toHaveCount(0);
+  await expect(tab('Portas locais')).toHaveClass(/active/);
+
+  // Menu de contexto: mandar para a outra metade troca as duas de lugar.
+  await tab('Portas locais').click({ button: 'right' });
+  await menu.locator('button', { hasText: 'metade direita' }).click();
+  expect((await box('Portas locais')).x).toBeGreaterThan((await box('Consulta DNS')).x);
+
+  // Arrastar a aba para uma metade a mostra lá.
+  await tab('Wake-on-LAN').dragTo(visible.filter({ has: page.locator('text=Consulta DNS') }).first());
+  await expect(tab('Wake-on-LAN')).toHaveClass(/active/);
+  await expect(tab('Consulta DNS')).not.toHaveClass(/active|in-pane/);
+  expect((await box('Portas locais')).x).toBeGreaterThan((await box('Wake-on-LAN')).x);
 });
