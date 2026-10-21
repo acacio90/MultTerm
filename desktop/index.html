@@ -73,7 +73,9 @@
             <label>Host <input name="host" required></label>
             <label>Porta <input name="port" type="number" min="1" max="65535"></label>
             <label>Usuário <input name="user"></label>
-            <label class="ssh-only wide">Chave privada <input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"></label>
+            <label class="ssh-only wide">Chave privada
+              <span class="dir-pick"><input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"><button type="button" id="pick-key">Procurar…</button></span>
+            </label>
             <label class="ssh-only check wide"><input type="checkbox" name="legacySsh"> Aceitar algoritmos antigos (SHA-1, ssh-rsa, CBC) — só para switches e servidores antigos</label>
             <label class="rdp-only check wide"><input type="checkbox" name="multimon"> Abrir sempre em todos os monitores (tela cheia, no cliente do Windows)</label>
             <label class="rdp-only check wide"><input type="checkbox" name="legacyTls"> Aceitar TLS antigo (1.0) — só para servidores Windows antigos que não falam TLS 1.2</label>
@@ -108,6 +110,20 @@
       <div class="actions">
         <button type="submit" class="primary">OK</button>
         <button type="button" id="name-cancel">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="key-dialog" aria-labelledby="key-title">
+    <form id="key-form" method="dialog" class="small-dialog">
+      <h2 id="key-title">Chave SSH padrão</h2>
+      <label>Chave privada
+        <span class="dir-pick"><input name="defaultKey" autocomplete="off" spellcheck="false" placeholder="vazio = agente SSH"><button type="button" id="key-pick">Procurar…</button></span>
+      </label>
+      <p class="muted">Vale para todas as sessões SSH sem chave própria. Fica gravada no arquivo de sessões.</p>
+      <div class="actions">
+        <button type="submit" class="primary">Salvar</button>
+        <button type="button" id="key-cancel">Cancelar</button>
       </div>
     </form>
   </dialog>

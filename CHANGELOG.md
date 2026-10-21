@@ -6,6 +6,13 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- Chave privada da sessão pelo explorador de arquivos: botão **Procurar…** ao lado do campo, que
+  abre em `~/.ssh` e grava um arquivo da pasta do usuário como `~/...`. (#87)
+- **Arquivo → Chave SSH padrão…**: uma chave para todas as sessões SSH sem chave própria, gravada
+  em `defaults` no arquivo de sessões e incluída no backup completo. (#87)
+
 ## [0.8.1] - 2026-10-19
 
 ### Corrigido

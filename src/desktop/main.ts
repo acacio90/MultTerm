@@ -6,7 +6,9 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import {
+  collapseHome,
   embeddedSshCommand,
+  expandHome,
   parseAgentList,
   parseSshQuery,
   planLaunch,
@@ -29,7 +31,9 @@ import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
-import { exportFileName, loadSessionFile, mergeSessions, saveSessionFile, sessionsInFolder, validateSessions } from '../sessions/store.ts';
+import {
+  exportFileName, loadSessionDefaults, loadSessionFile, mergeSessions, saveSessionFile, sessionsInFolder, validateDefaults, validateSessions, withDefaults,
+} from '../sessions/store.ts';
 
 // Pasta de dados alternativa (testes isolados, perfis separados). Precisa vir antes do "ready".
 if (process.env.MULTTERM_USER_DATA) app.setPath('userData', resolve(process.env.MULTTERM_USER_DATA));
@@ -71,7 +75,13 @@ function sshAlgorithms(): Promise<SshAlgorithms | undefined> {
 }
 
 async function snapshot() {
-  return { path: sessionsPath, sessions: await loadSessionFile(sessionsPath) };
+  return { path: sessionsPath, sessions: await loadSessionFile(sessionsPath), defaults: await loadSessionDefaults(sessionsPath) };
+}
+
+/** A sessão vinda da interface, com a chave padrão do arquivo quando não tem a própria. */
+async function sessionToConnect(raw: unknown) {
+  const [session] = validateSessions([raw], 'conexão');
+  return withDefaults(session, await loadSessionDefaults(sessionsPath));
 }
 
 async function persist(raw: unknown) {
@@ -126,6 +136,30 @@ function registerIpc(): void {
     return snapshot();
   });
 
+  // Padrões do arquivo de sessões (chave padrão das sessões SSH).
+  ipcMain.handle('sessions:set-defaults', async (_e, raw: unknown) => {
+    const defaults = validateDefaults(raw, 'interface');
+    await mkdir(dirname(sessionsPath), { recursive: true });
+    await saveSessionFile(sessionsPath, await loadSessionFile(sessionsPath), defaults);
+    return snapshot();
+  });
+
+  // Chave privada da sessão pelo explorador: abre na pasta da chave atual ou em ~/.ssh.
+  ipcMain.handle('sessions:choose-key', async (e, current: unknown) => {
+    const home = homedir();
+    const typed = typeof current === 'string' && current.trim() ? expandHome(current.trim(), home) : '';
+    const sshDir = join(home, '.ssh');
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const opts = {
+      title: 'Chave privada',
+      defaultPath: typed || (existsSync(sshDir) ? sshDir : home),
+      filters: [{ name: 'Todos os arquivos', extensions: ['*'] }, { name: 'Chave do PuTTY', extensions: ['ppk'] }],
+      properties: ['openFile' as const, 'showHiddenFiles' as const],
+    };
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return res.canceled || !res.filePaths[0] ? null : collapseHome(res.filePaths[0], home);
+  });
+
   // Exporta todas as sessões, ou só uma pasta (com subpastas), no mesmo YAML que a importação lê.
   ipcMain.handle('sessions:export', async (_e, folder: unknown) => {
     const scope = typeof folder === 'string' ? folder : '';
@@ -173,6 +207,7 @@ function registerIpc(): void {
       createdAt: new Date().toISOString(),
       appVersion: app.getVersion(),
       sessions,
+      sessionDefaults: await loadSessionDefaults(sessionsPath),
       vpnSites,
       servers,
       agent: exportAgentPrefs(),
@@ -191,8 +226,16 @@ function registerIpc(): void {
     const backup = parseBackup(await readFile(result.filePaths[0], 'utf8'));
     // Valida tudo antes de gravar qualquer coisa.
     const imported = validateSessions(backup.sessions, 'backup');
+    const importedDefaults = validateDefaults(backup.sessionDefaults, 'backup');
+    const current = await loadSessionDefaults(sessionsPath);
+    // Como as sessões, a chave padrão já configurada aqui é mantida.
+    const defaults = current.identityFile ? current : importedDefaults;
     const { merged, added, skipped } = mergeSessions(await loadSessionFile(sessionsPath), imported);
-    const snap = added.length ? await persist(merged) : await snapshot();
+    if (added.length || defaults.identityFile !== current.identityFile) {
+      await mkdir(dirname(sessionsPath), { recursive: true });
+      await saveSessionFile(sessionsPath, merged, defaults);
+    }
+    const snap = await snapshot();
     const sites = await importVpnSites(backup.vpnSites);
     const servers = await importServerConfigs(backup.servers);
     await importAgentPrefs(backup.agent);
@@ -200,7 +243,7 @@ function registerIpc(): void {
   });
 
   ipcMain.handle('session:connect', async (_e, raw: unknown, rawOpts: unknown) => {
-    const [session] = validateSessions([raw], 'conexão');
+    const session = await sessionToConnect(raw);
     const o = (typeof rawOpts === 'object' && rawOpts !== null ? rawOpts : {}) as Record<string, unknown>;
     const opts = typeof o.multimon === 'boolean' ? { multimon: o.multimon } : {};
     const env = {
@@ -247,7 +290,7 @@ function registerIpc(): void {
   });
 
   ipcMain.handle('term:open', async (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
-    const [session] = validateSessions([raw], 'conexão');
+    const session = await sessionToConnect(raw);
     const { file, args, warnings } = embeddedSshCommand(session, {
       platform: process.platform,
       home: homedir(),

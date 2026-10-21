@@ -129,3 +129,47 @@ test('importa inventário do Ansible pelo botão (diálogo substituído no teste
   await expect(session('web02.example.org')).toHaveCount(1);
   await expect(session('ad02')).toContainText('rdp');
 });
+
+test('chave privada pelo explorador: caminho na pasta do usuário vira ~/', async () => {
+  await app.evaluate(({ app: electronApp, dialog }) => {
+    const key = `${electronApp.getPath('home')}/.ssh/minha-chave`;
+    const g = globalThis as { keyDialog?: unknown };
+    dialog.showOpenDialog = (async (...args: unknown[]) => {
+      g.keyDialog = args.at(-1);
+      return { canceled: false, filePaths: [key] };
+    }) as typeof dialog.showOpenDialog;
+  });
+  await page.click('#btn-new');
+  await page.click('#pick-key');
+  await expect(page.locator('#form [name=identityFile]')).toHaveValue('~/.ssh/minha-chave');
+  const opts = await app.evaluate(() => (globalThis as { keyDialog?: { title: string; properties: string[] } }).keyDialog);
+  expect(opts?.title).toBe('Chave privada');
+  expect(opts?.properties).toContain('showHiddenFiles');
+});
+
+test('chave SSH padrão pelo menu: gravada no arquivo e mostrada no campo da sessão', async () => {
+  await clickMenu(app, 'default-key');
+  await expect(page.locator('#key-dialog')).toBeVisible();
+  await page.fill('#key-form [name=defaultKey]', '~/.ssh/geral');
+  await page.click('#key-form button[type=submit]');
+  await expect(page.locator('#key-dialog')).toBeHidden();
+  await expect(page.locator('#messages')).toHaveText('Chave SSH padrão: ~/.ssh/geral');
+  expect(await readFile(sessionsFile, 'utf8')).toMatch(/defaults:\r?\n  identityFile: ~\/\.ssh\/geral\r?\n/);
+  await page.click('#btn-new');
+  await expect(page.locator('#form [name=identityFile]')).toHaveAttribute('placeholder', 'vazio = chave padrão (~/.ssh/geral)');
+
+  // Salvar uma sessão mantém a chave padrão no arquivo.
+  await page.fill('#form [name=name]', 'nova');
+  await page.fill('#form [name=host]', 'nova.example.org');
+  await page.click('#form button[type=submit]');
+  await expect(page.locator('#messages')).toHaveText('Sessão salva.');
+  expect(await readFile(sessionsFile, 'utf8')).toContain('identityFile: ~/.ssh/geral');
+
+  // Vazio remove a chave padrão.
+  await clickMenu(app, 'default-key');
+  await expect(page.locator('#key-form [name=defaultKey]')).toHaveValue('~/.ssh/geral');
+  await page.fill('#key-form [name=defaultKey]', '');
+  await page.click('#key-form button[type=submit]');
+  await expect(page.locator('#messages')).toContainText('Sem chave SSH padrão');
+  expect(await readFile(sessionsFile, 'utf8')).not.toMatch(/^defaults:/m);
+});

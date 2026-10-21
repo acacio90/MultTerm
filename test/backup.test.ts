@@ -9,6 +9,7 @@ test('backup: ida e volta', () => {
     createdAt: '2026-10-13T12:00:00.000Z',
     appVersion: '0.4.0',
     sessions: [{ name: 'web', host: '10.0.0.1' }],
+    sessionDefaults: { identityFile: '~/.ssh/geral' },
     vpnSites: [{ name: 'Matriz', content: SITE }],
     servers: { tftp: { port: 69 } },
     agent: { port: 47830, agent: 'claude' },
@@ -16,6 +17,7 @@ test('backup: ida e volta', () => {
   const b = parseBackup(text);
   assert.equal(b.format, 'multterm-backup');
   assert.deepEqual(b.sessions, [{ name: 'web', host: '10.0.0.1' }]);
+  assert.deepEqual(b.sessionDefaults, { identityFile: '~/.ssh/geral' });
   assert.deepEqual(b.vpnSites, [{ name: 'Matriz', content: SITE }]);
   assert.deepEqual(b.servers, { tftp: { port: 69 } });
   assert.deepEqual(b.agent, { port: 47830, agent: 'claude' });
@@ -24,6 +26,7 @@ test('backup: ida e volta', () => {
 test('backup: partes ausentes viram vazias', () => {
   const b = parseBackup(JSON.stringify({ format: 'multterm-backup', version: 1 }));
   assert.deepEqual([b.sessions, b.vpnSites, b.servers, b.agent], [[], [], {}, {}]);
+  assert.equal(b.sessionDefaults, undefined);
 });
 
 test('backup: recusa o que não é backup ou está corrompido', () => {

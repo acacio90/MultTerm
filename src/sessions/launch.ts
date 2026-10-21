@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { DEFAULT_PORTS, effectivePort, SessionError, type Session } from './model.ts';
 
 export interface LaunchEnv {
@@ -95,6 +95,13 @@ export function consoleWindowPlan(command: string, args: string[], warnings: str
 
 export function expandHome(path: string, home: string): string {
   return path === '~' || /^~[\\/]/.test(path) ? join(home, path.slice(1)) : path;
+}
+
+/** Inverso de expandHome: um arquivo dentro da pasta do usuário vira "~/..." (vale em outra máquina). */
+export function collapseHome(path: string, home: string): string {
+  const rel = relative(home, path);
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return path;
+  return `~/${rel.split(/[\\/]/).join('/')}`;
 }
 
 export function sshArgs(

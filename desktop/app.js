@@ -9,6 +9,7 @@ const DEFAULT_PORTS = { ssh: 22, rdp: 3389 };
 const state = {
   path: '',
   sessions: [],
+  defaults: {}, // padrões do arquivo (chave SSH padrão)
   selected: null, // chave da sessão selecionada
   multi: new Set(), // seleção múltipla (Ctrl/Shift+clique)
   anchor: null, // início do intervalo do Shift+clique
@@ -260,6 +261,10 @@ function select(key) {
 function apply(snapshot) {
   state.path = snapshot.path;
   state.sessions = snapshot.sessions;
+  state.defaults = snapshot.defaults ?? {};
+  form.identityFile.placeholder = state.defaults.identityFile
+    ? `vazio = chave padrão (${state.defaults.identityFile})`
+    : '~/.ssh/id_ed25519 (vazio = agente SSH)';
   // Pasta pendente que ganhou sessão passa a existir no arquivo.
   for (const p of [...pendingFolders]) if (hasSessions(p)) pendingFolders.delete(p);
   for (const k of [...state.multi]) if (!state.sessions.some((x) => keyOf(x) === k)) state.multi.delete(k);
@@ -1321,6 +1326,44 @@ $('search').addEventListener('input', (e) => {
 
 form.addEventListener('submit', save);
 form.type.addEventListener('change', updateTypeFields);
+/** Botão "Procurar…" ao lado de um campo de chave: preenche com o arquivo escolhido. */
+async function pickKeyInto(input) {
+  try {
+    const path = await api.chooseKeyFile(input.value || state.defaults?.identityFile || '');
+    if (path) input.value = path;
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+$('pick-key').addEventListener('click', () => pickKeyInto(form.identityFile));
+$('key-pick').addEventListener('click', () => pickKeyInto($('key-form').defaultKey));
+
+/** Chave SSH padrão: vale para as sessões SSH sem chave própria (gravada no arquivo de sessões). */
+function editDefaultKey() {
+  const dialog = $('key-dialog');
+  const keyForm = $('key-form');
+  keyForm.defaultKey.value = state.defaults?.identityFile ?? '';
+  const done = () => {
+    keyForm.onsubmit = null;
+    $('key-cancel').onclick = null;
+    dialog.close();
+  };
+  keyForm.onsubmit = async (e) => {
+    e.preventDefault();
+    done();
+    showEditor();
+    clearMessages();
+    const identityFile = keyForm.defaultKey.value.trim();
+    try {
+      apply(await api.setDefaults(identityFile ? { identityFile } : {}));
+      message(identityFile ? `Chave SSH padrão: ${identityFile}` : 'Sem chave SSH padrão: as sessões sem chave própria usam o agente SSH.');
+    } catch (err) {
+      message(cleanError(err), 'error');
+    }
+  };
+  $('key-cancel').onclick = done;
+  dialog.showModal();
+}
 $('btn-delete').addEventListener('click', remove);
 $('btn-connect').addEventListener('click', () => {
   const session = state.sessions.find((s) => keyOf(s) === state.editing);
@@ -1840,6 +1883,7 @@ const MENU_COMMANDS = {
   'new-folder': () => folderAction('subfolder', ''),
   'open-file': chooseSessionsFile,
   reload: () => load(),
+  'default-key': editDefaultKey,
   'import-sessions': importSessions,
   'import-vpn': importVpnSite,
   'import-backup': importBackup,
