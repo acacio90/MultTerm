@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.9.0] - 2026-10-21
+
 ### Adicionado
 
 - Chave privada da sessão pelo explorador de arquivos: botão **Procurar…** ao lado do campo, que
@@ -255,7 +257,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.8.1...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.9.0...develop
+[0.9.0]: https://github.com/acacio90/MultTerm/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/acacio90/MultTerm/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/acacio90/MultTerm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/acacio90/MultTerm/compare/v0.6.0...v0.7.0
