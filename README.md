@@ -1,6 +1,23 @@
-# MultTerm
+<div align="center">
 
-[![CI](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
+  <img src=".github/assets/logo-light.svg" alt="MultTerm" width="400">
+</picture>
+
+[![release](https://img.shields.io/github/v/release/acacio90/MultTerm?label=release)](https://github.com/acacio90/MultTerm/releases)
+[![ci](https://img.shields.io/github/actions/workflow/status/acacio90/MultTerm/ci.yml?branch=develop&label=ci&logo=github)](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml)
+[![node](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen)](package.json)
+[![licença](https://img.shields.io/github/license/acacio90/MultTerm?label=licen%C3%A7a)](LICENSE)
+[![plataforma](https://img.shields.io/badge/plataforma-Windows-0078d4)](https://github.com/acacio90/MultTerm/releases)
+[![downloads](https://img.shields.io/github/downloads/acacio90/MultTerm/total?label=downloads)](https://github.com/acacio90/MultTerm/releases)
+
+[Releases](https://github.com/acacio90/MultTerm/releases) ·
+[Changelog](CHANGELOG.md) ·
+[Issues](https://github.com/acacio90/MultTerm/issues) ·
+[Segurança](SECURITY.md)
+
+</div>
 
 Gerenciador de sessões SSH/RDP com terminal em abas.
 As sessões ficam num arquivo YAML legível e versionável, **sem limite de quantidade**.
@@ -98,8 +115,11 @@ roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B,
 - **Arrastar uma aba de terminal para fora da barra de abas** a destaca numa janela própria, aberta
   onde a aba foi solta (soltar perto da barra não destaca).
 - **Layout da área de abas** (ícones no canto direito da barra de abas): uma aba, duas lado a
-  lado ou duas empilhadas. Na tela dividida, clicar numa aba a coloca na metade em foco (com
-  borda destacada) e clicar dentro de uma metade passa o foco para ela. O layout fica lembrado.
+  lado ou duas empilhadas. Na tela dividida, uma aba só muda de metade de propósito: arrastando
+  a aba para a metade, pelo botão direito na aba (**Mostrar na metade…**) ou, ao clicar numa aba
+  fora de vista com as duas metades ocupadas, escolhendo a metade no menu que aparece (ele diz
+  qual aba sai). Clicar dentro de uma metade passa o foco para ela (com borda destacada). O
+  layout fica lembrado.
 - Switches e servidores antigos que só falam algoritmos SHA-1/ssh-rsa/CBC (o ssh recusa com
   "no matching key exchange method found"): a aba oferece **Permitir algoritmos antigos nesta
   sessão e reconectar**, que vale só para aquela sessão (opção *Aceitar algoritmos antigos* no
@@ -330,71 +350,8 @@ código-fonte oficial (hash conferido) e publicado numa release auxiliar (`freer
 
 ## Desenvolvimento
 
-O motor de VPN tem testes de interoperabilidade contra um gateway strongSwan em Docker
-(`npm run test:ipsec`) e um teste da pilha completa no Windows, que pede UAC:
-`npm run test:ipsec -- --keep && npm run build && node test/ipsec-gateway/e2e-elevated.ts`.
-
-
-Requer Node.js 22.18+.
-
-```sh
-npm install
-npm run fetch:freerdp  # cliente RDP (uma vez; o npm run release baixa sozinho)
-npm start            # compila e abre o app
-npm test             # testes de unidade
-npm run test:ui      # testes de interface (abre o app com Playwright)
-npm run typecheck
-npm run icon         # regenera desktop/icon.png a partir de desktop/icon.svg
-npm run multterm -- list
-npm run multterm -- import outro.yaml --dry-run
-npm run multterm -- import inventario.ini --folder Ansible --dry-run
-```
-
-### Commits
-
-As mensagens seguem o [Conventional Commits](https://www.conventionalcommits.org/pt-br/):
-`tipo(escopo opcional): descrição`, com tipo em `feat`, `fix`, `docs`, `style`,
-`refactor`, `perf`, `test`, `build`, `ci`, `chore` ou `revert` (`!` após o tipo/escopo
-indica mudança incompatível). O `npm install` instala um hook `commit-msg` que recusa
-mensagens fora do padrão.
-
-```text
-feat(terminal): reconecta a sessão com a tecla R
-fix(sessions): rejeita host iniciado por "-"
-docs: explica a configuração do agente SSH
-```
-
-### Branches
-
-- `develop`: desenvolvimento do dia a dia; todo trabalho novo entra aqui.
-- `main`: só versões lançadas; cada merge em `main` corresponde a uma tag `vX.Y.Z` e a uma
-  release no GitHub.
-
-### Gerar e publicar uma versão
-
-1. Em `develop`: suba a `version` no `package.json` e registre as mudanças no `CHANGELOG.md`
-   (commit `chore(release): X.Y.Z`).
-2. Leve para a `main` e crie a tag:
-   `git checkout main && git merge --ff-only develop && git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`
-3. `npm run release` cria o rascunho da release da tag, gera o instalador e envia o `.exe`, o
-   `.blockmap` e o `latest.yml`. Usa o login do `gh` (ou `GH_TOKEN`) e recusa versões já
-   publicadas; `node scripts/release.mjs --dry-run` só confere.
-4. Confira os arquivos do rascunho, escreva as notas e publique. Os apps instalados encontram a
-   versão nova em **Ajuda → Buscar atualizações**.
-5. Feche o milestone da versão e volte para `develop`.
-
-### Grafo de código (code-review-graph)
-
-O projeto usa o [code-review-graph](https://github.com/tirth8205/code-review-graph) (MCP + hooks)
-para manter um grafo do código atualizado:
-
-```sh
-uv tool install code-review-graph==2.3.9
-code-review-graph build     # indexa só arquivos conhecidos pelo git (git add -N em arquivos novos)
-```
-
-O grafo é atualizado pelo hook `pre-commit` do git; o banco local fica em
-`.code-review-graph/` (ignorado).
+Ambiente, padrão de commits e branches, fluxo de PRs, testes e como gerar uma versão estão no
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licença
 

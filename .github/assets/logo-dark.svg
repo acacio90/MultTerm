@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="340" viewBox="0 0 640 340">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- ícone do app (desktop/icon.svg) reduzido a 200px -->
+  <g transform="translate(220 0) scale(0.390625)">
+    <rect x="16" y="16" width="480" height="480" rx="104" fill="url(#bg)"/>
+    <rect x="246" y="96" width="150" height="72" rx="16" fill="#334155"/>
+    <rect x="80" y="88" width="170" height="80" rx="16" fill="#0f172a"/>
+    <rect x="64" y="140" width="384" height="292" rx="28" fill="#0f172a"/>
+    <polyline points="128,226 196,276 128,326" fill="none" stroke="#7dd3fc" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="226" y="304" width="124" height="30" rx="10" fill="#f8fafc"/>
+  </g>
+  <!-- nome -->
+  <text x="320" y="310" text-anchor="middle" fill="#e6edf3" font-size="92" font-weight="500"
+        font-family="'JetBrains Mono','Cascadia Code',Consolas,'DejaVu Sans Mono',monospace">MultTerm</text>
+</svg>
