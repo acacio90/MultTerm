@@ -1,6 +1,23 @@
-# MultTerm
+<div align="center">
 
-[![CI](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
+  <img src=".github/assets/logo-light.svg" alt="MultTerm" width="400">
+</picture>
+
+[![release](https://img.shields.io/github/v/release/acacio90/MultTerm?label=release)](https://github.com/acacio90/MultTerm/releases)
+[![ci](https://img.shields.io/github/actions/workflow/status/acacio90/MultTerm/ci.yml?branch=develop&label=ci&logo=github)](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml)
+[![node](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen)](package.json)
+[![licença](https://img.shields.io/github/license/acacio90/MultTerm?label=licen%C3%A7a)](LICENSE)
+[![plataforma](https://img.shields.io/badge/plataforma-Windows-0078d4)](https://github.com/acacio90/MultTerm/releases)
+[![downloads](https://img.shields.io/github/downloads/acacio90/MultTerm/total?label=downloads)](https://github.com/acacio90/MultTerm/releases)
+
+[Releases](https://github.com/acacio90/MultTerm/releases) ·
+[Changelog](CHANGELOG.md) ·
+[Issues](https://github.com/acacio90/MultTerm/issues) ·
+[Segurança](SECURITY.md)
+
+</div>
 
 Gerenciador de sessões SSH/RDP com terminal em abas.
 As sessões ficam num arquivo YAML legível e versionável, **sem limite de quantidade**.
