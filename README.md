@@ -335,7 +335,8 @@ pasta guardados. A sincronização só mexe nas sessões que vieram do Zabbix (a
 Cada host vira uma sessão assim:
 
 - **Endereço**: interface principal do agente (IP ou DNS, conforme configurado no host); sem
-  agente, a interface SNMP. Hosts sem nenhuma das duas ficam de fora, com aviso.
+  agente, a interface SNMP. Hosts sem nenhuma das duas, ou com endereço local (`localhost`,
+  `127.x.x.x`, `::1`, como o próprio servidor do Zabbix), ficam de fora, com aviso.
 - **Tipo**: a tag `multterm.type` (`ssh` ou `rdp`); sem ela, Windows no inventário (`os`) ou num
   template vira RDP, o resto SSH.
 - **Usuário e porta**: tags opcionais `multterm.user` e `multterm.port`.

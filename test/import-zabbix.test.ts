@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hostAddress, planZabbixSync, zabbixToSessions, type ZabbixHost } from '../src/sessions/import-zabbix.ts';
+import { hostAddress, isLoopback, planZabbixSync, zabbixToSessions, type ZabbixHost } from '../src/sessions/import-zabbix.ts';
 import type { Session } from '../src/sessions/model.ts';
 import { parseSessions, serializeSessions } from '../src/sessions/store.ts';
 
@@ -72,6 +72,24 @@ test('host sem interface ou com tipo inválido gera aviso e fica de fora', () =>
   assert.equal(sessions.some((s) => s.zabbixHostId === '10504' || s.zabbixHostId === '10505'), false);
   assert.ok(warnings.some((w) => /sem-interface: sem interface/.test(w)));
   assert.ok(warnings.some((w) => /tipo-ruim.*"type" deve ser/.test(w)));
+});
+
+test('endereço local (localhost, 127.x, ::1) fica de fora com aviso', () => {
+  for (const a of ['localhost', 'LOCALHOST', 'app.localhost', '127.0.0.1', '127.1.2.3', '::1', '[::1]']) assert.ok(isLoopback(a), a);
+  for (const a of ['10.0.0.1', '127.example.org', 'localhost.acme.com', '::2']) assert.equal(isLoopback(a), false, a);
+
+  const server = { groupid: '4', name: 'Zabbix servers' };
+  const hosts: ZabbixHost[] = [
+    { hostid: '10084', host: 'Zabbix server', interfaces: [agent('127.0.0.1')], hostgroups: [server] },
+    { hostid: '10085', host: 'proxy', interfaces: [agent('', 'localhost', '0')], hostgroups: [server] },
+    { hostid: '10086', host: 'web', interfaces: [agent('10.0.0.8')], hostgroups: [server] },
+  ];
+  const { sessions, warnings } = zabbixToSessions(hosts, ['4'], 'Zabbix');
+  assert.deepEqual(sessions.map((s) => s.name), ['web']);
+  assert.deepEqual(warnings, [
+    'Zabbix server: endereço local (127.0.0.1), ignorado',
+    'proxy: endereço local (localhost), ignorado',
+  ]);
 });
 
 test('zabbixHostId sobrevive à gravação e à leitura do arquivo', () => {

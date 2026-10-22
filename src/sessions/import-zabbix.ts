@@ -6,6 +6,7 @@ import type { ImportResult } from './import-inventory.ts';
  * - Cada grupo escolhido vira uma pasta ("/" no nome do grupo cria subpastas); um host em vários
  *   grupos escolhidos aparece em cada um.
  * - Endereço: interface principal do agente (IP ou DNS, conforme "useip"); sem agente, a SNMP.
+ *   Hosts com endereço local (localhost, 127.x.x.x, ::1) ficam de fora.
  * - Tipo: tag "multterm.type" (ssh|rdp); senão Windows no inventário ou nos templates vira RDP.
  * - Tags opcionais "multterm.user" e "multterm.port"; MAC do inventário (macaddress_a).
  */
@@ -50,6 +51,12 @@ export function hostAddress(host: ZabbixHost): string | undefined {
   return (preferred || iface.ip || iface.dns || '').trim() || undefined;
 }
 
+/** localhost, 127.x.x.x e ::1: o próprio servidor do Zabbix, que não é alcançável por esse endereço. */
+export function isLoopback(address: string): boolean {
+  const a = address.toLowerCase().replace(/^\[|\]$/g, '');
+  return a === 'localhost' || a.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(a) || a === '::1' || a === '0:0:0:0:0:0:0:1';
+}
+
 function tag(host: ZabbixHost, name: string): string | undefined {
   return host.tags?.find((t) => t.tag.toLowerCase() === name)?.value.trim() || undefined;
 }
@@ -76,6 +83,10 @@ export function zabbixToSessions(hosts: ZabbixHost[], groupIds: Iterable<string>
     const address = hostAddress(host);
     if (!address) {
       warnings.push(`${label}: sem interface do agente ou SNMP, ignorado`);
+      continue;
+    }
+    if (isLoopback(address)) {
+      warnings.push(`${label}: endereço local (${address}), ignorado`);
       continue;
     }
     const groups = (host.hostgroups ?? host.groups ?? []).filter((g) => chosen.has(g.groupid));
