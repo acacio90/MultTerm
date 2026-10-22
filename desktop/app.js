@@ -1376,7 +1376,7 @@ async function importSessions() {
     const result = await api.importSessions();
     if (!result) return;
     apply(result);
-    const origem = result.format === 'ansible' ? ' do inventário do Ansible' : '';
+    const origem = result.format === 'inventory' ? ' do inventário' : '';
     message(`${result.added} sessões importadas${origem}, ${result.skipped} já existiam.`);
     for (const w of result.warnings) message(w, 'warn');
   } catch (err) {

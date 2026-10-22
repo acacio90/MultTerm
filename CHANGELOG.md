@@ -6,6 +6,12 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Alterado
+
+- Importação de inventário (INI/YAML): as variáveis agora têm os nomes dos campos da sessão
+  (`host`, `port`, `user`, `identityFile` e `type=ssh|rdp`); variáveis `ansible_*` são ignoradas.
+  O menu passa a ser **Importar → Sessões (YAML ou inventário INI)…**. (#101)
+
 ## [0.9.0] - 2026-10-21
 
 ### Adicionado

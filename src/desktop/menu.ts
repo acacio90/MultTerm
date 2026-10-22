@@ -41,7 +41,7 @@ export function buildAppMenu({ send, openProject, about }: MenuActions): Menu {
         {
           label: 'Importar',
           submenu: [
-            cmd('import-sessions', 'Sessões (YAML ou inventário do Ansible)…'),
+            cmd('import-sessions', 'Sessões (YAML ou inventário INI)…'),
             cmd('import-vpn', 'Site de VPN (.vpn)…'),
             sep,
             cmd('import-backup', 'Backup completo…'),

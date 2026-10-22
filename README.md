@@ -28,7 +28,7 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - **Terminal SSH embutido em abas** (xterm.js + node-pty), usando o OpenSSH do sistema
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - **RDP numa aba** (cliente FreeRDP embutido), ou no cliente do Windows (`mstsc`) pelo menu
-- Importação de sessões de outro arquivo YAML ou de um **inventário do Ansible** (INI/YAML)
+- Importação de sessões de outro arquivo YAML ou de um **inventário** (INI/YAML)
 - Exportação das sessões (todas ou uma pasta), dos sites de VPN ou de um **backup completo** para
   levar tudo a outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
@@ -301,11 +301,10 @@ sessões a outra máquina. Não há senhas no arquivo (o app não guarda senhas)
 com as sessões existentes (mesma pasta + nome não é sobrescrito):
 
 - **Sessões do MultTerm** (YAML com `sessions:`).
-- **Inventário do Ansible** (INI ou YAML): cada grupo vira uma pasta (grupos filhos viram
-  subpastas) e cada host uma sessão SSH, usando `ansible_host`, `ansible_port`,
-  `ansible_user` e `ansible_ssh_private_key_file` (variáveis do host valem sobre as do grupo).
-  Hosts com `ansible_connection=winrm`/`psrp` viram sessões RDP; faixas como `web[01:03]`
-  são expandidas; valores com template Jinja são ignorados com aviso.
+- **Inventário** (INI ou YAML): cada grupo vira uma pasta (grupos filhos viram subpastas) e
+  cada host uma sessão. Variáveis com os nomes dos campos da sessão (`host`, `port`, `user`,
+  `identityFile` e `type=ssh|rdp`) preenchem a sessão; as do host valem sobre as do grupo.
+  Faixas como `web[01:03]` são expandidas.
 
 ### Login sem senha (agente SSH)
 

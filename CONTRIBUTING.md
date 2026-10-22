@@ -20,7 +20,7 @@ Outros comandos úteis:
 npm run icon           # regenera desktop/icon.png a partir de desktop/icon.svg
 npm run multterm -- list
 npm run multterm -- import outro.yaml --dry-run
-npm run multterm -- import inventario.ini --folder Ansible --dry-run
+npm run multterm -- import inventario.ini --folder Inventario --dry-run
 ```
 
 O `wfreerdp.exe` é compilado pelo workflow `.github/workflows/freerdp.yml` a partir do
