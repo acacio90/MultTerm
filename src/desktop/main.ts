@@ -501,10 +501,7 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerAgentIpc();
   registerDetachIpc();
   registerRdpIpc();
-  registerZabbixIpc(async (imported) => {
-    const { merged, added, skipped } = mergeSessions(await loadSessionFile(sessionsPath), imported);
-    return { ...(await persist(merged)), added: added.length, skipped: skipped.length };
-  });
+  registerZabbixIpc({ load: () => loadSessionFile(sessionsPath), save: (sessions) => persist(sessions) });
   Menu.setApplicationMenu(buildAppMenu({
     // Os comandos agem na janela principal (abre de novo se só restaram janelas destacadas).
     send: async (command) => {

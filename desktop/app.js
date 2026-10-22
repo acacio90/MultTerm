@@ -1388,8 +1388,8 @@ async function importSessions() {
 }
 
 /**
- * Importar hosts do Zabbix: conecta na API, lista os grupos (com a quantidade de hosts) e importa
- * os escolhidos. Token e senha em branco usam os guardados; eles nunca voltam do processo principal.
+ * Hosts do Zabbix: conecta na API, lista os grupos (com a quantidade de hosts) e sincroniza os
+ * escolhidos. Token e senha em branco usam os guardados; eles nunca voltam do processo principal.
  */
 async function importZabbix() {
   const dialog = $('zabbix-dialog');
@@ -1453,7 +1453,7 @@ async function importZabbix() {
         label.dataset.name = g.name.toLowerCase();
         return label;
       }));
-      $('zabbix-version').textContent = `Zabbix ${version}: ${groups.length} grupo(s) com hosts. Um host em vários grupos marcados entra em cada pasta.`;
+      $('zabbix-version').textContent = `Zabbix ${version}: ${groups.length} grupo(s) com hosts. Um host em vários grupos marcados entra em cada pasta; grupos desmarcados saem da árvore.`;
       box.hidden = false;
       updateImport();
     } catch (err) {
@@ -1484,21 +1484,60 @@ async function importZabbix() {
     e.preventDefault();
     error.textContent = '';
     importBtn.disabled = true;
+    const req = {
+      groupIds: [...list.querySelectorAll('input:checked')].map((el) => el.value),
+      rootFolder: zform.rootFolder.value,
+    };
+    let preview;
     try {
-      const groupIds = [...list.querySelectorAll('input:checked')].map((el) => el.value);
-      const result = await api.zabbixImport({ groupIds, rootFolder: zform.rootFolder.value });
-      done();
-      showEditor();
-      clearMessages();
-      apply(result);
-      message(`${result.added} sessões importadas do Zabbix (${result.hosts} hosts), ${result.skipped} já existiam.`);
-      for (const w of result.warnings) message(w, 'warn');
+      preview = await api.zabbixSync(req);
     } catch (err) {
       error.textContent = cleanError(err);
       updateImport();
+      return;
     }
+    done();
+    await confirmZabbixSync(req, preview);
   };
   dialog.showModal();
+}
+
+/** Mostra a prévia (novas, atualizadas, removidas) e grava se o usuário confirmar. */
+async function confirmZabbixSync(req, preview) {
+  showEditor();
+  clearMessages();
+  const changes = preview.added + preview.updated + preview.removed.length;
+  if (changes) {
+    const ok = await askConfirm({
+      title: 'Sincronizar com o Zabbix',
+      text: `${preview.hosts} hosts no Zabbix: ${preview.added} sessão(ões) nova(s), ${preview.updated} atualizada(s) e ${preview.removed.length} removida(s).`,
+      items: preview.removed.map((key) => `remover: ${key}`),
+      note: 'Endereço, nome e pasta vêm do Zabbix; tipo, chave, VPN e opções editados no MultTerm são mantidos. Sessões criadas à mão não são alteradas.',
+      confirmLabel: 'Sincronizar',
+    });
+    if (!ok) return;
+  }
+  try {
+    const result = await api.zabbixSync({ ...req, apply: true });
+    apply(result);
+    message(changes
+      ? `Zabbix sincronizado: ${result.added} nova(s), ${result.updated} atualizada(s), ${result.removed.length} removida(s).`
+      : 'Zabbix sincronizado: nada mudou.');
+    for (const w of result.warnings) message(w, 'warn');
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+/** Arquivo → Importar → Sincronizar com o Zabbix: usa a conexão, os grupos e a pasta guardados. */
+async function syncZabbix() {
+  showEditor();
+  clearMessages();
+  try {
+    await confirmZabbixSync({}, await api.zabbixSync({}));
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
 }
 
 /** Troca o arquivo de sessões em uso (ex.: um sessions.yaml versionado no git). */
@@ -2080,6 +2119,7 @@ const MENU_COMMANDS = {
   'default-key': editDefaultKey,
   'import-sessions': importSessions,
   'import-zabbix': importZabbix,
+  'zabbix-sync': syncZabbix,
   'import-vpn': importVpnSite,
   'import-backup': importBackup,
   'export-sessions': () => exportSessions(),

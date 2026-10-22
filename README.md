@@ -307,17 +307,30 @@ com as sessões existentes (mesma pasta + nome não é sobrescrito):
   `identityFile` e `type=ssh|rdp`) preenchem a sessão; as do host valem sobre as do grupo.
   Faixas como `web[01:03]` são expandidas.
 
-### Importar do Zabbix
+### Sincronizar com o Zabbix
 
-**Arquivo → Importar → Hosts do Zabbix…** busca os hosts de um Zabbix 6.0 ou mais novo pela API:
+**Arquivo → Importar → Hosts do Zabbix…** monta a árvore com os hosts de um Zabbix 6.0 ou mais
+novo, pela API, e a mantém em dia:
 
 1. Informe o endereço (`https://zabbix.exemplo.com`; o `/api_jsonrpc.php` é completado) e um
    **API token** (Usuários → API tokens) ou usuário e senha. Para certificado autoassinado, marque
    **Aceitar certificado autoassinado**.
 2. **Conectar e listar grupos** mostra os grupos com a quantidade de hosts; marque os que quer.
-3. **Importar**: cada grupo vira uma pasta dentro da pasta de destino (padrão `Zabbix`; um `/` no
-   nome do grupo cria subpastas) e cada host uma sessão. Um host em vários grupos marcados entra em
-   cada pasta. Sessões que já existem (mesma pasta + nome) são mantidas.
+3. **Sincronizar…** mostra a prévia (sessões novas, atualizadas e removidas) e só grava se você
+   confirmar. Cada grupo vira uma pasta dentro da pasta de destino (padrão `Zabbix`; um `/` no
+   nome do grupo cria subpastas) e cada host uma sessão; um host em vários grupos marcados entra
+   em cada pasta.
+
+Depois, **Arquivo → Importar → Sincronizar com o Zabbix** repete com a conexão, os grupos e a
+pasta guardados. A sincronização só mexe nas sessões que vieram do Zabbix (as que têm
+`zabbixHostId`):
+
+- hosts novos entram; hosts removidos do Zabbix, ou de grupos desmarcados, saem;
+- **endereço, nome e pasta** vêm sempre do Zabbix (uma sessão movida volta para a pasta do grupo);
+- **usuário, porta e MAC** só mudam quando o Zabbix tem o valor (tags ou inventário);
+- **tipo, chave, VPN, opções e tags** editados no MultTerm são mantidos;
+- sessões criadas à mão nunca são alteradas; se uma tiver a mesma pasta e nome de um host, ela
+  fica e o host é avisado.
 
 Cada host vira uma sessão assim:
 
@@ -328,8 +341,7 @@ Cada host vira uma sessão assim:
 - **Usuário e porta**: tags opcionais `multterm.user` e `multterm.port`.
 - **MAC** (Wake-on-LAN): campo `macaddress_a` do inventário.
 
-O endereço, os grupos e a pasta ficam lembrados; o token e a senha ficam cifrados pelo Windows
-e não precisam ser digitados de novo. A sessão guarda o `zabbixHostId` do host de origem.
+O token e a senha ficam cifrados pelo Windows e não precisam ser digitados de novo.
 
 ### Login sem senha (agente SSH)
 

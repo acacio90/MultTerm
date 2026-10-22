@@ -2,7 +2,7 @@ import { normalizeFolder, normalizeMac, SessionError, sessionKey, validateSessio
 import type { ImportResult } from './import-inventory.ts';
 
 /*
- * Hosts do Zabbix (resposta do host.get) → sessões.
+ * Hosts do Zabbix (resposta do host.get) → sessões, e a sincronização delas com o arquivo.
  * - Cada grupo escolhido vira uma pasta ("/" no nome do grupo cria subpastas); um host em vários
  *   grupos escolhidos aparece em cada um.
  * - Endereço: interface principal do agente (IP ou DNS, conforme "useip"); sem agente, a SNMP.
@@ -107,4 +107,69 @@ export function zabbixToSessions(hosts: ZabbixHost[], groupIds: Iterable<string>
     }
   }
   return { sessions, warnings };
+}
+
+export interface ZabbixSyncPlan {
+  /** O arquivo inteiro depois da sincronização. */
+  sessions: Session[];
+  added: Session[];
+  updated: Session[];
+  removed: Session[];
+  /** Vindas do Zabbix com a mesma pasta/nome de uma sessão criada à mão (que é mantida). */
+  conflicts: Session[];
+}
+
+/** Mesmos campos e valores, em qualquer ordem. */
+function sameSession(a: Session, b: Session): boolean {
+  const norm = (s: Session) => JSON.stringify(Object.entries(s).filter(([, v]) => v !== undefined).sort(([x], [y]) => x.localeCompare(y)));
+  return norm(a) === norm(b);
+}
+
+/**
+ * Sessão existente atualizada pelo Zabbix: nome, pasta e endereço vêm sempre dele; usuário, porta
+ * e MAC só quando o Zabbix tem valor; tipo, chave, VPN, opções e tags ficam como editados aqui.
+ */
+function updateFromZabbix(prev: Session, inc: Session): Session {
+  const next: Session = { ...prev, name: inc.name, folder: inc.folder, host: inc.host, zabbixHostId: inc.zabbixHostId };
+  if (inc.user !== undefined) next.user = inc.user;
+  if (inc.port !== undefined) next.port = inc.port;
+  if (inc.mac !== undefined) next.mac = inc.mac;
+  return next;
+}
+
+/**
+ * Sincroniza as sessões do Zabbix (as que têm zabbixHostId) com o que veio da API: novas entram,
+ * existentes são atualizadas e as que não vieram (host removido ou grupo desmarcado) saem.
+ * Sessões sem zabbixHostId nunca são alteradas.
+ */
+export function planZabbixSync(existing: Session[], incoming: Session[]): ZabbixSyncPlan {
+  const managed = existing.filter((s) => s.zabbixHostId);
+  const others = existing.filter((s) => !s.zabbixHostId);
+  const otherKeys = new Set(others.map(sessionKey));
+  const byKey = new Map(managed.map((s) => [sessionKey(s), s]));
+  const used = new Set<Session>();
+  const plan: ZabbixSyncPlan = { sessions: [...others], added: [], updated: [], removed: [], conflicts: [] };
+
+  for (const inc of incoming) {
+    if (otherKeys.has(sessionKey(inc))) {
+      plan.conflicts.push(inc);
+      continue;
+    }
+    // Mesmo lugar primeiro; senão, outra sessão do mesmo host (grupo ou nome mudou no Zabbix).
+    const same = byKey.get(sessionKey(inc));
+    const prev = same && same.zabbixHostId === inc.zabbixHostId && !used.has(same)
+      ? same
+      : managed.find((s) => s.zabbixHostId === inc.zabbixHostId && !used.has(s));
+    if (!prev) {
+      plan.added.push(inc);
+      plan.sessions.push(inc);
+      continue;
+    }
+    used.add(prev);
+    const next = updateFromZabbix(prev, inc);
+    plan.sessions.push(next);
+    if (!sameSession(prev, next)) plan.updated.push(next);
+  }
+  plan.removed = managed.filter((s) => !used.has(s));
+  return plan;
 }

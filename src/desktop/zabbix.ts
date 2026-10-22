@@ -1,14 +1,14 @@
 import { app, ipcMain, safeStorage } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { zabbixToSessions } from '../sessions/import-zabbix.ts';
-import { normalizeFolder, type Session } from '../sessions/model.ts';
+import { planZabbixSync, zabbixToSessions } from '../sessions/import-zabbix.ts';
+import { normalizeFolder, sessionKey, type Session } from '../sessions/model.ts';
 import { apiUrl, ZabbixClient, ZabbixError, type ZabbixAuth } from '../zabbix/client.ts';
 
 /*
- * Arquivo → Importar → Hosts do Zabbix: conecta na API, lista os grupos e importa os hosts dos
- * grupos escolhidos. Endereço, grupos e pasta ficam lembrados em zabbix.json; o token e a senha
- * ficam cifrados pelo Windows (safeStorage) e nunca voltam para a interface.
+ * Arquivo → Importar → Hosts do Zabbix: conecta na API, lista os grupos e sincroniza as sessões
+ * com os hosts dos grupos escolhidos. Endereço, grupos e pasta ficam lembrados em zabbix.json; o
+ * token e a senha ficam cifrados pelo Windows (safeStorage) e nunca voltam para a interface.
  */
 
 type AuthType = 'token' | 'password';
@@ -66,10 +66,13 @@ function authOf(config: Config): ZabbixAuth {
 
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
-/** Adiciona as sessões importadas ao arquivo e devolve o resultado para a interface. */
-export type AddSessions = (sessions: Session[]) => Promise<Record<string, unknown>>;
+/** Acesso ao arquivo de sessões; "save" devolve o novo estado para a interface. */
+export interface SessionsAccess {
+  load(): Promise<Session[]>;
+  save(sessions: Session[]): Promise<Record<string, unknown>>;
+}
 
-export function registerZabbixIpc(addSessions: AddSessions): void {
+export function registerZabbixIpc(sessions: SessionsAccess): void {
   ipcMain.handle('zabbix:config', async () => {
     const c = await loadConfig();
     return {
@@ -106,12 +109,18 @@ export function registerZabbixIpc(addSessions: AddSessions): void {
     }
   });
 
-  ipcMain.handle('zabbix:import', async (_e, raw: Record<string, unknown>) => {
+  /*
+   * Sincroniza com os grupos e a pasta informados (ou os guardados, no "Sincronizar com o Zabbix"
+   * do menu). Sem "apply" só devolve a prévia; com "apply" grava e lembra a escolha.
+   */
+  ipcMain.handle('zabbix:sync', async (_e, raw: Record<string, unknown>) => {
     const config = await loadConfig();
-    if (!config.url) throw new ZabbixError('conecte ao Zabbix primeiro');
-    const groupIds = Array.isArray(raw?.groupIds) ? raw.groupIds.filter((id): id is string => typeof id === 'string' && /^\d+$/.test(id)) : [];
+    if (!config.url) throw new ZabbixError('configure a conexão em Arquivo → Importar → Hosts do Zabbix');
+    const groupIds = Array.isArray(raw?.groupIds)
+      ? raw.groupIds.filter((id): id is string => typeof id === 'string' && /^\d+$/.test(id))
+      : config.groupIds ?? [];
     if (!groupIds.length) throw new ZabbixError('escolha ao menos um grupo');
-    const rootFolder = normalizeFolder(text(raw?.rootFolder));
+    const rootFolder = typeof raw?.rootFolder === 'string' ? normalizeFolder(raw.rootFolder) : config.rootFolder ?? DEFAULT_ROOT;
     const client = await ZabbixClient.connect({ url: config.url, auth: authOf(config), insecure: config.insecure });
     let hosts;
     try {
@@ -119,8 +128,20 @@ export function registerZabbixIpc(addSessions: AddSessions): void {
     } finally {
       await client.close();
     }
+    const { sessions: incoming, warnings } = zabbixToSessions(hosts, groupIds, rootFolder);
+    const plan = planZabbixSync(await sessions.load(), incoming);
+    const summary = {
+      hosts: hosts.length,
+      added: plan.added.length,
+      updated: plan.updated.length,
+      removed: plan.removed.map(sessionKey),
+      warnings: [
+        ...warnings,
+        ...plan.conflicts.map((s) => `${sessionKey(s)}: já existe uma sessão com esse nome criada à mão; mantida`),
+      ],
+    };
+    if (raw?.apply !== true) return summary;
     await saveConfig({ ...config, groupIds, rootFolder });
-    const { sessions, warnings } = zabbixToSessions(hosts, groupIds, rootFolder);
-    return { ...(await addSessions(sessions)), hosts: hosts.length, warnings };
+    return { ...(await sessions.save(plan.sessions)), ...summary };
   });
 }

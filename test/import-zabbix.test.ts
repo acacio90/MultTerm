@@ -1,6 +1,7 @@
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hostAddress, zabbixToSessions, type ZabbixHost } from '../src/sessions/import-zabbix.ts';
+import { hostAddress, planZabbixSync, zabbixToSessions, type ZabbixHost } from '../src/sessions/import-zabbix.ts';
+import type { Session } from '../src/sessions/model.ts';
 import { parseSessions, serializeSessions } from '../src/sessions/store.ts';
 
 const LINUX = { groupid: '2', name: 'Linux servers' };
@@ -79,4 +80,51 @@ test('zabbixHostId sobrevive à gravação e à leitura do arquivo', () => {
   assert.match(text, /zabbixHostId: "10502"/);
   assert.equal(parseSessions(text)[0].zabbixHostId, '10502');
   assert.throws(() => parseSessions('sessions:\n  - { name: a, host: a, zabbixHostId: abc }'), /zabbixHostId/);
+});
+
+describe('sincronização', () => {
+  const web: Session = { name: 'web01', folder: 'Zabbix/Linux', type: 'ssh', host: '10.0.0.1', zabbixHostId: '1' };
+  const db: Session = { name: 'db01', folder: 'Zabbix/Linux', type: 'ssh', host: '10.0.0.2', zabbixHostId: '2' };
+  const manual: Session = { name: 'roteador', folder: 'Rede', type: 'ssh', host: '10.0.0.254' };
+
+  test('novas entram, iguais não contam como mudança, as que sumiram saem; manuais ficam', () => {
+    const plan = planZabbixSync([web, db, manual], [web, { ...db, name: 'db02', zabbixHostId: '3' }]);
+    assert.deepEqual(plan.added.map((s) => s.name), ['db02']);
+    assert.deepEqual(plan.updated, []);
+    assert.deepEqual(plan.removed.map((s) => s.name), ['db01']);
+    assert.deepEqual(plan.sessions.map((s) => s.name).sort(), ['db02', 'roteador', 'web01']);
+  });
+
+  test('atualiza endereço, nome e pasta do Zabbix e mantém o que foi editado aqui', () => {
+    const edited: Session = { ...web, type: 'rdp', user: 'pedro', identityFile: '~/.ssh/id', vpn: 'campus', tags: ['x'] };
+    const plan = planZabbixSync([edited], [{ ...web, name: 'Web 01', folder: 'Zabbix/Servidores', host: '10.0.0.10' }]);
+    assert.deepEqual(plan.updated, [{
+      name: 'Web 01', folder: 'Zabbix/Servidores', type: 'rdp', host: '10.0.0.10', user: 'pedro',
+      identityFile: '~/.ssh/id', vpn: 'campus', tags: ['x'], zabbixHostId: '1',
+    }]);
+    assert.deepEqual(plan.removed, []);
+    assert.equal(plan.sessions.length, 1);
+  });
+
+  test('usuário, porta e MAC do Zabbix só substituem quando existem', () => {
+    const edited = { ...web, user: 'pedro', port: 2200 };
+    assert.equal(planZabbixSync([edited], [web]).sessions[0].user, 'pedro');
+    const plan = planZabbixSync([edited], [{ ...web, user: 'deploy', mac: 'aa:bb:cc:dd:ee:ff' }]);
+    assert.equal(plan.sessions[0].user, 'deploy');
+    assert.equal(plan.sessions[0].port, 2200);
+    assert.equal(plan.sessions[0].mac, 'aa:bb:cc:dd:ee:ff');
+  });
+
+  test('host em dois grupos: cada sessão casa com a sua pasta', () => {
+    const other = { ...web, folder: 'Zabbix/Produção', user: 'prod' };
+    const plan = planZabbixSync([web, other], [web, { ...web, folder: 'Zabbix/Produção' }]);
+    assert.deepEqual(plan.updated, []);
+    assert.equal(plan.sessions.find((s) => s.folder === 'Zabbix/Produção')?.user, 'prod');
+  });
+
+  test('mesma pasta/nome de uma sessão manual: a manual fica e o conflito é avisado', () => {
+    const plan = planZabbixSync([manual], [{ ...manual, zabbixHostId: '9' }]);
+    assert.deepEqual(plan.sessions, [manual]);
+    assert.deepEqual(plan.conflicts.map((s) => s.name), ['roteador']);
+  });
 });
