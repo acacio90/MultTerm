@@ -128,6 +128,35 @@
     </form>
   </dialog>
 
+  <dialog id="zabbix-dialog" aria-labelledby="zabbix-title">
+    <form id="zabbix-form" method="dialog" class="small-dialog">
+      <h2 id="zabbix-title">Importar hosts do Zabbix</h2>
+      <label>Endereço <input name="url" required autocomplete="off" spellcheck="false" placeholder="https://zabbix.exemplo.com"></label>
+      <label>Autenticação
+        <select name="authType">
+          <option value="token">API token</option>
+          <option value="password">Usuário e senha</option>
+        </select>
+      </label>
+      <label class="zabbix-token">API token <input name="token" type="password" autocomplete="off"></label>
+      <label class="zabbix-password">Usuário <input name="user" autocomplete="off" spellcheck="false"></label>
+      <label class="zabbix-password">Senha <input name="password" type="password" autocomplete="off"></label>
+      <label class="check"><input type="checkbox" name="insecure"> Aceitar certificado autoassinado</label>
+      <div class="actions"><button type="button" id="zabbix-connect">Conectar e listar grupos</button></div>
+      <div id="zabbix-groups-box" class="zabbix-groups-box" hidden>
+        <p id="zabbix-version" class="muted"></p>
+        <input id="zabbix-filter" type="search" placeholder="Filtrar grupos" autocomplete="off">
+        <div id="zabbix-groups" class="zabbix-groups" role="group" aria-label="Grupos do Zabbix"></div>
+        <label>Pasta de destino <input name="rootFolder" autocomplete="off" placeholder="vazio = raiz"></label>
+      </div>
+      <p id="zabbix-error" class="form-error" aria-live="polite"></p>
+      <div class="actions">
+        <button type="submit" id="zabbix-import" class="primary" disabled>Importar</button>
+        <button type="button" id="zabbix-cancel">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="confirm-dialog" aria-labelledby="confirm-title">
     <form id="confirm-form" method="dialog" class="small-dialog">
       <h2 id="confirm-title">Confirmar</h2>

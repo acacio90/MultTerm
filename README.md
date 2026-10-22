@@ -28,7 +28,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - **Terminal SSH embutido em abas** (xterm.js + node-pty), usando o OpenSSH do sistema
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
 - **RDP numa aba** (cliente FreeRDP embutido), ou no cliente do Windows (`mstsc`) pelo menu
-- Importação de sessões de outro arquivo YAML ou de um **inventário** (INI/YAML)
+- Importação de sessões de outro arquivo YAML, de um **inventário** (INI/YAML) ou dos hosts e
+  grupos do **Zabbix**
 - Exportação das sessões (todas ou uma pasta), dos sites de VPN ou de um **backup completo** para
   levar tudo a outra máquina
 - **Ferramentas de rede**: ping, traceroute, consulta DNS, consulta SNMP (v1/v2c/v3), scanner de
@@ -305,6 +306,30 @@ com as sessões existentes (mesma pasta + nome não é sobrescrito):
   cada host uma sessão. Variáveis com os nomes dos campos da sessão (`host`, `port`, `user`,
   `identityFile` e `type=ssh|rdp`) preenchem a sessão; as do host valem sobre as do grupo.
   Faixas como `web[01:03]` são expandidas.
+
+### Importar do Zabbix
+
+**Arquivo → Importar → Hosts do Zabbix…** busca os hosts de um Zabbix 6.0 ou mais novo pela API:
+
+1. Informe o endereço (`https://zabbix.exemplo.com`; o `/api_jsonrpc.php` é completado) e um
+   **API token** (Usuários → API tokens) ou usuário e senha. Para certificado autoassinado, marque
+   **Aceitar certificado autoassinado**.
+2. **Conectar e listar grupos** mostra os grupos com a quantidade de hosts; marque os que quer.
+3. **Importar**: cada grupo vira uma pasta dentro da pasta de destino (padrão `Zabbix`; um `/` no
+   nome do grupo cria subpastas) e cada host uma sessão. Um host em vários grupos marcados entra em
+   cada pasta. Sessões que já existem (mesma pasta + nome) são mantidas.
+
+Cada host vira uma sessão assim:
+
+- **Endereço**: interface principal do agente (IP ou DNS, conforme configurado no host); sem
+  agente, a interface SNMP. Hosts sem nenhuma das duas ficam de fora, com aviso.
+- **Tipo**: a tag `multterm.type` (`ssh` ou `rdp`); sem ela, Windows no inventário (`os`) ou num
+  template vira RDP, o resto SSH.
+- **Usuário e porta**: tags opcionais `multterm.user` e `multterm.port`.
+- **MAC** (Wake-on-LAN): campo `macaddress_a` do inventário.
+
+O endereço, os grupos e a pasta ficam lembrados; o token e a senha ficam cifrados pelo Windows
+e não precisam ser digitados de novo. A sessão guarda o `zabbixHostId` do host de origem.
 
 ### Login sem senha (agente SSH)
 

@@ -5,7 +5,7 @@ import { DEFAULT_PORTS, normalizeFolder, SessionError, sessionKey, validateSessi
 export const FILE_VERSION = 1;
 
 const HEADER = `# Sessões do MultTerm — arquivo versionável, sem limite de sessões.
-# Campos: name, folder ("Pasta/Subpasta"), type (ssh|rdp), host, port, user, identityFile, mac, vpn, legacyTls, legacySsh, multimon, tags
+# Campos: name, folder ("Pasta/Subpasta"), type (ssh|rdp), host, port, user, identityFile, mac, vpn, legacyTls, legacySsh, multimon, tags, zabbixHostId
 # defaults.identityFile: chave das sessões SSH sem identityFile própria
 `;
 
@@ -91,6 +91,7 @@ export function serializeSessions(sessions: Session[], defaults: SessionDefaults
     if (s.legacySsh) out.legacySsh = true;
     if (s.multimon) out.multimon = true;
     if (s.tags?.length) out.tags = s.tags;
+    if (s.zabbixHostId) out.zabbixHostId = s.zabbixHostId;
     return out;
   });
   const doc: Record<string, unknown> = { version: FILE_VERSION };

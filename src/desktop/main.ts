@@ -25,6 +25,7 @@ import { exportVpnSites, importVpnSites, registerVpnIpc } from './vpn.ts';
 import { exportServerConfigs, importServerConfigs, registerServersIpc } from './servers.ts';
 import { agentLaunch, exportAgentPrefs, importAgentPrefs, registerAgentIpc } from './agent.ts';
 import { closeRdpOf, registerRdpIpc } from './rdp.ts';
+import { registerZabbixIpc } from './zabbix.ts';
 import { buildAppMenu } from './menu.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, type LocalShell } from './local-terminal.ts';
@@ -500,6 +501,10 @@ if (!vpnHelper) app.whenReady().then(async () => {
   registerAgentIpc();
   registerDetachIpc();
   registerRdpIpc();
+  registerZabbixIpc(async (imported) => {
+    const { merged, added, skipped } = mergeSessions(await loadSessionFile(sessionsPath), imported);
+    return { ...(await persist(merged)), added: added.length, skipped: skipped.length };
+  });
   Menu.setApplicationMenu(buildAppMenu({
     // Os comandos agem na janela principal (abre de novo se só restaram janelas destacadas).
     send: async (command) => {

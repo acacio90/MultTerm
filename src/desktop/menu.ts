@@ -8,7 +8,7 @@ import { app, Menu, type MenuItemConstructorOptions } from 'electron';
  */
 export type MenuCommand =
   | 'new-session' | 'new-folder' | 'open-file' | 'reload' | 'default-key'
-  | 'import-sessions' | 'import-vpn' | 'import-backup'
+  | 'import-sessions' | 'import-zabbix' | 'import-vpn' | 'import-backup'
   | 'export-sessions' | 'export-vpn' | 'export-backup'
   | 'connect' | 'external' | 'wol' | 'edit' | 'delete'
   | 'local-powershell' | 'local-cmd' | 'local-wsl'
@@ -42,6 +42,7 @@ export function buildAppMenu({ send, openProject, about }: MenuActions): Menu {
           label: 'Importar',
           submenu: [
             cmd('import-sessions', 'Sessões (YAML ou inventário INI)…'),
+            cmd('import-zabbix', 'Hosts do Zabbix…'),
             cmd('import-vpn', 'Site de VPN (.vpn)…'),
             sep,
             cmd('import-backup', 'Backup completo…'),

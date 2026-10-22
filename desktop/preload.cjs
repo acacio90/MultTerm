@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('multterm', {
   chooseKeyFile: (current) => ipcRenderer.invoke('sessions:choose-key', current),
   setDefaults: (defaults) => ipcRenderer.invoke('sessions:set-defaults', defaults),
   importSessions: () => ipcRenderer.invoke('sessions:import'),
+  // Importar hosts do Zabbix (token e senha ficam no processo principal).
+  zabbixConfig: () => ipcRenderer.invoke('zabbix:config'),
+  zabbixConnect: (req) => ipcRenderer.invoke('zabbix:connect', req),
+  zabbixImport: (req) => ipcRenderer.invoke('zabbix:import', req),
   exportSessions: (folder) => ipcRenderer.invoke('sessions:export', folder),
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   importBackup: () => ipcRenderer.invoke('backup:import'),
