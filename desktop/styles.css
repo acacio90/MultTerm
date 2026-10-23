@@ -416,3 +416,26 @@ dialog#name-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 /* Caixa de seleção no formulário de sessão (ex.: TLS antigo nas sessões RDP). */
 #form label.check { flex-direction: row; align-items: center; gap: 6px; }
 #form label.check input { width: auto; }
+
+/* ---------- importar do Zabbix ---------- */
+
+dialog#zabbix-dialog {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+dialog#zabbix-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+#zabbix-form { width: 440px; }
+#zabbix-form label[hidden] { display: none; }
+#zabbix-form label.check { flex-direction: row; align-items: center; gap: 6px; }
+#zabbix-form label.check input { width: auto; }
+#zabbix-form .actions { margin-top: 0; }
+.zabbix-groups-box { display: flex; flex-direction: column; gap: 8px; }
+.zabbix-groups-box[hidden] { display: none; }
+.zabbix-groups-box .muted { margin: 0; font-size: 12px; color: var(--muted); }
+.zabbix-groups { max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; }
+.zabbix-groups label { flex-direction: row; align-items: center; gap: 6px; color: var(--text); padding: 2px 0; }
+.zabbix-groups label input { width: auto; }
+.zabbix-groups label .count { color: var(--muted); font-size: 12px; }

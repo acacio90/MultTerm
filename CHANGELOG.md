@@ -6,6 +6,15 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Arquivo → Importar → Hosts do Zabbix…**: conecta no Zabbix (6.0 ou mais novo) por API token
+  ou usuário e senha, lista os grupos e monta a árvore com os hosts dos escolhidos; cada grupo
+  vira uma pasta e cada host uma sessão (Windows vira RDP; hosts com endereço local, como
+  `127.0.0.1`, ficam de fora). **Sincronizar com o Zabbix** mantém a
+  árvore em dia (hosts novos entram, removidos saem), com prévia antes de gravar e sem perder o que
+  foi editado no MultTerm. A conexão fica lembrada, com a credencial cifrada. (#103)
+
 ### Alterado
 
 - Importação de inventário (INI/YAML): as variáveis agora têm os nomes dos campos da sessão

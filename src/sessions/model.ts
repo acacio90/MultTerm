@@ -26,6 +26,8 @@ export interface Session {
   /** SSH: aceita algoritmos antigos (troca de chaves SHA-1, ssh-rsa, CBC). Escolha explícita por sessão. */
   legacySsh?: boolean;
   tags?: string[];
+  /** hostid do host no Zabbix de onde a sessão foi importada. */
+  zabbixHostId?: string;
 }
 
 /** Aceita aa:bb:cc:dd:ee:ff, AA-BB-…, aabb.ccdd.eeff (Cisco) ou 12 dígitos hex; devolve "aa:bb:cc:dd:ee:ff". */
@@ -129,6 +131,10 @@ export function validateSession(raw: unknown, where: string): Session {
   if (macText !== undefined && !mac) throw new SessionError(`${where}: "mac" inválido (${macText})`);
   const vpn = optionalString(obj, 'vpn', where)?.trim() || undefined;
   if (vpn !== undefined && !isSafeSiteName(vpn)) throw new SessionError(`${where}: "vpn" inválido (${vpn})`);
+  const zabbixHostId = obj.zabbixHostId === undefined || obj.zabbixHostId === null ? undefined : String(obj.zabbixHostId);
+  if (zabbixHostId !== undefined && !/^\d+$/.test(zabbixHostId)) {
+    throw new SessionError(`${where}: "zabbixHostId" inválido (${zabbixHostId})`);
+  }
   for (const flag of ['legacyTls', 'legacySsh', 'multimon']) {
     if (obj[flag] !== undefined && obj[flag] !== null && typeof obj[flag] !== 'boolean') {
       throw new SessionError(`${where}: "${flag}" deve ser true ou false`);
@@ -144,5 +150,6 @@ export function validateSession(raw: unknown, where: string): Session {
   if (obj.legacySsh === true && session.type === 'ssh') session.legacySsh = true;
   if (obj.multimon === true && session.type === 'rdp') session.multimon = true;
   if (tags !== undefined) session.tags = tags;
+  if (zabbixHostId !== undefined) session.zabbixHostId = zabbixHostId;
   return session;
 }

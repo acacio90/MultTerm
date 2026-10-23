@@ -280,6 +280,9 @@ async function save(event) {
   event.preventDefault();
   clearMessages();
   const session = readForm();
+  // Campos que o formulário não mostra (origem no Zabbix) seguem com a sessão editada.
+  const edited = state.sessions.find((s) => keyOf(s) === state.editing);
+  if (edited?.zabbixHostId) session.zabbixHostId = edited.zabbixHostId;
   const others = state.sessions.filter((s) => keyOf(s) !== state.editing);
   try {
     apply(await api.save([...others, session]));
@@ -1384,6 +1387,159 @@ async function importSessions() {
   }
 }
 
+/**
+ * Hosts do Zabbix: conecta na API, lista os grupos (com a quantidade de hosts) e sincroniza os
+ * escolhidos. Token e senha em branco usam os guardados; eles nunca voltam do processo principal.
+ */
+async function importZabbix() {
+  const dialog = $('zabbix-dialog');
+  const zform = $('zabbix-form');
+  const box = $('zabbix-groups-box');
+  const list = $('zabbix-groups');
+  const error = $('zabbix-error');
+  const importBtn = $('zabbix-import');
+  let config;
+  try {
+    config = await api.zabbixConfig();
+  } catch (err) {
+    showEditor();
+    clearMessages();
+    message(cleanError(err), 'error');
+    return;
+  }
+  zform.url.value = config.url;
+  zform.authType.value = config.authType;
+  zform.user.value = config.user;
+  zform.token.value = '';
+  zform.password.value = '';
+  zform.token.placeholder = config.hasToken ? 'guardado (em branco = manter)' : '';
+  zform.password.placeholder = config.hasPassword ? 'guardada (em branco = manter)' : '';
+  zform.insecure.checked = config.insecure;
+  zform.rootFolder.value = config.rootFolder;
+  $('zabbix-filter').value = '';
+  list.replaceChildren();
+  box.hidden = true;
+  importBtn.disabled = true;
+  error.textContent = '';
+
+  const updateAuth = () => {
+    const password = zform.authType.value === 'password';
+    for (const el of zform.querySelectorAll('.zabbix-token')) el.hidden = password;
+    for (const el of zform.querySelectorAll('.zabbix-password')) el.hidden = !password;
+  };
+  const updateImport = () => {
+    importBtn.disabled = !list.querySelector('input:checked');
+  };
+  updateAuth();
+
+  const connectZabbix = async () => {
+    error.textContent = '';
+    $('zabbix-connect').disabled = true;
+    try {
+      const { version, groups } = await api.zabbixConnect({
+        url: zform.url.value,
+        authType: zform.authType.value,
+        token: zform.token.value,
+        user: zform.user.value,
+        password: zform.password.value,
+        insecure: zform.insecure.checked,
+      });
+      const chosen = new Set(config.groupIds);
+      list.replaceChildren(...groups.map((g) => {
+        const label = document.createElement('label');
+        const check = Object.assign(document.createElement('input'), { type: 'checkbox', value: g.groupid, checked: chosen.has(g.groupid) });
+        const count = Object.assign(document.createElement('span'), { className: 'count', textContent: `(${g.hosts})` });
+        label.append(check, ` ${g.name} `, count);
+        label.dataset.name = g.name.toLowerCase();
+        return label;
+      }));
+      $('zabbix-version').textContent = `Zabbix ${version}: ${groups.length} grupo(s) com hosts. Um host em vários grupos marcados entra em cada pasta; grupos desmarcados saem da árvore.`;
+      box.hidden = false;
+      updateImport();
+    } catch (err) {
+      error.textContent = cleanError(err);
+    } finally {
+      $('zabbix-connect').disabled = false;
+    }
+  };
+
+  const done = () => {
+    zform.onsubmit = null;
+    zform.authType.onchange = null;
+    list.onchange = null;
+    $('zabbix-filter').oninput = null;
+    $('zabbix-connect').onclick = null;
+    $('zabbix-cancel').onclick = null;
+    dialog.close();
+  };
+  zform.authType.onchange = updateAuth;
+  list.onchange = updateImport;
+  $('zabbix-filter').oninput = (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    for (const label of list.children) label.hidden = !!q && !label.dataset.name.includes(q);
+  };
+  $('zabbix-connect').onclick = connectZabbix;
+  $('zabbix-cancel').onclick = done;
+  zform.onsubmit = async (e) => {
+    e.preventDefault();
+    error.textContent = '';
+    importBtn.disabled = true;
+    const req = {
+      groupIds: [...list.querySelectorAll('input:checked')].map((el) => el.value),
+      rootFolder: zform.rootFolder.value,
+    };
+    let preview;
+    try {
+      preview = await api.zabbixSync(req);
+    } catch (err) {
+      error.textContent = cleanError(err);
+      updateImport();
+      return;
+    }
+    done();
+    await confirmZabbixSync(req, preview);
+  };
+  dialog.showModal();
+}
+
+/** Mostra a prévia (novas, atualizadas, removidas) e grava se o usuário confirmar. */
+async function confirmZabbixSync(req, preview) {
+  showEditor();
+  clearMessages();
+  const changes = preview.added + preview.updated + preview.removed.length;
+  if (changes) {
+    const ok = await askConfirm({
+      title: 'Sincronizar com o Zabbix',
+      text: `${preview.hosts} hosts no Zabbix: ${preview.added} sessão(ões) nova(s), ${preview.updated} atualizada(s) e ${preview.removed.length} removida(s).`,
+      items: preview.removed.map((key) => `remover: ${key}`),
+      note: 'Endereço, nome e pasta vêm do Zabbix; tipo, chave, VPN e opções editados no MultTerm são mantidos. Sessões criadas à mão não são alteradas.',
+      confirmLabel: 'Sincronizar',
+    });
+    if (!ok) return;
+  }
+  try {
+    const result = await api.zabbixSync({ ...req, apply: true });
+    apply(result);
+    message(changes
+      ? `Zabbix sincronizado: ${result.added} nova(s), ${result.updated} atualizada(s), ${result.removed.length} removida(s).`
+      : 'Zabbix sincronizado: nada mudou.');
+    for (const w of result.warnings) message(w, 'warn');
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
+/** Arquivo → Importar → Sincronizar com o Zabbix: usa a conexão, os grupos e a pasta guardados. */
+async function syncZabbix() {
+  showEditor();
+  clearMessages();
+  try {
+    await confirmZabbixSync({}, await api.zabbixSync({}));
+  } catch (err) {
+    message(cleanError(err), 'error');
+  }
+}
+
 /** Troca o arquivo de sessões em uso (ex.: um sessions.yaml versionado no git). */
 async function chooseSessionsFile() {
   showEditor();
@@ -1962,6 +2118,8 @@ const MENU_COMMANDS = {
   reload: () => load(),
   'default-key': editDefaultKey,
   'import-sessions': importSessions,
+  'import-zabbix': importZabbix,
+  'zabbix-sync': syncZabbix,
   'import-vpn': importVpnSite,
   'import-backup': importBackup,
   'export-sessions': () => exportSessions(),
