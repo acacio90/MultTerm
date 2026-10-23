@@ -44,6 +44,8 @@ export function openTerminal(
   file: string,
   args: string[],
   size: { cols: number; rows: number; cwd: string },
+  /** Ajuste da saída antes de ir para a aba e para o agente (ex.: acentos escapados pelo ssh). */
+  transform?: (data: string) => string,
 ): void {
   if (!validId(id)) throw new Error('id de terminal inválido');
   const key = keyOf(owner, id);
@@ -59,7 +61,8 @@ export function openTerminal(
   terminals.set(key, entry);
   if (!outputs.has(key)) outputs.set(key, new OutputBuffer());
   // Dono e id lidos na hora: a aba pode ter mudado de janela.
-  proc.onData((data) => {
+  proc.onData((raw) => {
+    const data = transform ? transform(raw) : raw;
     const k = keyOf(entry.owner, entry.id);
     outputs.get(k)?.push(data);
     for (const l of dataListeners) l(k);

@@ -58,3 +58,13 @@ test('moveTerminal passa o processo para outra janela sem reiniciá-lo', async (
   closeTerminalsOf(a.wc);
   assert.equal(terminalRunning(terminalKey(b.wc, 7)), true);
 });
+
+test('transform ajusta a saída antes da aba e do agente (acentos escapados pelo ssh)', async (t) => {
+  const w = fakeWindow(903);
+  t.after(() => closeTerminalsOf(w.wc));
+  const transform = (s: string) => s.replaceAll('\\343', 'ã');
+  openTerminal(w.wc, 1, 'cmd.exe', ['/q', '/k', 'echo n\\343o'], { cols: 80, rows: 24, cwd: process.cwd() }, transform);
+  await until(() => dataOf(w.sent, 1).includes('não'));
+  assert.doesNotMatch(dataOf(w.sent, 1), /\\343/);
+  assert.match(terminalOutput(terminalKey(w.wc, 1))!.tail(5), /não/);
+});

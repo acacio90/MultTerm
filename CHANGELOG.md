@@ -25,6 +25,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 - Colar com o botão direito no agente (Claude Code) não duplica mais o texto: o clique direito
   cola pelo MultTerm e não chega ao programa como clique do mouse. (#99)
+- Mensagens do SSH com acentos (ex.: "Este host não é conhecido.") aparecem com os acentos, e não
+  como códigos `\343`/`\351`, nas abas SSH e no status do agente SSH. (#100)
 
 ## [0.9.0] - 2026-10-21
 
