@@ -882,6 +882,13 @@ async function openTerminalTab({ title, tooltip, open, spec, adopt, endedText = 
     e.preventDefault();
     pasteInto(tab);
   });
+  // O botão direito é do MultTerm (colar): não chega ao programa mesmo que ele use o mouse. Senão
+  // programas que também colam no clique direito (Claude Code) recebem o texto duas vezes.
+  for (const type of ['mousedown', 'mouseup', 'pointerdown', 'pointerup']) {
+    tab.panel.addEventListener(type, (e) => {
+      if (e.button === 2) e.stopPropagation();
+    }, true);
+  }
   tab.term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
     if (e.code === 'KeyV') {
