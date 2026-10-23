@@ -2,11 +2,11 @@ import { parse } from 'yaml';
 import { normalizeFolder, SessionError, sessionKey, validateSession, type Session } from './model.ts';
 
 /*
- * Inventário do Ansible (INI ou YAML) → sessões.
+ * Inventário (INI ou YAML) → sessões.
  * - Cada grupo vira uma pasta; grupos filhos (":children" / "children:") viram subpastas.
  * - Um host aparece em cada grupo onde é listado diretamente.
  * - Variáveis: host > grupo > grupos pais > all.
- * - ansible_connection=winrm/psrp → sessão RDP (a porta do WinRM não é usada).
+ * - Variáveis com os nomes dos campos da sessão: host, port, user, identityFile e type (ssh|rdp; padrão ssh).
  */
 
 type Vars = Record<string, unknown>;
@@ -37,7 +37,7 @@ function group(inv: Inventory, name: string): Group {
   return g;
 }
 
-/** Expande faixas de host do Ansible: web[01:03] → web01, web02, web03; db[a:c] → dba, dbb, dbc. */
+/** Expande faixas de host: web[01:03] → web01, web02, web03; db[a:c] → dba, dbb, dbc. */
 export function expandHostPattern(pattern: string): string[] {
   const m = /^(.*?)\[([0-9a-z]+):([0-9a-z]+)(?::(\d+))?\](.*)$/i.exec(pattern);
   if (!m) return [pattern];
@@ -144,7 +144,7 @@ export function parseYamlInventory(doc: unknown): Inventory {
   return inv;
 }
 
-/** Um YAML é inventário do Ansible se os grupos de topo têm hosts/children/vars. */
+/** Um YAML é inventário se os grupos de topo têm hosts/children/vars. */
 export function looksLikeYamlInventory(doc: unknown): boolean {
   return isObject(doc) && !('sessions' in doc) &&
     Object.values(doc).some((g) => isObject(g) && ('hosts' in g || 'children' in g || 'vars' in g));
@@ -192,7 +192,7 @@ export function inventoryToSessions(inv: Inventory, rootFolder = ''): ImportResu
           if (v === undefined || v === null || v === '') continue;
           const s = String(v);
           if (TEMPLATE.test(s)) {
-            warnings.push(`${label}: ${k} usa template Jinja (${s}); campo ignorado`);
+            warnings.push(`${label}: ${k} usa template (${s}); campo ignorado`);
             return undefined;
           }
           return s;
@@ -200,24 +200,16 @@ export function inventoryToSessions(inv: Inventory, rootFolder = ''): ImportResu
         return undefined;
       };
 
-      const connection = pick('ansible_connection');
-      if (connection === 'local') {
-        warnings.push(`${label}: ansible_connection=local, ignorado`);
-        continue;
-      }
-      const windows = connection === 'winrm' || connection === 'psrp';
+      const type = pick('type') ?? 'ssh';
       const raw: Record<string, unknown> = {
         name: host.replace(/\//g, '-'),
         folder: normalizeFolder([rootFolder, folder].filter(Boolean).join('/')),
-        type: windows ? 'rdp' : 'ssh',
-        host: pick('ansible_host', 'ansible_ssh_host') ?? host,
-        user: pick('ansible_user', 'ansible_ssh_user'),
+        type,
+        host: pick('host') ?? host,
+        port: pick('port'),
+        user: pick('user'),
       };
-      if (!windows) {
-        const port = pick('ansible_port', 'ansible_ssh_port');
-        if (port) raw.port = Number(port);
-        raw.identityFile = pick('ansible_ssh_private_key_file', 'ansible_private_key_file');
-      }
+      if (type === 'ssh') raw.identityFile = pick('identityFile');
 
       let session: Session;
       try {
@@ -237,7 +229,7 @@ export function inventoryToSessions(inv: Inventory, rootFolder = ''): ImportResu
 }
 
 /** Lê um inventário em texto (INI ou YAML). */
-export function parseAnsibleInventory(text: string, rootFolder = ''): ImportResult {
+export function parseInventory(text: string, rootFolder = ''): ImportResult {
   let doc: unknown;
   try {
     doc = parse(text);

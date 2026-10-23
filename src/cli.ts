@@ -9,7 +9,7 @@ const USAGE = `uso: multterm <comando> [opções]
 comandos:
   list                         lista as sessões agrupadas por pasta
   validate                     valida o arquivo de sessões
-  import <arquivo>             importa sessões YAML ou inventário do Ansible (INI/YAML), mantendo as existentes
+  import <arquivo>             importa sessões YAML ou inventário (INI/YAML), mantendo as existentes
 
 opções:
   --file <caminho>   arquivo de sessões (padrão: $MULTTERM_SESSIONS ou ./sessions.yaml)
@@ -60,11 +60,11 @@ async function main(argv: string[]): Promise<number> {
     case 'import': {
       const source = rest[0];
       if (!source) {
-        process.stderr.write('informe o arquivo a importar (sessões YAML ou inventário do Ansible)\n');
+        process.stderr.write('informe o arquivo a importar (sessões YAML ou inventário INI/YAML)\n');
         return 1;
       }
       const { format, sessions: imported, warnings } = await readImportFile(source, values.folder ?? '');
-      console.error(`formato: ${format === 'ansible' ? 'inventário do Ansible' : 'sessões do MultTerm'}`);
+      console.error(`formato: ${format === 'inventory' ? 'inventário' : 'sessões do MultTerm'}`);
       for (const w of warnings) console.warn(`aviso: ${w}`);
 
       const existing = await loadSessionFile(file);

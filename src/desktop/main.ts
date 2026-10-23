@@ -181,7 +181,7 @@ function registerIpc(): void {
       title: 'Importar sessões',
       defaultPath: dirname(sessionsPath),
       filters: [
-        { name: 'Sessões ou inventário do Ansible', extensions: ['yaml', 'yml', 'ini', 'cfg', 'hosts'] },
+        { name: 'Sessões ou inventário', extensions: ['yaml', 'yml', 'ini', 'cfg', 'hosts'] },
         { name: 'Todos os arquivos', extensions: ['*'] },
       ],
       properties: ['openFile'],

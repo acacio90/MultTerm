@@ -116,15 +116,15 @@ test('F1 abre a ajuda com versão, agente SSH e arquivo de sessões', async () =
   await expect(help).toBeHidden();
 });
 
-test('importa inventário do Ansible pelo botão (diálogo substituído no teste)', async () => {
+test('importa inventário pelo botão (diálogo substituído no teste)', async () => {
   const inventory = join(dir, 'hosts.ini');
-  await writeFile(inventory, '[web]\nweb[01:02].example.org\n\n[win]\nad02 ansible_connection=winrm\n');
+  await writeFile(inventory, '[web]\nweb[01:02].example.org\n\n[win]\nad02 type=rdp\n');
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as typeof dialog.showOpenDialog;
   }, inventory);
 
   await clickMenu(app, 'import-sessions');
-  await expect(page.locator('#messages')).toContainText('3 sessões importadas do inventário do Ansible');
+  await expect(page.locator('#messages')).toContainText('3 sessões importadas do inventário');
   await expect(page.locator('#status-count')).toHaveText('6 sessões · sem limite');
   await expect(session('web02.example.org')).toHaveCount(1);
   await expect(session('ad02')).toContainText('rdp');
