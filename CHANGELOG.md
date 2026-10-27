@@ -21,6 +21,11 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   (`host`, `port`, `user`, `identityFile` e `type=ssh|rdp`); variáveis `ansible_*` são ignoradas.
   O menu passa a ser **Importar → Sessões (YAML ou inventário INI)…**. (#101)
 
+### Corrigido
+
+- Colar com o botão direito no agente (Claude Code) não duplica mais o texto: o clique direito
+  cola pelo MultTerm e não chega ao programa como clique do mouse. (#99)
+
 ## [0.9.0] - 2026-10-21
 
 ### Adicionado
