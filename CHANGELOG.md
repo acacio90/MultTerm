@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [0.10.0] - 2026-10-27
+
 ### Adicionado
 
 - **Arquivo → Importar → Hosts do Zabbix…**: conecta no Zabbix (6.0 ou mais novo) por API token
@@ -23,8 +25,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ### Corrigido
 
-- Colar com o botão direito no agente (Claude Code) não duplica mais o texto: o clique direito
-  cola pelo MultTerm e não chega ao programa como clique do mouse. (#99)
+- Colar com o botão direito em programas de terminal que usam o mouse não duplica mais o texto:
+  o clique direito cola pelo MultTerm e não chega ao programa como clique do mouse. (#99)
 - Mensagens do SSH com acentos (ex.: "Este host não é conhecido.") aparecem com os acentos, e não
   como códigos `\343`/`\351`, nas abas SSH e no status do agente SSH. (#100)
 
@@ -279,7 +281,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.9.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.10.0...develop
+[0.10.0]: https://github.com/acacio90/MultTerm/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/acacio90/MultTerm/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/acacio90/MultTerm/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/acacio90/MultTerm/compare/v0.7.0...v0.8.0
