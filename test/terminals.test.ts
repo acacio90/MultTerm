@@ -4,6 +4,7 @@ import type { WebContents } from 'electron';
 import {
   closeTerminalsOf, moveTerminal, onTerminalMoved, openTerminal, terminalKey, terminalOutput, terminalRunning, writeTerminal,
 } from '../src/desktop/terminals.ts';
+import { sshTextStream } from '../src/sessions/ssh-text.ts';
 
 /** Janela falsa: só o que terminals.ts usa. */
 function fakeWindow(id: number) {
@@ -57,4 +58,36 @@ test('moveTerminal passa o processo para outra janela sem reiniciá-lo', async (
   // Fechar a janela antiga não mata o processo que mudou de dono.
   closeTerminalsOf(a.wc);
   assert.equal(terminalRunning(terminalKey(b.wc, 7)), true);
+});
+
+test('filtro ajusta a saída antes da aba e do agente (acentos escapados pelo ssh)', async (t) => {
+  const w = fakeWindow(903);
+  t.after(() => closeTerminalsOf(w.wc));
+  openTerminal(w.wc, 1, 'cmd.exe', ['/q', '/k', 'echo n\\343o'], { cols: 80, rows: 24, cwd: process.cwd() }, sshTextStream());
+  await until(() => dataOf(w.sent, 1).includes('não'));
+  assert.doesNotMatch(dataOf(w.sent, 1), /\\343/);
+  assert.match(terminalOutput(terminalKey(w.wc, 1))!.tail(5), /não/);
+});
+
+test('o que o filtro guarda sai sozinho se nada mais vier', async (t) => {
+  const w = fakeWindow(904);
+  t.after(() => closeTerminalsOf(w.wc));
+  // Guarda tudo: a saída só chega pelo flush do prazo.
+  let held = '';
+  const filter = {
+    push(chunk: string) {
+      held += chunk;
+      return '';
+    },
+    flush() {
+      const text = held;
+      held = '';
+      return text;
+    },
+    get pending() {
+      return held !== '';
+    },
+  };
+  openTerminal(w.wc, 1, 'cmd.exe', ['/q', '/k', 'echo guardado'], { cols: 80, rows: 24, cwd: process.cwd() }, filter);
+  await until(() => dataOf(w.sent, 1).includes('guardado'));
 });

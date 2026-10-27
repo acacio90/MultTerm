@@ -26,6 +26,19 @@ const terminals = new Map<string, Terminal>();
 
 const keyOf = (owner: WebContents, id: number) => `${owner.id}:${id}`;
 
+/**
+ * Ajuste da saída antes de ir para a aba e para o agente (ex.: acentos escapados pelo ssh). Pode
+ * guardar o fim de um pedaço para juntar com o próximo; o que ficou guardado sai no `flush`.
+ */
+export interface OutputFilter {
+  push(chunk: string): string;
+  flush(): string;
+  readonly pending: boolean;
+}
+
+// O que o filtro guardou sai se nada mais vier logo (ex.: uma "\" digitada no shell remoto).
+const FILTER_WAIT_MS = 20;
+
 function validId(id: unknown): id is number {
   return Number.isInteger(id) && (id as number) > 0;
 }
@@ -44,6 +57,7 @@ export function openTerminal(
   file: string,
   args: string[],
   size: { cols: number; rows: number; cwd: string },
+  filter?: OutputFilter,
 ): void {
   if (!validId(id)) throw new Error('id de terminal inválido');
   const key = keyOf(owner, id);
@@ -59,13 +73,23 @@ export function openTerminal(
   terminals.set(key, entry);
   if (!outputs.has(key)) outputs.set(key, new OutputBuffer());
   // Dono e id lidos na hora: a aba pode ter mudado de janela.
-  proc.onData((data) => {
+  const deliver = (data: string) => {
+    if (!data) return;
     const k = keyOf(entry.owner, entry.id);
     outputs.get(k)?.push(data);
     for (const l of dataListeners) l(k);
     if (!entry.owner.isDestroyed()) entry.owner.send('term:data', entry.id, data);
+  };
+  let held: NodeJS.Timeout | undefined;
+  proc.onData((raw) => {
+    if (!filter) return deliver(raw);
+    clearTimeout(held);
+    deliver(filter.push(raw));
+    if (filter.pending) held = setTimeout(() => deliver(filter.flush()), FILTER_WAIT_MS);
   });
   proc.onExit(({ exitCode }) => {
+    clearTimeout(held);
+    if (filter) deliver(filter.flush());
     const k = keyOf(entry.owner, entry.id);
     if (terminals.get(k) === entry) terminals.delete(k);
     if (!entry.owner.isDestroyed()) entry.owner.send('term:exit', entry.id, exitCode);

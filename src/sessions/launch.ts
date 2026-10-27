@@ -1,5 +1,6 @@
 import { isAbsolute, join, relative } from 'node:path';
 import { DEFAULT_PORTS, effectivePort, SessionError, type Session } from './model.ts';
+import { unescapeSshText } from './ssh-text.ts';
 
 export interface LaunchEnv {
   platform: NodeJS.Platform;
@@ -202,7 +203,7 @@ export function parseAgentList(exitCode: number | null, stdout: string, stderr: 
     return { available: true, keys: stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) };
   }
   if (exitCode === 1) return { available: true, keys: [] };
-  return { available: false, message: (stderr || stdout).trim() || 'agente SSH indisponível' };
+  return { available: false, message: unescapeSshText((stderr || stdout).trim()) || 'agente SSH indisponível' };
 }
 
 /**

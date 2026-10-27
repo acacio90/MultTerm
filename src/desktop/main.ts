@@ -32,6 +32,7 @@ import { localShellCommand, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
+import { sshTextStream } from '../sessions/ssh-text.ts';
 import {
   exportFileName, loadSessionDefaults, loadSessionFile, mergeSessions, saveSessionFile, sessionsInFolder, validateDefaults, validateSessions, withDefaults,
 } from '../sessions/store.ts';
@@ -300,7 +301,7 @@ function registerIpc(): void {
       sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
     });
     const size = (n: unknown, fallback: number) => (Number.isInteger(n) && (n as number) > 0 ? (n as number) : fallback);
-    openTerminal(e.sender, id, file, args, { cols: size(cols, 80), rows: size(rows, 24), cwd: homedir() });
+    openTerminal(e.sender, id, file, args, { cols: size(cols, 80), rows: size(rows, 24), cwd: homedir() }, sshTextStream());
     // Avisos vão para a faixa da aba: o ConPTY limpa a tela ao iniciar e apagaria texto escrito antes.
     return { warnings };
   });
