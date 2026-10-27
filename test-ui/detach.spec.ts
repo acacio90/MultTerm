@@ -121,11 +121,13 @@ test('fechar a janela principal encerra o app, inclusive as janelas destacadas',
   const opened = ctx.app.waitForEvent('window');
   await main.locator('#tabs .tab', { hasText: 'PowerShell' }).click({ button: 'right' });
   await main.locator('.tab-menu button', { hasText: 'Abrir em janela separada' }).click();
-  await opened;
+  const detached = await opened;
+  await expect(detached.locator('#tabs .tab', { hasText: 'PowerShell' })).toBeVisible();
   expect(ctx.app.windows()).toHaveLength(2);
   const exited = ctx.app.waitForEvent('close');
+  // A principal pela URL, não pelo título: enquanto carrega, a destacada também se chama "MultTerm".
   await ctx.app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'MultTerm')?.close();
+    BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('detached=1'))?.close();
   });
   await exited;
 });
