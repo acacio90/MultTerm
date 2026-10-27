@@ -10,6 +10,9 @@ const cp1252 = new TextDecoder('windows-1252');
 
 // Sequências de bytes altos (\200-\377) que não vêm depois de outra barra ("\\351" é uma barra literal).
 const ESCAPES = /(?<!\\)(?:\\[23][0-7]{2})+/g;
+// Fim de pedaço que pode continuar no próximo: escapes completos (bytes de um mesmo caractere UTF-8,
+// ou um acento seguido do resto da palavra) e um escape cortado ao meio ("\", "\3", "\34").
+const TAIL = /(?<!\\)(?:\\[23][0-7]{2})*(?:\\(?:[23][0-7]?)?)?$/;
 
 export function unescapeSshText(text: string): string {
   if (!text.includes('\\')) return text;
@@ -23,4 +26,28 @@ export function unescapeSshText(text: string): string {
     }
     return /^[\p{L}\p{M}]+$/u.test(decoded) ? decoded : run;
   });
+}
+
+/**
+ * Para a saída do terminal, que chega em pedaços: o fim de um pedaço que pode continuar no próximo
+ * fica guardado e sai junto com ele (ou no `flush`), para um "\343" cortado ao meio não escapar.
+ */
+export function sshTextStream(): { push(chunk: string): string; flush(): string; readonly pending: boolean } {
+  let held = '';
+  return {
+    push(chunk) {
+      const text = held + chunk;
+      // Sem casamento quando o texto termina numa barra literal ("\\"): nada a guardar.
+      held = TAIL.exec(text)?.[0] ?? '';
+      return unescapeSshText(text.slice(0, text.length - held.length));
+    },
+    flush() {
+      const text = held;
+      held = '';
+      return unescapeSshText(text);
+    },
+    get pending() {
+      return held !== '';
+    },
+  };
 }
