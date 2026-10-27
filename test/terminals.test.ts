@@ -66,7 +66,11 @@ test('filtro ajusta a saída antes da aba e do agente (acentos escapados pelo ss
   openTerminal(w.wc, 1, 'cmd.exe', ['/q', '/k', 'echo n\\343o'], { cols: 80, rows: 24, cwd: process.cwd() }, sshTextStream());
   await until(() => dataOf(w.sent, 1).includes('não'));
   assert.doesNotMatch(dataOf(w.sent, 1), /\\343/);
-  assert.match(terminalOutput(terminalKey(w.wc, 1))!.tail(5), /não/);
+  // Saída bruta guardada para o agente: o tail() aplica \r e cursor de forma simplificada, e o
+  // redesenho do ConPTY (no CI) apaga o texto nele.
+  const saved = terminalOutput(terminalKey(w.wc, 1))!.since(0);
+  assert.match(saved, /não/);
+  assert.doesNotMatch(saved, /\\343/);
 });
 
 test('o que o filtro guarda sai sozinho se nada mais vier', async (t) => {
