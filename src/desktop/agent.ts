@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { McpServer, type ShareMode, type SharedTerminal } from '../agent/mcp.ts';
 import { startAgentHttp, type AgentHttp } from '../agent/http.ts';
@@ -10,6 +11,7 @@ import { timestamp } from '../servers/common.ts';
 import { onTerminalMoved, terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
 import { AGENTS, agentExe, agentLaunchCommand, DEFAULT_AGENT } from './local-terminal.ts';
 import { chooseAgent, knownAgentPaths, parseVersion, parseWhere, pickExecutable, type AgentDetection } from './agent-detect.ts';
+import { which } from '../which.ts';
 
 /*
  * Agente MCP: servidor local (HTTP em 127.0.0.1 + ponte stdio) que expõe só as abas de terminal
@@ -230,12 +232,16 @@ export function detectAgents(): Promise<void> {
     const env = searchPath !== undefined ? { ...process.env, PATH: searchPath } : process.env;
     const result: Record<string, AgentDetection> = {};
     for (const [id, a] of Object.entries(AGENTS)) {
-      const candidates = parseWhere(await run(whereExe, [a.exe], env));
+      const win = process.platform === 'win32';
+      const inPath = win ? parseWhere(await run(whereExe, [a.exe], env)) : [which(a.exe, env.PATH)].filter((p): p is string => !!p);
+      const candidates = [...inPath];
       if (searchPath === undefined) {
-        candidates.push(...knownAgentPaths(a.exe, { userProfile: process.env.USERPROFILE, appData: process.env.APPDATA }).filter((p) => existsSync(p)));
+        const known = win ? { userProfile: process.env.USERPROFILE, appData: process.env.APPDATA } : { home: homedir() };
+        candidates.push(...knownAgentPaths(a.exe, known).filter((p) => existsSync(p)));
       }
       const path = pickExecutable(candidates);
-      const version = path && /\.exe$/i.test(path) ? parseVersion(await run(path, ['--version'])) : undefined;
+      // No Windows, só os .exe rodam sem shell; no Linux, qualquer executável.
+      const version = path && (!win || /\.exe$/i.test(path)) ? parseVersion(await run(path, ['--version'])) : undefined;
       result[id] = { installed: !!path, ...(path ? { path } : {}), ...(version ? { version } : {}) };
     }
     detected = result;
