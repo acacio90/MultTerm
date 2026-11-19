@@ -1040,9 +1040,9 @@ api.onReturnTabs(() => {
   setTimeout(() => api.closeWindowNow(), 5000);
 });
 
-const LOCAL_TITLES = { powershell: 'PowerShell', cmd: 'Prompt de comando', wsl: 'WSL', agent: 'Agente' };
+const LOCAL_TITLES = { powershell: 'PowerShell', cmd: 'Prompt de comando', wsl: 'WSL', shell: 'Terminal', agent: 'Agente' };
 
-/** Terminal local (PowerShell, cmd, WSL) ou o agente numa aba local. */
+/** Terminal local (PowerShell, cmd, WSL; no Linux, o shell do usuário) ou o agente numa aba local. */
 function openLocalTab(kind) {
   return openTerminalTab({
     spec: { type: 'local', kind },
@@ -2087,6 +2087,10 @@ $('diag-cancel').addEventListener('click', () => diagDialog.close());
 
 // Menu "Ferramentas".
 const toolsMenu = $('tools-menu');
+// Terminais locais: PowerShell, cmd e WSL no Windows; o shell do usuário nos outros sistemas.
+for (const b of toolsMenu.querySelectorAll('[data-tool^="local-"]')) {
+  b.hidden = (b.dataset.tool === 'local-shell') === (api.platform === 'win32');
+}
 function setToolsMenu(open) {
   toolsMenu.hidden = !open;
   $('btn-tools').setAttribute('aria-expanded', String(open));

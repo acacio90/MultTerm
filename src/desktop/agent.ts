@@ -8,7 +8,7 @@ import { McpServer, type ShareMode, type SharedTerminal } from '../agent/mcp.ts'
 import { startAgentHttp, type AgentHttp } from '../agent/http.ts';
 import { timestamp } from '../servers/common.ts';
 import { onTerminalMoved, terminalKey, terminalOutput, terminalRunning, waitTerminalQuiet, writeTerminalByKey } from './terminals.ts';
-import { AGENTS, agentLaunchCommand, DEFAULT_AGENT } from './local-terminal.ts';
+import { AGENTS, agentExe, agentLaunchCommand, DEFAULT_AGENT } from './local-terminal.ts';
 import { chooseAgent, knownAgentPaths, parseVersion, parseWhere, pickExecutable, type AgentDetection } from './agent-detect.ts';
 
 /*
@@ -271,7 +271,7 @@ export async function agentLaunch(): Promise<{ file: string; args: string[] }> {
   }
   await enable();
   // O caminho encontrado (pode não estar no PATH, ex.: instalador que põe em ~/.local/bin).
-  const exe = `& '${found.path.replace(/'/g, "''")}'`;
+  const exe = agentExe(found.path);
   return agentLaunchCommand(agent.command.split('{exe}').join(exe), mcpConfigFile());
 }
 

@@ -28,7 +28,7 @@ import { closeRdpOf, registerRdpIpc } from './rdp.ts';
 import { registerZabbixIpc } from './zabbix.ts';
 import { buildAppMenu } from './menu.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
-import { localShellCommand, type LocalShell } from './local-terminal.ts';
+import { localShellCommand, localShells, type LocalShell } from './local-terminal.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
@@ -280,10 +280,10 @@ function registerIpc(): void {
   });
 
   // Terminal embutido (abas).
-  // Terminal local (PowerShell, cmd, WSL) ou o agente numa aba local.
+  // Terminal local (PowerShell, cmd, WSL; no Linux, o shell do usuário) ou o agente numa aba local.
   ipcMain.handle('term:open-local', async (e, id: unknown, kind: unknown, cols: unknown, rows: unknown) => {
     const size = (n: unknown, fallback: number) => (Number.isInteger(n) && (n as number) > 0 ? (n as number) : fallback);
-    const shells: LocalShell[] = ['powershell', 'cmd', 'wsl'];
+    const shells = localShells();
     const cmd = kind === 'agent' ? await agentLaunch()
       : shells.includes(kind as LocalShell) ? localShellCommand(kind as LocalShell) : undefined;
     if (!cmd) throw new Error('tipo de terminal local inválido');

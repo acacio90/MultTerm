@@ -11,7 +11,7 @@ export type MenuCommand =
   | 'import-sessions' | 'import-zabbix' | 'zabbix-sync' | 'import-vpn' | 'import-backup'
   | 'export-sessions' | 'export-vpn' | 'export-backup'
   | 'connect' | 'external' | 'wol' | 'edit' | 'delete'
-  | 'local-powershell' | 'local-cmd' | 'local-wsl'
+  | 'local-powershell' | 'local-cmd' | 'local-wsl' | 'local-shell'
   | 'ping' | 'traceroute' | 'dns' | 'snmp' | 'portscan' | 'netscan' | 'localports' | 'capture'
   | 'wol-tool' | 'servers' | 'vpn' | 'agent'
   | 'toggle-sidebar' | 'help' | 'check-updates';
@@ -78,11 +78,9 @@ export function buildAppMenu({ send, openProject, about }: MenuActions): Menu {
       submenu: [
         {
           label: 'Terminal local',
-          submenu: [
-            cmd('local-powershell', 'PowerShell'),
-            cmd('local-cmd', 'Prompt de comando'),
-            cmd('local-wsl', 'WSL'),
-          ],
+          submenu: process.platform === 'win32'
+            ? [cmd('local-powershell', 'PowerShell'), cmd('local-cmd', 'Prompt de comando'), cmd('local-wsl', 'WSL')]
+            : [cmd('local-shell', 'Terminal')],
         },
         sep,
         cmd('ping', 'Ping…'),

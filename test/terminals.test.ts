@@ -16,6 +16,13 @@ function fakeWindow(id: number) {
 const dataOf = (sent: { channel: string; args: unknown[] }[], id: number) =>
   sent.filter((m) => m.channel === 'term:data' && m.args[0] === id).map((m) => m.args[1]).join('');
 
+/** Shell que escreve `text` literal (sem interpretar barras) e continua aberto lendo comandos. */
+function echoShell(text: string): [string, string[]] {
+  return process.platform === 'win32'
+    ? ['cmd.exe', ['/q', '/k', `echo ${text}`]]
+    : ['/bin/sh', ['-c', `printf '%s\\n' '${text}'; exec /bin/sh`]];
+}
+
 async function until(cond: () => boolean, ms = 10_000) {
   const end = Date.now() + ms;
   while (!cond()) {
@@ -34,7 +41,7 @@ test('moveTerminal passa o processo para outra janela sem reiniciá-lo', async (
   const moves: string[] = [];
   onTerminalMoved((from, to) => moves.push(`${from}>${to}`));
 
-  openTerminal(a.wc, 3, 'cmd.exe', ['/q', '/k', 'echo antes'], { cols: 80, rows: 24, cwd: process.cwd() });
+  openTerminal(a.wc, 3, ...echoShell('antes'), { cols: 80, rows: 24, cwd: process.cwd() });
   await until(() => dataOf(a.sent, 3).includes('antes'));
 
   const moved = moveTerminal(a.wc, 3, b.wc, 7);
@@ -63,7 +70,7 @@ test('moveTerminal passa o processo para outra janela sem reiniciá-lo', async (
 test('filtro ajusta a saída antes da aba e do agente (acentos escapados pelo ssh)', async (t) => {
   const w = fakeWindow(903);
   t.after(() => closeTerminalsOf(w.wc));
-  openTerminal(w.wc, 1, 'cmd.exe', ['/q', '/k', 'echo n\\343o'], { cols: 80, rows: 24, cwd: process.cwd() }, sshTextStream());
+  openTerminal(w.wc, 1, ...echoShell('n\\343o'), { cols: 80, rows: 24, cwd: process.cwd() }, sshTextStream());
   await until(() => dataOf(w.sent, 1).includes('não'));
   assert.doesNotMatch(dataOf(w.sent, 1), /\\343/);
   // Saída bruta guardada para o agente: o tail() aplica \r e cursor de forma simplificada, e o
@@ -92,6 +99,6 @@ test('o que o filtro guarda sai sozinho se nada mais vier', async (t) => {
       return held !== '';
     },
   };
-  openTerminal(w.wc, 1, 'cmd.exe', ['/q', '/k', 'echo guardado'], { cols: 80, rows: 24, cwd: process.cwd() }, filter);
+  openTerminal(w.wc, 1, ...echoShell('guardado'), { cols: 80, rows: 24, cwd: process.cwd() }, filter);
   await until(() => dataOf(w.sent, 1).includes('guardado'));
 });
