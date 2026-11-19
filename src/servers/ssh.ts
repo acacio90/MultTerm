@@ -7,6 +7,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import pty from 'node-pty';
 import ssh2 from 'ssh2';
 import { checkHost, checkPort, checkRoot, resolveInRoot, type LogFn, type RunningServer } from './common.ts';
+import { commandShell, interactiveShell, serverShell, type ServerShell } from './shell.ts';
 
 /*
  * Servidor SSH/SFTP: login com usuário e senha do painel, shell do Windows pelo ConPTY, execução
@@ -24,7 +25,7 @@ export interface SshConfig {
   host?: string;
   user: string;
   password: string;
-  shell?: 'powershell' | 'cmd';
+  shell?: ServerShell;
   /** Chave de host (OpenSSH, privada). */
   hostKey: string;
 }
@@ -35,7 +36,7 @@ export function validateSsh(raw: Record<string, unknown>): Omit<SshConfig, 'host
   // eslint-disable-next-line no-control-regex
   if (!user || /[\s\x00-\x1f]/.test(user)) throw new Error('informe o usuário');
   if (password.length < 6) throw new Error('defina uma senha (mínimo 6 caracteres)');
-  return { root: checkRoot(raw.root), port: checkPort(raw.port, 22), host: checkHost(raw.host), user, password, shell: raw.shell === 'cmd' ? 'cmd' : 'powershell' };
+  return { root: checkRoot(raw.root), port: checkPort(raw.port, 22), host: checkHost(raw.host), user, password, shell: serverShell(raw.shell) };
 }
 
 /**
@@ -132,8 +133,8 @@ export async function startSsh(cfg: SshConfig, log: LogFn): Promise<RunningServe
       session.on('env', (accept) => accept?.());
       session.on('shell', (accept) => {
         const stream = accept();
-        const file = cfg.shell === 'cmd' ? 'cmd.exe' : 'powershell.exe';
-        term = pty.spawn(file, cfg.shell === 'cmd' ? [] : ['-NoLogo'], {
+        const sh = interactiveShell(cfg.shell);
+        term = pty.spawn(sh.file, sh.args, {
           name: 'xterm-256color', cols: size.cols, rows: size.rows, cwd: homedir(), env: process.env as Record<string, string>,
         });
         log(`${addr}: shell aberto`);
@@ -152,9 +153,8 @@ export async function startSsh(cfg: SshConfig, log: LogFn): Promise<RunningServe
       session.on('exec', (accept, _r, info2) => {
         const stream = accept();
         log(`${addr}: comando "${info2.command.slice(0, 80)}"`);
-        const child = spawn(cfg.shell === 'cmd' ? 'cmd.exe' : 'powershell.exe',
-          cfg.shell === 'cmd' ? ['/d', '/s', '/c', info2.command] : ['-NoLogo', '-NoProfile', '-Command', info2.command],
-          { cwd: homedir(), windowsHide: true });
+        const sh = commandShell(cfg.shell, info2.command);
+        const child = spawn(sh.file, sh.args, { cwd: homedir(), windowsHide: true });
         child.stdout.pipe(stream, { end: false });
         child.stderr.pipe(stream.stderr, { end: false });
         stream.pipe(child.stdin);
