@@ -77,7 +77,7 @@ test('rdp em todos os monitores: tela cheia com multimon (pela opção da sessã
   assert.doesNotMatch(planLaunch({ ...rdp, multimon: true }, WIN, { multimon: false }).file!.content, /multimon/);
   assert.equal(planLaunch(rdp, { ...WIN, mstsc: 'C:\\teste\\mstsc.exe' }).command, 'C:\\teste\\mstsc.exe');
   const linux = planLaunch(rdp, { ...WIN, platform: 'linux', tmp: '/tmp' }, { multimon: true });
-  assert.deepEqual(linux.args, ['/v:10.0.0.9:3389', '/f', '/multimon']);
+  assert.deepEqual(linux.args, ['-e', 'xfreerdp', '/v:10.0.0.9:3389', '/f', '/multimon']);
 });
 
 test('quoteWindowsArg segue a regra do CommandLineToArgvW', () => {
@@ -100,7 +100,28 @@ test('rdpFileContent respeita porta customizada', () => {
 test('linux: terminal padrão e xfreerdp', () => {
   const env: LaunchEnv = { ...WIN, platform: 'linux', home: '/home/pedro', tmp: '/tmp' };
   assert.deepEqual(planLaunch(SSH, env).args, ['-e', 'ssh', '--', 'pedro@ansible.example.org']);
-  assert.deepEqual(planLaunch({ name: 'r', folder: '', type: 'rdp', host: 'h', user: 'u' }, env).args, ['/v:h:3389', '/u:u']);
+  // RDP num terminal: o FreeRDP pergunta a senha e o certificado ali.
+  const rdp = planLaunch({ name: 'r', folder: '', type: 'rdp', host: 'h', user: 'u' }, env);
+  assert.deepEqual([rdp.command, ...rdp.args], ['x-terminal-emulator', '-e', 'xfreerdp', '/v:h:3389', '/u:u']);
+});
+
+test('linux: escolhe o emulador de terminal e o FreeRDP instalados', () => {
+  const installed = (...names: string[]) => (n: string) => (names.includes(n) ? `/usr/bin/${n}` : undefined);
+  const base: LaunchEnv = { ...WIN, platform: 'linux', home: '/home/pedro', tmp: '/tmp' };
+  const gnome = planLaunch(SSH, { ...base, which: installed('gnome-terminal', 'xterm') });
+  assert.deepEqual([gnome.command, ...gnome.args], ['/usr/bin/gnome-terminal', '--title', 'ANSIBLE', '--', 'ssh', '--', 'pedro@ansible.example.org']);
+  const x = planLaunch(SSH, { ...base, which: installed('x-terminal-emulator', 'gnome-terminal') });
+  assert.equal(x.command, '/usr/bin/x-terminal-emulator');
+  // $TERMINAL vence, com a sintaxe dele quando conhecida.
+  const kitty = planLaunch(SSH, { ...base, which: installed('kitty', 'xterm'), terminal: 'kitty' });
+  assert.deepEqual([kitty.command, ...kitty.args.slice(0, 3)], ['/usr/bin/kitty', '--title', 'ANSIBLE', 'ssh']);
+  // $TERMINAL ausente: segue a lista.
+  assert.equal(planLaunch(SSH, { ...base, which: installed('xterm'), terminal: 'foo' }).command, '/usr/bin/xterm');
+  assert.throws(() => planLaunch(SSH, { ...base, which: installed() }), /nenhum emulador de terminal/);
+  const rdp = { name: 'r', folder: '', type: 'rdp' as const, host: 'h', port: 3390, legacyTls: true };
+  const v3 = planLaunch(rdp, { ...base, which: installed('xterm', 'xfreerdp', 'xfreerdp3') });
+  assert.deepEqual(v3.args, ['-T', 'r', '-e', '/usr/bin/xfreerdp3', '/v:h:3390', '/tls:enforce:1.0', '/tls-seclevel:0']);
+  assert.equal(planLaunch(rdp, { ...base, which: installed('xterm', 'xfreerdp') }).args[3], '/usr/bin/xfreerdp');
 });
 
 test('quoteForCmd: aspas só quando preciso; recusa o que o cmd expandiria', () => {

@@ -15,6 +15,10 @@ export interface LaunchEnv {
   sshAlgorithms?: SshAlgorithms;
   /** Cliente RDP do Windows (padrão mstsc.exe; os testes trocam). */
   mstsc?: string;
+  /** Linux: caminho de um programa no PATH (undefined = não existe). Sem isso, usa os nomes padrão. */
+  which?: (name: string) => string | undefined;
+  /** Linux: emulador de terminal preferido ($TERMINAL). */
+  terminal?: string;
 }
 
 export interface SshAlgorithms {
@@ -152,6 +156,41 @@ function safeFileName(name: string): string {
   return name.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'sessao';
 }
 
+/**
+ * Emuladores de terminal do Linux, na ordem de preferência, e como cada um recebe o título e o
+ * comando. O x-terminal-emulator (Debian/Ubuntu/Kali) aponta para o terminal padrão do sistema.
+ */
+const LINUX_TERMINALS: [string, (title: string, cmd: string[]) => string[]][] = [
+  ['x-terminal-emulator', (_t, cmd) => ['-e', ...cmd]],
+  ['gnome-terminal', (t, cmd) => ['--title', t, '--', ...cmd]],
+  ['konsole', (_t, cmd) => ['-e', ...cmd]],
+  ['xfce4-terminal', (t, cmd) => ['-T', t, '-x', ...cmd]],
+  ['qterminal', (_t, cmd) => ['-e', ...cmd]],
+  ['kitty', (t, cmd) => ['--title', t, ...cmd]],
+  ['alacritty', (t, cmd) => ['--title', t, '-e', ...cmd]],
+  ['xterm', (t, cmd) => ['-T', t, '-e', ...cmd]],
+];
+
+/** Abre `cmd` numa janela do emulador de terminal: o $TERMINAL, senão o primeiro instalado da lista. */
+export function linuxTerminalPlan(title: string, cmd: string[], env: Pick<LaunchEnv, 'which' | 'terminal'>, warnings: string[]): LaunchPlan {
+  const byName = (name: string) => LINUX_TERMINALS.find(([n]) => n === name.split('/').pop())?.[1];
+  if (env.terminal) {
+    const path = env.which ? env.which(env.terminal) : env.terminal;
+    if (path) return { command: path, args: (byName(env.terminal) ?? ((_t, c) => ['-e', ...c]))(title, cmd), warnings };
+  }
+  if (!env.which) return { command: 'x-terminal-emulator', args: ['-e', ...cmd], warnings };
+  for (const [name, args] of LINUX_TERMINALS) {
+    const path = env.which(name);
+    if (path) return { command: path, args: args(title, cmd), warnings };
+  }
+  throw new SessionError('nenhum emulador de terminal encontrado (instale um, ex.: xterm, ou defina $TERMINAL)');
+}
+
+/** Cliente FreeRDP do Linux: o da versão 3, se houver; senão o xfreerdp. */
+export function linuxRdpClient(env: Pick<LaunchEnv, 'which'>): string {
+  return env.which?.('xfreerdp3') ?? env.which?.('xfreerdp') ?? 'xfreerdp';
+}
+
 export function planLaunch(s: Session, env: LaunchEnv, opts: RdpFileOptions = {}): LaunchPlan {
   if (s.type === 'rdp') {
     const multimon = opts.multimon ?? s.multimon === true;
@@ -162,7 +201,9 @@ export function planLaunch(s: Session, env: LaunchEnv, opts: RdpFileOptions = {}
     const args = [`/v:${s.host}:${effectivePort(s)}`];
     if (s.user) args.push(`/u:${s.user}`);
     if (multimon) args.push('/f', '/multimon');
-    return { command: 'xfreerdp', args, warnings: [] };
+    if (s.legacyTls) args.push('/tls:enforce:1.0', '/tls-seclevel:0');
+    // Num terminal: o FreeRDP pergunta ali a senha e se aceita o certificado do servidor.
+    return linuxTerminalPlan(s.name, [linuxRdpClient(env), ...args], env, []);
   }
 
   const { args, warnings } = sshArgs(s, env);
@@ -174,7 +215,7 @@ export function planLaunch(s: Session, env: LaunchEnv, opts: RdpFileOptions = {}
     }
     return consoleWindowPlan(sshProgram(env), args, warnings);
   }
-  return { command: 'x-terminal-emulator', args: ['-e', 'ssh', ...args], warnings };
+  return linuxTerminalPlan(s.name, [sshProgram(env), ...args], env, warnings);
 }
 
 /** Comando para rodar a sessão SSH dentro de um terminal embutido (pseudo-terminal). */

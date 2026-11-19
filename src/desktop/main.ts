@@ -29,6 +29,7 @@ import { registerZabbixIpc } from './zabbix.ts';
 import { buildAppMenu } from './menu.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
 import { localShellCommand, localShells, type LocalShell } from './local-terminal.ts';
+import { which } from '../which.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
@@ -259,6 +260,8 @@ function registerIpc(): void {
       sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
       // Gancho de teste: troca o executável; não vale no app instalado.
       mstsc: (!app.isPackaged && process.env.MULTTERM_MSTSC) || undefined,
+      which: (name: string) => which(name),
+      terminal: process.env.TERMINAL || undefined,
     };
     let plan = planLaunch(session, env, opts);
     if (plan.file) {
