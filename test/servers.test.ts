@@ -10,7 +10,7 @@ import { checkHost, listenOptions, resolveInRoot } from '../src/servers/common.t
 import { serverShell } from '../src/servers/shell.ts';
 import { fromNetascii, parseRequest, startTftp, toNetascii, validateTftp } from '../src/servers/tftp.ts';
 
-const CURL = 'C:/Windows/System32/curl.exe';
+const CURL = process.platform === 'win32' ? 'C:/Windows/System32/curl.exe' : '/usr/bin/curl';
 const hasCurl = existsSync(CURL);
 const curl = (args: string[]) => new Promise<{ code: number; out: string; err: string }>((resolve) => {
   execFile(CURL, ['-s', '-S', ...args], { encoding: 'latin1', maxBuffer: 1 << 26, timeout: 60_000 }, (e, out, err) => {
@@ -243,8 +243,9 @@ test('FTPS implícito com certificado autoassinado', { skip: !hasCurl && 'sem cu
   }
 });
 
-const IPERF3 = process.env.MULTTERM_IPERF3
-  ?? join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Packages', 'ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe', 'iperf3.exe');
+const IPERF3 = process.env.MULTTERM_IPERF3 ?? (process.platform === 'win32'
+  ? join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Packages', 'ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe', 'iperf3.exe')
+  : '/usr/bin/iperf3');
 
 test('Iperf com o cliente iperf3: envio, reverso, vários fluxos e UDP recusado', { skip: !existsSync(IPERF3) && 'iperf3 não instalado', timeout: 120_000 }, async () => {
   const { startIperf, validateIperf } = await import('../src/servers/iperf.ts');
