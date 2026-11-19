@@ -439,8 +439,12 @@ function capturePanel(ctx, tab) {
     again.addEventListener('click', load);
     body.replaceChildren(
       el('p', {
-        textContent: 'Para capturar pacotes, instale o Wireshark (wireshark.org) marcando a instalação do Npcap. ' +
-          'O MultTerm usa o dumpcap do Wireshark e, com o Npcap no modo padrão, não precisa rodar como administrador.',
+        textContent: ctx.api.platform === 'win32'
+          ? 'Para capturar pacotes, instale o Wireshark (wireshark.org) marcando a instalação do Npcap. ' +
+            'O MultTerm usa o dumpcap do Wireshark e, com o Npcap no modo padrão, não precisa rodar como administrador.'
+          : 'Para capturar pacotes, instale o Wireshark (pacote wireshark ou tshark da distribuição). O MultTerm usa o ' +
+            'dumpcap, que captura sem root quando o seu usuário está no grupo wireshark (sudo usermod -aG wireshark $USER, ' +
+            'depois saia e entre de novo).',
       }),
       el('div', { className: 'actions' }, again),
     );
@@ -544,7 +548,11 @@ function capturePanel(ctx, tab) {
           : 'Wireshark não encontrado: usando o pktmon do Windows. Instale o Wireshark com o Npcap para capturar sem administrador.';
       } else {
         renderMissing();
-        if (info.dumpcap) status.textContent = 'O dumpcap não listou nenhuma interface (o Npcap está instalado e ativo?).';
+        if (info.dumpcap) {
+          status.textContent = ctx.api.platform === 'win32'
+            ? 'O dumpcap não listou nenhuma interface (o Npcap está instalado e ativo?).'
+            : 'O dumpcap não listou nenhuma interface (o seu usuário está no grupo wireshark?).';
+        }
       }
     } catch (err) {
       status.textContent = ctx.cleanError(err);
@@ -733,7 +741,7 @@ function agentPanel(ctx) {
       ...(agentNote ? [el('p', { className: noneInstalled || s.agentFallback ? 'notice' : 'muted', textContent: agentNote })] : []),
       el('p', {
         className: 'muted',
-        textContent: 'O agente abre numa aba de terminal local (PowerShell), já ligado a este servidor, com a conta que você tem ' +
+        textContent: 'O agente abre numa aba de terminal local, já ligado a este servidor, com a conta que você tem ' +
           'nele nesta máquina (ele precisa estar instalado). Converse com ele nessa aba; ele opera as abas que você compartilhar.',
       }),
       el('h3', { textContent: 'Terminais compartilhados' }),

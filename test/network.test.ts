@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer, type Server } from 'node:net';
+import { createServer, type AddressInfo, type Server } from 'node:net';
 import { diagCommand, validateDiag } from '../src/network/diag.ts';
 import { dnsErrorMessage, formatRecords, normalizeQuery, normalizeServer, pickDnsServers } from '../src/network/dns.ts';
 import { parseTargets, probeHost } from '../src/network/hosts.ts';
-import { formatEndpoint, parseWindowsConnections, stateLabel } from '../src/network/local-ports.ts';
+import { formatEndpoint, listConnections, parseSsConnections, parseWindowsConnections, stateLabel } from '../src/network/local-ports.ts';
 import { parsePorts, probePort, runPool, scanPorts } from '../src/network/ports.ts';
 
 // Servidor TCP local para testar portas aberta/fechada sem depender da rede.
@@ -136,6 +136,41 @@ test('DNS: filtra servidores inválidos do sistema', () => {
 });
 
 // ---------- portas locais ----------
+
+test('parseSsConnections: saída do ss no Linux (placa, IPv6, curinga, sem processo)', () => {
+  const out = [
+    'udp ESTAB      0      0      192.168.150.8%eth0.150:68      192.168.150.1:67 ',
+    'udp UNCONN     0      0                     0.0.0.0:5353         0.0.0.0:*   users:(("avahi-daemon",pid=812,fd=12))',
+    'tcp LISTEN     0      4096                  [::]:22                [::]:*   users:(("sshd",pid=900,fd=4),("sshd",pid=901,fd=4))',
+    'tcp ESTAB      0      0        [::ffff:10.0.0.5]:22   [::ffff:10.0.0.9]:51000',
+    'tcp TIME-WAIT  0      0                 10.0.0.5:443           10.0.0.7:40000',
+    'tcp LISTEN     0      128                     *:8080                  *:*   users:(("node",pid=77,fd=20))',
+    'lixo',
+  ].join('\n');
+  assert.deepEqual(parseSsConnections(out), [
+    { proto: 'TCP', localAddress: '::ffff:10.0.0.5', localPort: 22, remoteAddress: '::ffff:10.0.0.9', remotePort: 51000, state: 'Established', pid: 0, process: '' },
+    { proto: 'TCP', localAddress: '::', localPort: 22, remoteAddress: '::', remotePort: 0, state: 'Listen', pid: 900, process: 'sshd' },
+    { proto: 'TCP', localAddress: '10.0.0.5', localPort: 443, remoteAddress: '10.0.0.7', remotePort: 40000, state: 'TimeWait', pid: 0, process: '' },
+    { proto: 'TCP', localAddress: '0.0.0.0', localPort: 8080, remoteAddress: '0.0.0.0', remotePort: 0, state: 'Listen', pid: 77, process: 'node' },
+    { proto: 'UDP', localAddress: '192.168.150.8', localPort: 68, remoteAddress: '', remotePort: null, state: 'Bound', pid: 0, process: '' },
+    { proto: 'UDP', localAddress: '0.0.0.0', localPort: 5353, remoteAddress: '', remotePort: null, state: 'Bound', pid: 812, process: 'avahi-daemon' },
+  ]);
+});
+
+test('listConnections no Linux encontra um servidor TCP aberto pelo teste', { skip: process.platform !== 'linux' && 'só no Linux' }, async () => {
+  const srv = createServer();
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    const port = (srv.address() as AddressInfo).port;
+    const rows = await listConnections();
+    const mine = rows.find((r) => r.proto === 'TCP' && r.localPort === port);
+    assert.ok(mine, `porta ${port} não listada`);
+    assert.equal(mine.state, 'Listen');
+    assert.equal(mine.pid, process.pid);
+  } finally {
+    srv.close();
+  }
+});
 
 test('parseWindowsConnections: TCP/UDP, objeto único e ordenação', () => {
   const json = JSON.stringify([
