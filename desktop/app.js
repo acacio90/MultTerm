@@ -2,6 +2,8 @@ import { buildToolPanel, TOOL_TITLES } from './tools.js';
 
 // Interface: árvore de sessões + formulário de edição + abas de terminal.
 const api = window.multterm;
+// Cliente RDP fora do app: o do Windows (mstsc) ou, no Linux, o FreeRDP numa janela própria.
+const RDP_EXTERNAL = api.platform === 'win32' ? 'cliente do Windows' : 'FreeRDP em janela própria';
 const $ = (id) => document.getElementById(id);
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
 const DEFAULT_PORTS = { ssh: 22, rdp: 3389 };
@@ -377,7 +379,7 @@ async function remove() {
 
 /**
  * SSH abre numa aba de terminal embutido; RDP numa aba, ou fora do app ("Janela externa" e
- * "Abrir em todos os monitores", que usam o cliente do Windows).
+ * "Abrir em todos os monitores", que usam o cliente do Windows ou, no Linux, o FreeRDP).
  */
 async function connect(session, { external = false, multimon = session.type === 'rdp' && session.multimon === true } = {}) {
   // Sessão atrás de uma VPN: conecta a VPN primeiro e depois abre a sessão.
@@ -1171,13 +1173,13 @@ function endRdp(tab, end) {
   const tlsFailed = end.code === 0x20008 && !tab.session.legacyTls;
   rdpStatus(tab, 'Sessão RDP encerrada.', {
     error: end.normal ? '' : end.message + (tlsFailed
-      ? '. Servidores Windows antigos só aceitam TLS 1.0, que o MultTerm recusa por padrão; o cliente do Windows aceita.'
+      ? `. Servidores Windows antigos só aceitam TLS 1.0, que o MultTerm recusa por padrão${api.platform === 'win32' ? '; o cliente do Windows aceita' : ''}.`
       : ''),
     log: end.normal ? '' : end.log,
     actions: [
       ...(tlsFailed ? [['Permitir TLS antigo nesta sessão e reconectar', () => allowLegacyTls(tab), true]] : []),
       ['Reconectar', () => startRdp(tab), !tlsFailed],
-      ['Abrir no cliente do Windows', () => connect(tab.session, { external: true, multimon: false })],
+      [`Abrir no ${RDP_EXTERNAL}`, () => connect(tab.session, { external: true, multimon: false })],
     ],
   });
 }
@@ -1925,7 +1927,7 @@ function openSessionMenu(e, session) {
   clearMulti();
   const items = [
     ['connect', 'Conectar', () => connect(session)],
-    ['external', session.type === 'rdp' ? 'Janela externa (cliente do Windows)' : 'Janela externa', () => connect(session, { external: true, multimon: false })],
+    ['external', session.type === 'rdp' ? `Janela externa (${RDP_EXTERNAL})` : 'Janela externa', () => connect(session, { external: true, multimon: false })],
     ...(session.type === 'rdp' ? [['multimon', 'Abrir em todos os monitores', () => connect(session, { multimon: true })]] : []),
     ...(session.mac ? [['wol', 'Ligar (Wake-on-LAN)', () => wakeSession(session)]] : []),
     ['ping', 'Ping…', () => openDiagDialog('ping', session.host)],

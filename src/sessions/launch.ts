@@ -201,7 +201,7 @@ export function planLaunch(s: Session, env: LaunchEnv, opts: RdpFileOptions = {}
     const args = [`/v:${s.host}:${effectivePort(s)}`];
     if (s.user) args.push(`/u:${s.user}`);
     if (multimon) args.push('/f', '/multimon');
-    if (s.legacyTls) args.push('/tls:enforce:1.0', '/tls-seclevel:0');
+    if (s.legacyTls) args.push(...LINUX_LEGACY_TLS);
     // Num terminal: o FreeRDP pergunta ali a senha e se aceita o certificado do servidor.
     return linuxTerminalPlan(s.name, [linuxRdpClient(env), ...args], env, []);
   }
@@ -253,7 +253,13 @@ export function parseAgentList(exitCode: number | null, stdout: string, stderr: 
  * A senha não vai na linha de comando (outros processos a leriam): vai pela entrada padrão
  * (/from-stdin:force), no formato de rdpStdin.
  */
-export function embeddedRdpArgs(s: Session, view: { parent: string; width: number; height: number }): string[] {
+/**
+ * TLS antigo no xfreerdp do Linux: as duas opções num /tls: só (as versões 3.x atuais não têm mais o
+ * /tls-seclevel, e aceitam a lista separada por vírgula).
+ */
+export const LINUX_LEGACY_TLS = ['/tls:enforce:1.0,seclevel:0'];
+
+export function embeddedRdpArgs(s: Session, view: { parent: string; width: number; height: number }, platform: NodeJS.Platform = 'win32'): string[] {
   const port = effectivePort(s);
   const args = [`/v:${s.host}${port === DEFAULT_PORTS.rdp ? '' : `:${port}`}`];
   if (s.user) {
@@ -277,8 +283,9 @@ export function embeddedRdpArgs(s: Session, view: { parent: string; width: numbe
   );
   // Só quando o usuário permitiu nesta sessão: servidores que falam apenas TLS 1.0. O FreeRDP
   // exige TLS 1.2 por padrão e o OpenSSL 3 recusa TLS 1.0 acima do nível 0. Cada /tls: aceita uma
-  // opção só (a última vence), por isso o nível vai pela forma antiga /tls-seclevel.
-  if (s.legacyTls) args.push('/tls:enforce:1.0', '/tls-seclevel:0');
+  // opção só (a última vence), por isso o nível vai pela forma antiga /tls-seclevel. No Linux, o
+  // xfreerdp do sistema recebe a forma nova (LINUX_LEGACY_TLS).
+  if (s.legacyTls) args.push(...(platform === 'win32' ? ['/tls:enforce:1.0', '/tls-seclevel:0'] : LINUX_LEGACY_TLS));
   return args;
 }
 
@@ -342,6 +349,23 @@ const RDP_FAILED: Record<number, string> = {
 };
 // Fins normais (o próprio usuário saiu ou desconectou pelo Windows remoto).
 const RDP_NORMAL = new Set([0, 0x1000b, 0x1000c]);
+
+// Códigos de saída do xfreerdp (XF_EXIT_*, client/X11/xf_client.h) → códigos do wfreerdp acima.
+// 1–12 são os ERRINFO_* do servidor; 16–26, os de licença; 128+, as falhas ao conectar.
+const XF_CONNECT: Record<number, number> = {
+  131: 0x20006, 132: 0x20009, 133: 0x2000c, 134: 0x20014, 135: 0x20018, 136: 0x20001, 137: 0x20002, 138: 0x20003,
+  139: 0x20004, 140: 0x20005, 141: 0x20006, 142: 0x20007, 143: 0x20008, 144: 0x2000a, 145: 0x2000b, 147: 0x2000d,
+  148: 0x2000e, 149: 0x20013, 150: 0x20011, 151: 0x20012, 152: 0x2000f, 153: 0x20010, 154: 0x20015, 155: 0x20016,
+  156: 0x20017, 157: 0x20019, 158: 0x2001a, 159: 0x2001b,
+};
+
+/** Código de saída do xfreerdp (Linux) no formato do wfreerdp, que rdpExitMessage e a interface entendem. */
+export function xfreerdpExitCode(code: number | null): number | null {
+  if (code === null || code === 0) return code;
+  if (code >= 1 && code <= 12) return 0x10000 | code;
+  if (code >= 16 && code <= 26) return 0x10100 + (code - 16);
+  return XF_CONNECT[code] ?? code;
+}
 
 /** Mensagem para o fim de uma sessão RDP; `normal` = o usuário saiu, não é erro. */
 export function rdpExitMessage(code: number | null): { normal: boolean; message: string } {

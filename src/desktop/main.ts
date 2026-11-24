@@ -41,6 +41,10 @@ import {
 // Pasta de dados alternativa (testes isolados, perfis separados). Precisa vir antes do "ready".
 if (process.env.MULTTERM_USER_DATA) app.setPath('userData', resolve(process.env.MULTTERM_USER_DATA));
 
+// Linux: X11 (pelo XWayland numa sessão Wayland). O RDP numa aba encaixa o xfreerdp numa janela X
+// filha da janela do app, o que não existe no Wayland. Sem DISPLAY (Wayland sem XWayland), segue o padrão.
+if (process.platform === 'linux' && process.env.DISPLAY) app.commandLine.appendSwitch('ozone-platform', 'x11');
+
 const appRoot = app.getAppPath();
 const configPath = () => join(app.getPath('userData'), 'config.json');
 let sessionsPath = '';

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Session } from '../src/sessions/model.ts';
-import { embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, collapseHome, expandHome, parseAgentList, planLaunch, quoteForCmd, quoteWindowsArg, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
+import { xfreerdpExitCode, embeddedRdpArgs, embeddedSshCommand, legacySshOptions, parseSshQuery, rdpExitMessage, rdpStdin, collapseHome, expandHome, parseAgentList, planLaunch, quoteForCmd, quoteWindowsArg, rdpFileContent, sshAddProgram, sshArgs, sshProgram, type LaunchEnv } from '../src/sessions/launch.ts';
 
 const WIN: LaunchEnv = {
   platform: 'win32',
@@ -120,7 +120,7 @@ test('linux: escolhe o emulador de terminal e o FreeRDP instalados', () => {
   assert.throws(() => planLaunch(SSH, { ...base, which: installed() }), /nenhum emulador de terminal/);
   const rdp = { name: 'r', folder: '', type: 'rdp' as const, host: 'h', port: 3390, legacyTls: true };
   const v3 = planLaunch(rdp, { ...base, which: installed('xterm', 'xfreerdp', 'xfreerdp3') });
-  assert.deepEqual(v3.args, ['-T', 'r', '-e', '/usr/bin/xfreerdp3', '/v:h:3390', '/tls:enforce:1.0', '/tls-seclevel:0']);
+  assert.deepEqual(v3.args, ['-T', 'r', '-e', '/usr/bin/xfreerdp3', '/v:h:3390', '/tls:enforce:1.0,seclevel:0']);
   assert.equal(planLaunch(rdp, { ...base, which: installed('xterm', 'xfreerdp') }).args[3], '/usr/bin/xfreerdp');
 });
 
@@ -227,4 +227,24 @@ test('ssh: algoritmos antigos só quando a sessão permite, e só os que o ssh l
     '-o', 'Ciphers=+aes128-cbc',
   ]);
   assert.deepEqual(parseSshQuery('diffie-hellman-group1-sha1\r\ncurve25519-sha256\r\n\r\n'), ['diffie-hellman-group1-sha1', 'curve25519-sha256']);
+});
+
+test('xfreerdp (Linux): códigos de saída traduzidos para os do wfreerdp', () => {
+  assert.equal(xfreerdpExitCode(0), 0);
+  assert.equal(xfreerdpExitCode(null), null);
+  assert.equal(xfreerdpExitCode(147), 0x2000d); // transporte (porta fechada), medido com o xfreerdp3
+  assert.equal(xfreerdpExitCode(143), 0x20008); // TLS, idem
+  assert.equal(xfreerdpExitCode(154), 0x20015);
+  assert.equal(xfreerdpExitCode(11), 0x1000b); // o usuário saiu
+  assert.equal(rdpExitMessage(xfreerdpExitCode(12)).normal, true);
+  assert.equal(xfreerdpExitCode(17), 0x10101);
+  assert.match(rdpExitMessage(xfreerdpExitCode(147)).message, /não foi possível conectar/);
+  assert.equal(xfreerdpExitCode(200), 200);
+});
+
+test('rdp embutido: TLS antigo na forma de cada cliente (wfreerdp no Windows, xfreerdp no Linux)', () => {
+  const s: Session = { name: 'r', folder: '', type: 'rdp', host: 'h', legacyTls: true };
+  const view = { parent: '1', width: 800, height: 600 };
+  assert.deepEqual(embeddedRdpArgs(s, view).slice(-2), ['/tls:enforce:1.0', '/tls-seclevel:0']);
+  assert.deepEqual(embeddedRdpArgs(s, view, 'linux').slice(-1), ['/tls:enforce:1.0,seclevel:0']);
 });
