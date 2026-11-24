@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, safeStorage, screen, shell, webContents } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -497,6 +497,11 @@ const vpnHelper = process.argv.includes(HELPER_FLAG);
 if (vpnHelper) void runVpnHelper(process.argv, wintunDllPath(), (code) => app.exit(code));
 
 if (!vpnHelper) app.whenReady().then(async () => {
+  // Testes no Linux sem chaveiro (Xvfb, CI, com --password-store=basic): aceita a cifra com a chave
+  // fixa do Chromium. Só fora do app instalado; no uso normal, sem chaveiro o app recusa guardar senhas.
+  if (process.platform === 'linux' && !app.isPackaged && process.env.MULTTERM_TEST_PLAINTEXT_SECRETS === '1') {
+    safeStorage.setUsePlainTextEncryption(true);
+  }
   sessionsPath = await resolveSessionsPath();
   registerIpc();
   registerToolsIpc();

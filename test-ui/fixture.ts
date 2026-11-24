@@ -3,6 +3,28 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+export const WIN = process.platform === 'win32';
+
+/**
+ * Terminal local dos testes: PowerShell no Windows; no Linux, o sh (prompt previsível, sem o tema
+ * do shell do usuário: o launchApp fixa SHELL=/bin/sh).
+ */
+export const LOCAL = WIN
+  ? {
+    tool: 'local-powershell', title: 'PowerShell', prompt: 'PS ',
+    calc: 'Write-Output (6*7)\r', calcOut: /\(6\*7\)\s*42/,
+    setMark: '$marca = 6*7\r', showMark: 'Write-Output $marca\r', markOut: /Write-Output \$marca\s*42/,
+    typedTitle: /PS .*>\s*PowerShell/,
+    run: (exe: string, script: string) => `& "${exe}" "${script}"\r`,
+  }
+  : {
+    tool: 'local-shell', title: 'Terminal', prompt: '$ ',
+    calc: 'echo $((6*7))\r', calcOut: /\$\(\(6\*7\)\)\s*42/,
+    setMark: 'marca=$((6*7))\r', showMark: 'echo "$marca"\r', markOut: /echo "\$marca"\s*42/,
+    typedTitle: /\$ Terminal/,
+    run: (exe: string, script: string) => `"${exe}" "${script}"\r`,
+  };
+
 export interface LaunchedApp {
   app: ElectronApplication;
   page: Page;
@@ -22,8 +44,9 @@ export async function launchApp(sessionsYaml: string, extraEnv: Record<string, s
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RUN_AS_NODE') env[k] = v;
   const app = await electron.launch({
-    args: ['.'],
-    env: { ...env, MULTTERM_SESSIONS: sessionsFile, MULTTERM_USER_DATA: join(dir, 'userdata'), MULTTERM_UPDATE_URL: '', ...extraEnv },
+    // Linux sem chaveiro (Xvfb, CI): o safeStorage cifra com a chave fixa do Chromium.
+    args: WIN ? ['.'] : ['.', '--password-store=basic'],
+    env: { ...env, ...(WIN ? {} : { SHELL: '/bin/sh' }), MULTTERM_SESSIONS: sessionsFile, MULTTERM_USER_DATA: join(dir, 'userdata'), MULTTERM_UPDATE_URL: '', MULTTERM_TEST_PLAINTEXT_SECRETS: '1', ...extraEnv },
   });
   const page = await app.firstWindow();
   expect(await app.evaluate(({ app: a }) => a.getPath('userData'))).toBe(join(dir, 'userdata'));

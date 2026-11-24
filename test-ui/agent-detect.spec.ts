@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { launchApp, WIN, type LaunchedApp } from './fixture.ts';
 
 let ctx: LaunchedApp;
 let searchDir: string;
@@ -30,7 +30,8 @@ test('lista só os agentes instalados; sem nenhum, explica e bloqueia o botão',
   await expect(panel).toContainText('Nenhum agente compatível foi encontrado nesta máquina');
 
   // "Instala" um agente falso e procura de novo: aparece e pode ser aberto.
-  await writeFile(join(searchDir, 'claude.cmd'), '@echo AGENTE-FALSO %*\r\n');
+  if (WIN) await writeFile(join(searchDir, 'claude.cmd'), '@echo AGENTE-FALSO %*\r\n');
+  else await writeFile(join(searchDir, 'claude'), '#!/bin/sh\n[ "$1" = --version ] && exit 0\necho AGENTE-FALSO "$@"\n', { mode: 0o755 });
   await panel.locator('button', { hasText: 'Procurar de novo' }).click();
   await expect(option).toHaveText('Claude Code');
   await expect(option).not.toHaveAttribute('disabled');
