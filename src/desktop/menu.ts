@@ -59,7 +59,8 @@ export function buildAppMenu({ send, openProject, about }: MenuActions): Menu {
           ],
         },
         sep,
-        { role: 'quit', label: 'Sair' },
+        // No Linux o papel "quit" traz Ctrl+Q, que o terminal usa (nano, emacs, XON): só no menu.
+        { role: 'quit', label: 'Sair', registerAccelerator: false },
       ],
     },
     {
