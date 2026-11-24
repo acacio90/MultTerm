@@ -14,6 +14,7 @@ import { startNfs, validateNfs } from '../servers/nfs.ts';
 import { startVnc, validateVnc } from '../servers/vnc.ts';
 import { serverShell, serverShellOptions } from '../servers/shell.ts';
 import { captureScreen, windowsInput } from './screen-share.ts';
+import { KEYRING_HINT } from './keyring.ts';
 
 /*
  * Servidores locais (Ferramentas → Servidores): iniciar/parar, parar sozinho depois de N
@@ -23,7 +24,7 @@ import { captureScreen, windowsInput } from './screen-share.ts';
 
 /** Senha guardada: cifrada pelo sistema (base64) — nunca em texto puro. */
 const seal = (text: string) => {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('o Windows não liberou a cifra para guardar a senha');
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(`o sistema não liberou a cifra para guardar a senha${KEYRING_HINT}`);
   return safeStorage.encryptString(text).toString('base64');
 };
 const unseal = (b64: unknown) => {
