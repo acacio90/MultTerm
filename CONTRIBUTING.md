@@ -5,12 +5,19 @@ versões do projeto. Issues, PRs e mensagens de commit são escritos em portugu�
 
 ## Ambiente
 
-Requer Node.js 22.18+ e Windows (o app é Electron para Windows; os testes de NFS e VNC do CI rodam
-também no Linux).
+Requer Node.js 22.18+, no Windows ou no Linux (X11). No Linux, o `node-pty` é compilado na
+instalação (precisa de `make`, `g++` e `python3`) e os testes de interface rodam numa tela virtual:
+
+```sh
+npm rebuild node-pty                  # se o npm não rodou os scripts de instalação
+node node_modules/electron/install.js # baixa o Electron, idem
+xvfb-run -a npm run test:ui
+npm run dist:linux                    # AppImage e .deb em release/
+```
 
 ```sh
 npm install            # dependências + hook commit-msg (Conventional Commits)
-npm run fetch:freerdp  # cliente RDP, uma vez (o npm run release baixa sozinho)
+npm run fetch:freerdp  # cliente RDP, uma vez, no Windows (o npm run release baixa sozinho)
 npm start              # compila e abre o app
 ```
 
@@ -118,9 +125,11 @@ versão do meio (0.x.0), só correções sobem o patch (0.x.y) e mudança incomp
    `CHANGELOG.md` para a nova versão (commit `chore(release): X.Y.Z`).
 2. Leve para a `main` e crie a tag:
    `git checkout main && git merge --ff-only develop && git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`
-3. `npm run release` cria o rascunho da release da tag, gera o instalador e envia o `.exe`, o
-   `.blockmap` e o `latest.yml`. Usa o login do `gh` (ou `GH_TOKEN`) e recusa versões já
-   publicadas; `node scripts/release.mjs --dry-run` só confere.
+3. Rode `npm run release` **no Windows e no Linux** (a ordem não importa). Ele cria o rascunho
+   da release da tag (ou usa o que já existe) e envia os pacotes do sistema em que roda: no
+   Windows, o `.exe`, o `.blockmap` e o `latest.yml`; no Linux, o `.AppImage`, o `.deb` e o
+   `latest-linux.yml`. Usa o login do `gh` (ou `GH_TOKEN`) e recusa versões já publicadas; ao
+   final, avisa se ainda falta a outra plataforma. `node scripts/release.mjs --dry-run` só confere.
 4. Confira os arquivos do rascunho, escreva as notas e publique. Os apps instalados encontram a
    versão nova em **Ajuda → Buscar atualizações**.
 5. Feche o milestone da versão e volte para `develop`.
