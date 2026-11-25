@@ -31,8 +31,10 @@ const tmp = join(tmpDir, 'freerdp.zip');
 writeFileSync(tmp, zip);
 rmSync(dest, { recursive: true, force: true });
 mkdirSync(dest, { recursive: true });
-const ps = (s) => `'${s.replace(/'/g, "''")}'`;
-execFileSync('powershell.exe', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath ${ps(tmp)} -DestinationPath ${ps(dest)} -Force`], { stdio: 'inherit' });
+// tar.exe do Windows (bsdtar) extrai .zip. O Expand-Archive falhava no CI: o powershell.exe chamado
+// de um passo pwsh herda o PSModulePath do PowerShell 7 e carrega o módulo Archive errado.
+const tar = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+execFileSync(tar, ['-xf', tmp, '-C', dest], { stdio: 'inherit' });
 rmSync(tmpDir, { recursive: true, force: true });
 if (!existsSync(join(dest, 'wfreerdp.exe'))) throw new Error('fetch-freerdp: o pacote não tem wfreerdp.exe');
 writeFileSync(stamp, `${VERSION}-${BUILD} ${SHA256}\n`);

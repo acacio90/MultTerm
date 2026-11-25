@@ -6,9 +6,12 @@ import { chooseAgent, knownAgentPaths, parseVersion, parseWhere, pickExecutable 
 test('where.exe: um caminho por linha; .exe antes de .cmd; script sem extensão fica de fora', () => {
   const found = parseWhere('C:\\npm\\claude\r\nC:\\npm\\claude.cmd\r\nC:\\bin\\claude.exe\r\n\r\n');
   assert.deepEqual(found, ['C:\\npm\\claude', 'C:\\npm\\claude.cmd', 'C:\\bin\\claude.exe']);
-  assert.equal(pickExecutable(found), 'C:\\bin\\claude.exe');
-  assert.equal(pickExecutable(['C:\\npm\\claude', 'C:\\npm\\claude.cmd']), 'C:\\npm\\claude.cmd');
-  assert.equal(pickExecutable(['C:\\npm\\claude']), undefined);
+  assert.equal(pickExecutable(found, 'win32'), 'C:\\bin\\claude.exe');
+  assert.equal(pickExecutable(['C:\\npm\\claude', 'C:\\npm\\claude.cmd'], 'win32'), 'C:\\npm\\claude.cmd');
+  assert.equal(pickExecutable(['C:\\npm\\claude'], 'win32'), undefined);
+  // Linux: o primeiro encontrado (sem extensão).
+  assert.equal(pickExecutable(['/usr/local/bin/claude', '/home/ana/.local/bin/claude'], 'linux'), '/usr/local/bin/claude');
+  assert.equal(pickExecutable([], 'linux'), undefined);
   assert.deepEqual(parseWhere(''), []);
 });
 
@@ -18,6 +21,10 @@ test('caminhos de instalação conhecidos e versão', () => {
     join('C:\\Users\\ana\\AppData\\Roaming', 'npm', 'claude.cmd'),
   ]);
   assert.deepEqual(knownAgentPaths('claude', {}), []);
+  assert.deepEqual(knownAgentPaths('claude', { home: '/home/ana' }), [
+    join('/home/ana', '.local', 'bin', 'claude'),
+    join('/home/ana', '.npm-global', 'bin', 'claude'),
+  ]);
   assert.equal(parseVersion('2.1.4 (Claude Code)\n'), '2.1.4');
   assert.equal(parseVersion('\n  v10.3\n'), '10.3');
   assert.equal(parseVersion(''), undefined);

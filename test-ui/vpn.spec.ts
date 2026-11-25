@@ -7,6 +7,9 @@ import { launchApp, type LaunchedApp } from './fixture.ts';
 let ctx: LaunchedApp | undefined;
 let root: string;
 
+// A VPN do MultTerm usa o adaptador Wintun: só no Windows (no Linux, o painel avisa).
+test.skip(process.platform !== 'win32', 'VPN só no Windows');
+
 /** Pasta de sites própria do teste. */
 async function withSites(sites: Record<string, string>) {
   const dir = join(root, 'sites');

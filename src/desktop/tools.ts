@@ -15,6 +15,7 @@ import { runSnmp, validateSnmpRequest, type SnmpRequest } from '../network/snmp.
 import { sendWol, validateWol } from '../network/wol.ts';
 import { isSafeHost } from '../sessions/model.ts';
 import { openTerminal } from './terminals.ts';
+import { which } from '../which.ts';
 
 /** Varreduras em andamento, por janela + id da aba; canceláveis. */
 const jobs = new Map<string, AbortController>();
@@ -67,14 +68,16 @@ function netscanSnmp(raw: unknown): SnmpRequest | undefined {
   });
 }
 
-// MULTTERM_PROGRAM_FILES (separado por ";") troca as pastas onde o Wireshark é procurado (testes).
+// MULTTERM_PROGRAM_FILES troca as pastas onde o Wireshark é procurado (testes): separadas por ";" no
+// Windows; no Linux, vira o PATH da busca.
 const captureTools = () => findCaptureTools({
+  which: (name) => which(name, process.env.MULTTERM_PROGRAM_FILES ?? process.env.PATH),
   programFiles: process.env.MULTTERM_PROGRAM_FILES?.split(';')
     ?? [process.env.ProgramFiles ?? '', process.env['ProgramFiles(x86)'] ?? ''],
   fileExists: existsSync,
 });
 // MULTTERM_SYSTEM_ROOT troca a pasta do Windows onde o pktmon é procurado (testes).
-const pktmonPath = () => findPktmon({
+const pktmonPath = () => process.platform !== 'win32' ? undefined : findPktmon({
   systemRoot: process.env.MULTTERM_SYSTEM_ROOT ?? process.env.SystemRoot,
   fileExists: existsSync,
 });
@@ -94,7 +97,9 @@ export function registerToolsIpc(): void {
   // Ping/traceroute num terminal embutido.
   ipcMain.handle('term:open-tool', (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
     const req = validateDiag(raw);
-    const { file, args } = diagCommand(req, process.platform);
+    let { file, args } = diagCommand(req, process.platform);
+    // Distribuições sem o traceroute costumam ter o tracepath (iputils).
+    if (file === 'traceroute' && !which('traceroute') && which('tracepath')) file = 'tracepath';
     const size = (n: unknown, fallback: number) => (Number.isInteger(n) && (n as number) > 0 ? (n as number) : fallback);
     openTerminal(e.sender, id, file, args, { cols: size(cols, 80), rows: size(rows, 24), cwd: homedir() });
   });

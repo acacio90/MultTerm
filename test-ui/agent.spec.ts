@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { launchApp, LOCAL, WIN, type LaunchedApp } from './fixture.ts';
 
 let ctx: LaunchedApp;
 let page: Page;
@@ -19,7 +19,7 @@ const freePort = () => new Promise<number>((resolve) => {
 
 test.beforeEach(async () => {
   // O "agente" dos testes só mostra o arquivo de configuração que recebeu no lugar de {mcp}.
-  ctx = await launchApp('version: 1\nsessions:\n  - {name: local, host: 127.0.0.1}\n', { MULTTERM_AGENT_COMMAND: 'Get-Content {mcp}' });
+  ctx = await launchApp('version: 1\nsessions:\n  - {name: local, host: 127.0.0.1}\n', { MULTTERM_AGENT_COMMAND: WIN ? 'Get-Content {mcp}' : 'cat {mcp}' });
   page = ctx.page;
 });
 
@@ -136,16 +136,16 @@ test('agente: sem abas abertas explica o que fazer e lembra que estava ligado', 
 });
 
 test('terminal local e abrir o agente numa aba com a configuração MCP', async () => {
-  // PowerShell local.
+  // Terminal local (PowerShell no Windows).
   await page.click('#btn-tools');
-  await page.click('#tools-menu [data-tool="local-powershell"]');
-  const ps = page.locator('#tabs .tab', { hasText: 'PowerShell' });
+  await page.click(`#tools-menu [data-tool="${LOCAL.tool}"]`);
+  const ps = page.locator('#tabs .tab', { hasText: LOCAL.title });
   await expect(ps).toHaveClass(/active/);
   const rows = page.locator('.term-panel:not([hidden]) .xterm-rows');
-  await expect(rows).toContainText('PS ', { timeout: 20_000 });
+  await expect(rows).toContainText(LOCAL.prompt, { timeout: 20_000 });
   await page.locator('.term-panel:not([hidden]) .xterm-helper-textarea').focus();
-  await page.keyboard.type('Write-Output (6*7)\r');
-  await expect(rows).toContainText(/\(6\*7\)\s*42/, { timeout: 20_000 });
+  await page.keyboard.type(LOCAL.calc);
+  await expect(rows).toContainText(LOCAL.calcOut, { timeout: 20_000 });
 
   // Agente escolhido na lista (o comando de teste vem de MULTTERM_AGENT_COMMAND).
   await page.click('#btn-agent');
@@ -170,9 +170,9 @@ test('terminal local e abrir o agente numa aba com a configuração MCP', async 
 test('agente MCP: define o modo de todas as abas de uma vez', async () => {
   for (let i = 0; i < 2; i++) {
     await page.click('#btn-tools');
-    await page.click('#tools-menu [data-tool="local-powershell"]');
+    await page.click(`#tools-menu [data-tool="${LOCAL.tool}"]`);
   }
-  const tabs = page.locator('#tabs .tab', { hasText: 'PowerShell' });
+  const tabs = page.locator('#tabs .tab', { hasText: LOCAL.title });
   await expect(tabs).toHaveCount(2);
 
   await page.click('#btn-agent');

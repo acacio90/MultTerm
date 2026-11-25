@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { planZabbixSync, zabbixToSessions } from '../sessions/import-zabbix.ts';
 import { normalizeFolder, sessionKey, type Session } from '../sessions/model.ts';
 import { apiUrl, ZabbixClient, ZabbixError, type ZabbixAuth } from '../zabbix/client.ts';
+import { KEYRING_HINT } from './keyring.ts';
 
 /*
  * Arquivo → Importar → Hosts do Zabbix: conecta na API, lista os grupos e sincroniza as sessões
@@ -41,7 +42,7 @@ async function saveConfig(config: Config): Promise<void> {
 }
 
 const seal = (text: string) => {
-  if (!safeStorage.isEncryptionAvailable()) throw new ZabbixError('o Windows não liberou a cifra para guardar a credencial');
+  if (!safeStorage.isEncryptionAvailable()) throw new ZabbixError(`o sistema não liberou a cifra para guardar a credencial${KEYRING_HINT}`);
   return safeStorage.encryptString(text).toString('base64');
 };
 const unseal = (b64: string | undefined) => {

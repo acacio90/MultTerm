@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import type { LogFn, RunningServer } from './common.ts';
+import { commandShell, serverShell, type ServerShell } from './shell.ts';
 
 /*
  * Agendador de comandos no formato do crontab (minuto hora dia-do-mês mês dia-da-semana comando),
@@ -121,7 +122,7 @@ export function nextRun(job: CronJob, from: Date): Date | undefined {
 
 export interface CronConfig {
   jobs: string;
-  shell?: 'powershell' | 'cmd';
+  shell?: ServerShell;
   /** Relógio injetável (testes). */
   now?: () => Date;
   /** Intervalo de verificação (ms); padrão: a virada de cada minuto. */
@@ -131,7 +132,7 @@ export interface CronConfig {
 export function validateCron(raw: Record<string, unknown>): CronConfig {
   const jobs = String(raw.jobs ?? '');
   if (!parseCrontab(jobs).length) throw new Error('nenhuma tarefa: escreva ao menos uma linha (ex.: */5 * * * * ping -n 1 10.0.0.1)');
-  return { jobs, shell: raw.shell === 'cmd' ? 'cmd' : 'powershell' };
+  return { jobs, shell: serverShell(raw.shell) };
 }
 
 export async function startCron(cfg: CronConfig, log: LogFn): Promise<RunningServer> {
@@ -153,9 +154,8 @@ export async function startCron(cfg: CronConfig, log: LogFn): Promise<RunningSer
       return;
     }
     const t0 = Date.now();
-    const child = spawn(cfg.shell === 'cmd' ? 'cmd.exe' : 'powershell.exe',
-      cfg.shell === 'cmd' ? ['/d', '/s', '/c', j.command] : ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', j.command],
-      { cwd: homedir(), windowsHide: true });
+    const sh = commandShell(cfg.shell, j.command);
+    const child = spawn(sh.file, sh.args, { cwd: homedir(), windowsHide: true });
     running.set(j.line, child);
     let out = '';
     const take = (d: Buffer) => {

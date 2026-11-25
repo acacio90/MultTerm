@@ -1,6 +1,7 @@
 {
   "name": "multterm",
   "productName": "MultTerm",
+  "desktopName": "multterm.desktop",
   "version": "0.10.0",
   "private": true,
   "description": "Gerenciador de sessões SSH/RDP com terminal em abas",
@@ -20,8 +21,9 @@
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc",
     "dist": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --x64 --publish never",
     "multterm": "node src/cli.ts",
-    "release": "node scripts/fetch-freerdp.mjs && npm run build && node scripts/release.mjs",
+    "release": "npm run build && node scripts/release.mjs",
     "prepare": "node scripts/install-hooks.mjs",
     "icon": "node scripts/electron.mjs scripts/render-icon.mjs",
     "test:ui": "npm run build && playwright test",
@@ -54,12 +56,74 @@
           ]
         }
       ],
-      "icon": "desktop/icon.png"
+      "icon": "desktop/icon.png",
+      "extraResources": [
+        {
+          "from": "vendor/wintun",
+          "to": "wintun",
+          "filter": [
+            "**/*"
+          ]
+        },
+        {
+          "from": "vendor/freerdp",
+          "to": "freerdp",
+          "filter": [
+            "wfreerdp.exe",
+            "LICENSE.txt"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "artifactName": "${productName}-setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/icon.png",
+      "category": "Network",
+      "synopsis": "Gerenciador de sessões SSH/RDP com terminal em abas",
+      "executableName": "multterm",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "maintainer": "acacio90 <49293808+acacio90@users.noreply.github.com>",
+      "syncDesktopName": true
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "openssh-client"
+      ],
+      "recommends": [
+        "libappindicator3-1",
+        "freerdp3-x11 | freerdp2-x11",
+        "iputils-ping",
+        "traceroute",
+        "iproute2",
+        "openssl"
+      ]
     },
     "publish": [
       {
@@ -67,23 +131,6 @@
         "owner": "acacio90",
         "repo": "MultTerm",
         "releaseType": "draft"
-      }
-    ],
-    "extraResources": [
-      {
-        "from": "vendor/wintun",
-        "to": "wintun",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "vendor/freerdp",
-        "to": "freerdp",
-        "filter": [
-          "wfreerdp.exe",
-          "LICENSE.txt"
-        ]
       }
     ]
   },

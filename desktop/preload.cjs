@@ -11,6 +11,8 @@ ipcRenderer.on('menu:command', (_e, command) => (menuCb ? menuCb(command) : menu
 
 // Única ponte entre a interface e o processo principal.
 contextBridge.exposeInMainWorld('multterm', {
+  // Sistema (win32, linux): a interface mostra só o que existe nele.
+  platform: process.platform,
   load: () => ipcRenderer.invoke('sessions:load'),
   save: (sessions) => ipcRenderer.invoke('sessions:save', sessions),
   chooseFile: () => ipcRenderer.invoke('sessions:choose-file'),

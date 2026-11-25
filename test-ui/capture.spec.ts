@@ -1,12 +1,23 @@
 import { expect, test } from '@playwright/test';
-import { existsSync } from 'node:fs';
+import { accessSync, constants, existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchApp, type LaunchedApp } from './fixture.ts';
 
-const HAS_WIRESHARK = existsSync('C:/Program Files/Wireshark/dumpcap.exe');
+const WIN = process.platform === 'win32';
+// No Linux, o dumpcap só roda para quem está no grupo wireshark.
+const runnable = (p: string) => {
+  try {
+    accessSync(p, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const HAS_WIRESHARK = WIN ? existsSync('C:/Program Files/Wireshark/dumpcap.exe') : runnable('/usr/bin/dumpcap');
+const LOOPBACK = WIN ? { label: 'Adapter for loopback traffic capture' } : { value: 'lo' };
 let ctx: LaunchedApp | undefined;
 let captures: string;
 
@@ -42,7 +53,7 @@ test('sem Wireshark nem pktmon, orienta a instalação', async () => {
 test('captura no loopback com filtro, conta ao vivo e grava ao parar', async () => {
   test.skip(!HAS_WIRESHARK, 'Wireshark/Npcap não instalados nesta máquina');
   const panel = await openCapture();
-  await panel.locator('[name=iface]').selectOption({ label: 'Adapter for loopback traffic capture' });
+  await panel.locator('[name=iface]').selectOption(LOOPBACK);
   await panel.locator('[name=filter]').fill('tcp port 9');
   await panel.locator('button[type=submit]').click();
   await expect(panel.locator('.tool-status')).toContainText('Capturando…');
@@ -63,7 +74,7 @@ test('captura no loopback com filtro, conta ao vivo e grava ao parar', async () 
 test('filtro inválido mostra erro traduzido', async () => {
   test.skip(!HAS_WIRESHARK, 'Wireshark/Npcap não instalados nesta máquina');
   const panel = await openCapture();
-  await panel.locator('[name=iface]').selectOption({ label: 'Adapter for loopback traffic capture' });
+  await panel.locator('[name=iface]').selectOption(LOOPBACK);
   await panel.locator('[name=filter]').fill('port and lixo');
   await panel.locator('button[type=submit]').click();
   await expect(panel.locator('.tool-status')).toContainText('filtro de captura inválido');
@@ -78,6 +89,7 @@ async function fakeSystemRoot() {
 }
 
 test('sem Wireshark, usa o pktmon com filtros simples', async () => {
+  test.skip(process.platform !== 'win32', 'o pktmon só existe no Windows');
   const empty = await mkdtemp(join(tmpdir(), 'multterm-pf-'));
   const root = await fakeSystemRoot();
   try {
@@ -100,6 +112,7 @@ test('sem Wireshark, usa o pktmon com filtros simples', async () => {
 });
 
 test('com Wireshark e pktmon, o seletor troca os campos', async () => {
+  test.skip(!WIN, 'o pktmon só existe no Windows');
   test.skip(!HAS_WIRESHARK, 'Wireshark/Npcap não instalados nesta máquina');
   const root = await fakeSystemRoot();
   try {
