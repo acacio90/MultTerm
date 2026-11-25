@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { matches, nextRun, parseCrontab, startCron, validateCron } from '../src/servers/cron.ts';
+import { serverShell } from '../src/servers/shell.ts';
 
 test('crontab: campos, intervalos, passos, nomes, atalhos e erros', () => {
   const [a, b, c, d] = parseCrontab([
@@ -45,8 +46,10 @@ test('agendador executa no minuto certo, registra a saída e pula se ainda estiv
   let clock = new Date(2026, 9, 13, 10, 0, 30);
   const logs: string[] = [];
   const srv = await startCron({
-    jobs: '* * * * * echo tarefa-ok\n*/2 * * * * ping -n 3 127.0.0.1 >nul & echo lenta\n0 0 1 1 * echo nunca-agora',
-    shell: 'cmd', now: () => clock, tickMs: 50,
+    jobs: process.platform === 'win32'
+      ? '* * * * * echo tarefa-ok\n*/2 * * * * ping -n 3 127.0.0.1 >nul & echo lenta\n0 0 1 1 * echo nunca-agora'
+      : '* * * * * echo tarefa-ok\n*/2 * * * * sleep 2; echo lenta\n0 0 1 1 * echo nunca-agora',
+    shell: serverShell('cmd'), now: () => clock, tickMs: 50,
   }, (l) => logs.push(l));
   try {
     assert.ok(logs.some((l) => /linha 1 .* próxima: /.test(l)));

@@ -162,16 +162,29 @@ test('HTTP: token, Origin, Host, notificações e ponte stdio', async () => {
 });
 
 test('terminais locais e comando do agente', async () => {
-  const { localShellCommand, agentLaunchCommand, AGENTS, DEFAULT_AGENT } = await import('../src/desktop/local-terminal.ts');
+  const { localShellCommand, localShells, agentLaunchCommand, agentExe, AGENTS, DEFAULT_AGENT } = await import('../src/desktop/local-terminal.ts');
   // Cada agente da lista recebe o arquivo de configuração MCP.
   assert.ok(AGENTS[DEFAULT_AGENT]);
   for (const a of Object.values(AGENTS)) assert.match(a.command, /\{mcp\}/);
-  assert.deepEqual(localShellCommand('cmd', 'C:\Win'), { file: join('C:\Win', 'System32', 'cmd.exe'), args: [] });
-  assert.equal(localShellCommand('powershell', 'C:\Win').file, join('C:\Win', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'));
-  assert.deepEqual(localShellCommand('wsl', 'C:\Win').args, ['--cd', '~']);
-  const a = agentLaunchCommand("meu-agente --mcp-config {mcp}", "C:\Users\d'Ávila\agent-mcp.json", 'C:\Win');
+  const win = { platform: 'win32' as const, systemRoot: 'C:\Win' };
+  assert.deepEqual(localShellCommand('cmd', win), { file: join('C:\Win', 'System32', 'cmd.exe'), args: [] });
+  assert.equal(localShellCommand('powershell', win).file, join('C:\Win', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'));
+  assert.deepEqual(localShellCommand('wsl', win).args, ['--cd', '~']);
+  assert.throws(() => localShellCommand('shell', win), /no Windows/);
+  const a = agentLaunchCommand("meu-agente --mcp-config {mcp}", "C:\Users\d'Ávila\agent-mcp.json", win);
   assert.deepEqual(a.args, ['-NoLogo', '-NoExit', '-Command', "meu-agente --mcp-config 'C:\Users\d''Ávila\agent-mcp.json'"]);
-  assert.deepEqual(agentLaunchCommand('outro-agente', 'x').args.at(-1), 'outro-agente');
+  assert.deepEqual(agentLaunchCommand('outro-agente', 'x', win).args.at(-1), 'outro-agente');
+  assert.equal(agentExe("C:\Program Files\d'a\claude.exe", 'win32'), "& 'C:\Program Files\d''a\claude.exe'");
+  // Linux: o shell do usuário ($SHELL), com aspas do sh.
+  const linux = { platform: 'linux' as const, shell: '/usr/bin/zsh' };
+  assert.deepEqual(localShells('linux'), ['shell']);
+  assert.deepEqual(localShells('win32'), ['powershell', 'cmd', 'wsl']);
+  assert.deepEqual(localShellCommand('shell', linux), { file: '/usr/bin/zsh', args: [] });
+  assert.equal(localShellCommand('shell', { platform: 'linux', shell: 'zsh' }).file, '/bin/sh');
+  assert.throws(() => localShellCommand('powershell', linux), /só existe no Windows/);
+  const l = agentLaunchCommand('meu-agente --mcp-config {mcp}', "/home/d'avila/agent-mcp.json", linux);
+  assert.deepEqual(l, { file: '/usr/bin/zsh', args: ['-c', "meu-agente --mcp-config '/home/d'\\''avila/agent-mcp.json'; exec '/usr/bin/zsh' -i"] });
+  assert.equal(agentExe("/home/d'a/.local/bin/claude", 'linux'), "'/home/d'\\''a/.local/bin/claude'");
   assert.throws(() => agentLaunchCommand('  ', 'x'), /escolha o agente/);
   assert.throws(() => agentLaunchCommand('a\nb', 'x'), /inválido/);
 });

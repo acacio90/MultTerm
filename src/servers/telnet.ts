@@ -3,6 +3,7 @@ import { createServer, type Socket } from 'node:net';
 import { homedir } from 'node:os';
 import pty from 'node-pty';
 import { checkHost, checkPort, type LogFn, type RunningServer } from './common.ts';
+import { interactiveShell, serverShell, type ServerShell } from './shell.ts';
 
 /*
  * Servidor Telnet (RFC 854/857/858/1073) para equipamentos que só falam Telnet: pede a senha (sem
@@ -15,7 +16,7 @@ export interface TelnetConfig {
   port?: number;
   host?: string;
   password: string;
-  shell?: 'powershell' | 'cmd';
+  shell?: ServerShell;
   confirm?: (client: string) => Promise<boolean>;
   /** Pasta inicial do shell (padrão: a do usuário). */
   cwd?: string;
@@ -24,7 +25,7 @@ export interface TelnetConfig {
 export function validateTelnet(raw: Record<string, unknown>): Omit<TelnetConfig, 'confirm'> {
   const password = String(raw.password ?? '');
   if (password.length < 4) throw new Error('defina uma senha (mínimo 4 caracteres): o Telnet não é cifrado');
-  const shell = raw.shell === 'cmd' ? 'cmd' : 'powershell';
+  const shell = serverShell(raw.shell);
   return { port: checkPort(raw.port, 23), host: checkHost(raw.host), password, shell };
 }
 
@@ -157,8 +158,8 @@ export async function startTelnet(cfg: TelnetConfig, log: LogFn): Promise<Runnin
     });
 
     function openShell() {
-      const file = cfg.shell === 'cmd' ? 'cmd.exe' : 'powershell.exe';
-      term = pty.spawn(file, cfg.shell === 'cmd' ? [] : ['-NoLogo'], {
+      const sh = interactiveShell(cfg.shell);
+      term = pty.spawn(sh.file, sh.args, {
         name: 'xterm-256color', cols: size.cols, rows: size.rows, cwd: cfg.cwd ?? homedir(), env: process.env as Record<string, string>,
       });
       term.onData((d) => {

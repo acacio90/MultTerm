@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { launchApp, LOCAL, type LaunchedApp } from './fixture.ts';
 
 let ctx: LaunchedApp;
 
@@ -16,13 +16,13 @@ test('botão direito cola uma vez só, mesmo num programa que usa o mouse (Claud
   const { app, page } = ctx;
   await app.evaluate(({ clipboard }) => clipboard.writeText('colado-123'));
   await page.click('#btn-tools');
-  await page.click('#tools-menu [data-tool="local-powershell"]');
+  await page.click(`#tools-menu [data-tool="${LOCAL.tool}"]`);
   const rows = page.locator('.term-panel:not([hidden]) .xterm-rows');
-  await expect(rows).toContainText('PS ', { timeout: 20_000 });
+  await expect(rows).toContainText(LOCAL.prompt, { timeout: 20_000 });
 
   const script = join(import.meta.dirname, 'fixtures', 'mouse-echo.cjs');
   await page.locator('.term-panel:not([hidden]) .xterm-helper-textarea').focus();
-  await page.keyboard.type(`& "${process.execPath}" "${script}"\r`);
+  await page.keyboard.type(LOCAL.run(process.execPath, script));
   await expect(rows).toContainText('PRONTO', { timeout: 20_000 });
 
   await page.locator('.term-panel:not([hidden]) .xterm-screen').click({ button: 'right' });

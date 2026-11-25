@@ -6,16 +6,18 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensureHostKey, startSsh, validateSsh } from '../src/servers/ssh.ts';
+import { serverShell } from '../src/servers/shell.ts';
 
-const SSH = 'C:/Windows/System32/OpenSSH/ssh.exe';
-const SFTP = 'C:/Windows/System32/OpenSSH/sftp.exe';
+const WIN = process.platform === 'win32';
+const SSH = WIN ? 'C:/Windows/System32/OpenSSH/ssh.exe' : '/usr/bin/ssh';
+const SFTP = WIN ? 'C:/Windows/System32/OpenSSH/sftp.exe' : '/usr/bin/sftp';
 const hasOpenSsh = existsSync(SSH) && existsSync(SFTP);
 
-/** Roda o ssh/sftp do Windows com a senha via SSH_ASKPASS (sem terminal). */
+/** Roda o ssh/sftp do sistema com a senha via SSH_ASKPASS (sem terminal). */
 function run(exe: string, args: string[], dir: string, password: string, input = '') {
   return new Promise<{ code: number | null; out: string; err: string }>((resolve) => {
-    const askpass = join(dir, 'askpass.cmd');
-    void writeFile(askpass, `@echo ${password}\r\n`).then(() => {
+    const askpass = join(dir, WIN ? 'askpass.cmd' : 'askpass.sh');
+    void writeFile(askpass, WIN ? `@echo ${password}\r\n` : `#!/bin/sh\necho '${password}'\n`, { mode: 0o755 }).then(() => {
       const p = spawn(exe, ['-o', 'StrictHostKeyChecking=no', '-o', `UserKnownHostsFile=${join(dir, 'known_hosts')}`,
         '-o', 'PreferredAuthentications=password', '-o', 'NumberOfPasswordPrompts=1', ...args], {
         env: { ...process.env, SSH_ASKPASS: askpass, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: 'x' },
@@ -69,7 +71,7 @@ test('SSH/SFTP com o OpenSSH do Windows: comando, envio, download, listagem, ren
   await writeFile(local, Buffer.alloc(200_000, 7));
   const { key } = await ensureHostKey(join(dir, 'hostkey'));
   const logs: string[] = [];
-  const srv = await startSsh({ root, port: 0, host: '127.0.0.1', user: 'tecnico', password: 'senha-123', shell: 'cmd', hostKey: key }, (l) => logs.push(l));
+  const srv = await startSsh({ root, port: 0, host: '127.0.0.1', user: 'tecnico', password: 'senha-123', shell: serverShell('cmd'), hostKey: key }, (l) => logs.push(l));
   const target = ['-p', String(srv.port), 'tecnico@127.0.0.1'];
   try {
     let r = await run(SSH, [...target, 'echo ok-via-ssh'], dir, 'senha-123');

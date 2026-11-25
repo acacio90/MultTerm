@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { Resolver } from 'node:dns/promises';
 import { createServer, type Server } from 'node:net';
 import { startAgent, V3_USER } from '../test/snmp-agent.ts';
 import { launchApp, type LaunchedApp } from './fixture.ts';
@@ -194,7 +195,11 @@ test.describe('consulta SNMP contra um agente local', () => {
 });
 
 test('scanner de rede busca o nome por SNMP quando não há DNS reverso', async () => {
-  // 127.0.0.2 também é loopback e não tem DNS reverso; o agente responde só nele.
+  // 127.0.0.2 também é loopback e normalmente não tem DNS reverso; o agente responde só nele. No
+  // Ubuntu do CI, o systemd-resolved responde "localhost" para todo o 127.0.0.0/8: aí o caminho do
+  // SNMP não é alcançável pela interface (o test/snmp.test.ts cobre com o DNS reverso substituído).
+  const reverse = await new Resolver({ timeout: 1500, tries: 1 }).reverse('127.0.0.2').then((n) => n.length > 0, () => false);
+  test.skip(reverse, '127.0.0.2 tem DNS reverso nesta máquina');
   const agent = await startAgent('127.0.0.2');
   try {
     await openTool('netscan');

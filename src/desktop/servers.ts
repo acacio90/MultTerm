@@ -12,7 +12,9 @@ import { startCron, validateCron } from '../servers/cron.ts';
 import { startTftp, validateTftp } from '../servers/tftp.ts';
 import { startNfs, validateNfs } from '../servers/nfs.ts';
 import { startVnc, validateVnc } from '../servers/vnc.ts';
+import { serverShell, serverShellOptions } from '../servers/shell.ts';
 import { captureScreen, windowsInput } from './screen-share.ts';
+import { KEYRING_HINT } from './keyring.ts';
 
 /*
  * Servidores locais (Ferramentas → Servidores): iniciar/parar, parar sozinho depois de N
@@ -22,7 +24,7 @@ import { captureScreen, windowsInput } from './screen-share.ts';
 
 /** Senha guardada: cifrada pelo sistema (base64) — nunca em texto puro. */
 const seal = (text: string) => {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('o Windows não liberou a cifra para guardar a senha');
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(`o sistema não liberou a cifra para guardar a senha${KEYRING_HINT}`);
   return safeStorage.encryptString(text).toString('base64');
 };
 const unseal = (b64: unknown) => {
@@ -152,7 +154,7 @@ const DEFS: ServerDef[] = [
   {
     kind: 'ssh',
     title: 'SSH/SFTP',
-    description: 'Servidor SSH com SFTP na pasta raiz e shell do Windows pelo ConPTY (ssh usuário@ip deste computador). ' +
+    description: 'Servidor SSH com SFTP na pasta raiz e o shell deste computador (ssh usuário@ip deste computador). ' +
       'Na primeira conexão, confira a impressão digital da chave mostrada no log.',
     fields: [
       { key: 'root', label: 'Pasta raiz do SFTP', type: 'dir' },
@@ -160,10 +162,10 @@ const DEFS: ServerDef[] = [
       HOST_FIELD,
       { key: 'user', label: 'Usuário', type: 'text' },
       { key: 'password', label: 'Senha', type: 'password' },
-      { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
+      { key: 'shell', label: 'Shell', type: 'select', options: serverShellOptions() },
       ...COMMON,
     ],
-    defaults: () => ({ root: filesDir(), port: 22, user: 'multterm', password: '', shell: 'powershell', stopAfter: 3600 }),
+    defaults: () => ({ root: filesDir(), port: 22, user: 'multterm', password: '', shell: serverShell(undefined), stopAfter: 3600 }),
     start: async (raw, log) => {
       const host = await ensureHostKey(join(app.getPath('userData'), 'certs', 'ssh_host_ed25519'));
       if (host.created) log('chave de host gerada');
@@ -174,17 +176,17 @@ const DEFS: ServerDef[] = [
   {
     kind: 'telnet',
     title: 'Telnet',
-    description: 'Shell do Windows por Telnet, para equipamentos que só falam Telnet. O Telnet não é cifrado: ' +
+    description: 'Shell deste computador por Telnet, para equipamentos que só falam Telnet. O Telnet não é cifrado: ' +
       'a senha e tudo o que for digitado trafegam em texto puro — use só em rede confiável e por pouco tempo.',
     fields: [
       { key: 'port', label: 'Porta', type: 'number', min: 1, max: 65535 },
       HOST_FIELD,
       { key: 'password', label: 'Senha de acesso', type: 'password' },
-      { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
+      { key: 'shell', label: 'Shell', type: 'select', options: serverShellOptions() },
       { key: 'confirm', label: 'Perguntar antes de aceitar cada conexão', type: 'bool' },
       ...COMMON,
     ],
-    defaults: () => ({ port: 23, password: '', shell: 'powershell', confirm: true, stopAfter: 900 }),
+    defaults: () => ({ port: 23, password: '', shell: serverShell(undefined), confirm: true, stopAfter: 900 }),
     start: (raw, log) => startTelnet({
       ...validateTelnet(raw),
       confirm: raw.confirm === true ? (client) => confirmConnection('Telnet', client) : undefined,
@@ -198,11 +200,11 @@ const DEFS: ServerDef[] = [
       '"@daily ..."). Linhas com # são comentários. A saída de cada execução vai para o log.',
     fields: [
       { key: 'jobs', label: 'Tarefas (uma por linha)', type: 'textarea' },
-      { key: 'shell', label: 'Shell', type: 'select', options: [['powershell', 'PowerShell'], ['cmd', 'Prompt de comando (cmd)']] },
+      { key: 'shell', label: 'Shell', type: 'select', options: serverShellOptions() },
       { key: 'startWithApp', label: 'Iniciar o agendador junto com o MultTerm', type: 'bool' },
       ...COMMON,
     ],
-    defaults: () => ({ jobs: '# minuto hora dia mês dia-da-semana comando\n', shell: 'powershell', startWithApp: false, stopAfter: 0 }),
+    defaults: () => ({ jobs: '# minuto hora dia mês dia-da-semana comando\n', shell: serverShell(undefined), startWithApp: false, stopAfter: 0 }),
     start: (raw, log) => startCron(validateCron(raw), log),
   },
   {

@@ -1,10 +1,12 @@
 import { app, BrowserWindow, ipcMain, screen, type WebContents } from 'electron';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { embeddedRdpArgs, RDP_DISPLAY_CONTROL, rdpExitMessage, rdpStdin } from '../sessions/launch.ts';
+import { embeddedRdpArgs, RDP_DISPLAY_CONTROL, rdpExitMessage, rdpStdin, xfreerdpExitCode } from '../sessions/launch.ts';
 import { validateSessions } from '../sessions/store.ts';
+import { which } from '../which.ts';
+import * as x11 from './rdp-x11.ts';
 
 /*
  * Sessões RDP numa aba: o MultTerm cria uma janela nativa vinculada à janela do app (uma janela
@@ -12,7 +14,12 @@ import { validateSessions } from '../sessions/store.ts';
  * FreeRDP (wfreerdp.exe, distribuído com o app) se encaixa nela com /parent-window. Uma janela
  * filha não serviria: o Chromium compõe a página (DirectComposition) por cima das filhas. A interface informa a posição/visibilidade da aba; menus e diálogos
  * por cima da área escondem a sessão (uma janela nativa sempre fica acima da página).
+ *
+ * No Linux (X11), o contêiner é uma janela filha da janela do app (rdp-x11.ts) e o cliente é o
+ * xfreerdp do sistema, encaixado do mesmo jeito.
  */
+
+const LINUX = process.platform === 'linux';
 
 const require = createRequire(import.meta.url);
 
@@ -104,9 +111,30 @@ function win32() {
   return user32;
 }
 
-/** Cliente RDP distribuído com o app. MULTTERM_FREERDP troca o executável (testes). */
+/**
+ * Cliente RDP: no Windows, o distribuído com o app; no Linux, o xfreerdp3 (ou xfreerdp) do sistema.
+ * MULTTERM_FREERDP troca o executável (testes).
+ */
 export const freerdpPath = () => (!app.isPackaged && process.env.MULTTERM_FREERDP)
-  || join(app.isPackaged ? join(process.resourcesPath, 'freerdp') : join(app.getAppPath(), 'vendor', 'freerdp'), 'wfreerdp.exe');
+  || (LINUX ? which('xfreerdp3') ?? which('xfreerdp') ?? ''
+    : join(app.isPackaged ? join(process.resourcesPath, 'freerdp') : join(app.getAppPath(), 'vendor', 'freerdp'), 'wfreerdp.exe'));
+
+/** RDP numa aba no Linux só com o X11 (o app roda pelo XWayland numa sessão Wayland). */
+const x11Available = () => LINUX && !!process.env.DISPLAY;
+
+/** Versão principal do FreeRDP (2 ou 3): muda a opção de certificado. Consultada uma vez por executável. */
+const majors = new Map<string, number>();
+function freerdpMajor(exe: string): number {
+  if (!majors.has(exe)) {
+    let major = 3;
+    try {
+      const out = execFileSync(exe, ['--version'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+      major = Number(/version (\d+)\./i.exec(out)?.[1] ?? 3);
+    } catch { /* cliente de teste ou sem --version: assume o 3 */ }
+    majors.set(exe, major);
+  }
+  return majors.get(exe)!;
+}
 
 interface View {
   x: number;
@@ -119,6 +147,7 @@ interface View {
 interface RdpSession {
   owner: WebContents;
   id: number;
+  /** HWND do contêiner (Windows) ou janela X (Linux). */
   container: number | bigint;
   proc: ChildProcess;
   view: View;
@@ -143,8 +172,30 @@ function validView(raw: unknown): View {
   return { x: n(o.x), y: n(o.y), width: Math.max(0, n(o.width)), height: Math.max(0, n(o.height)), visible: o.visible === true };
 }
 
+/** Linux: posição da área da aba dentro da janela X do app (pixels físicos). */
+function placeX11(s: RdpSession) {
+  const { x, y, width, height } = s.view;
+  const show = s.view.visible && width > 0 && height > 0 && !!s.child;
+  if (!show) {
+    x11.hide(BigInt(s.container));
+    return;
+  }
+  const win = BrowserWindow.fromWebContents(s.owner);
+  if (!win || win.isDestroyed()) return;
+  // A aba informa a posição na página; a janela X do app começa na borda dela (o menu do topo,
+  // desenhado pelo Electron, fica dentro): soma o deslocamento da área do conteúdo.
+  const b = win.getBounds();
+  const c = win.getContentBounds();
+  const scale = screen.getDisplayMatching(b).scaleFactor;
+  x11.show(BigInt(s.container), BigInt(s.child!), {
+    x: Math.round((c.x - b.x) * scale) + x, y: Math.round((c.y - b.y) * scale) + y, width, height,
+  });
+  scheduleReconnect(s);
+}
+
 /** Aplica posição e visibilidade; com a sessão aberta, ajusta a janela do RDP e a resolução. */
 function place(s: RdpSession) {
+  if (LINUX) return placeX11(s);
   const w = win32();
   const { x, y, width, height } = s.view;
   const show = s.view.visible && width > 0 && height > 0 && !!s.child;
@@ -197,6 +248,7 @@ function close(key: string) {
   clearTimeout(s.resizeTimer);
   clearTimeout(s.reconnectTimer);
   if (s.proc.exitCode === null) s.proc.kill();
+  if (LINUX) return x11.destroy(BigInt(s.container));
   const w = win32();
   if (w.IsWindow(s.container)) w.DestroyWindow(s.container);
 }
@@ -231,7 +283,7 @@ function validCredentials(raw: unknown): { user?: string; password: string } {
 }
 
 function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unknown, rawCredentials: unknown) {
-  if (process.platform !== 'win32') throw new Error('RDP numa aba só no Windows; use Janela externa');
+  if (process.platform !== 'win32' && !x11Available()) throw new Error('RDP numa aba só no Windows e no Linux com X11; use Janela externa');
   if (!Number.isInteger(id) || (id as number) <= 0) throw new Error('aba inválida');
   const key = keyOf(owner, id as number);
   if (sessions.has(key)) throw new Error('esta aba já tem uma sessão RDP');
@@ -241,19 +293,31 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
   // O usuário digitado na hora vale para esta conexão (sem mudar a sessão gravada).
   const session = { ...saved, user: credentials.user ?? saved.user };
   const exe = freerdpPath();
-  if (!existsSync(exe)) throw new Error('cliente RDP não encontrado nesta instalação; use Janela externa (botão direito na sessão)');
+  if (!exe || !existsSync(exe)) {
+    throw new Error(LINUX
+      ? 'cliente RDP não encontrado: instale o FreeRDP (pacote freerdp3-x11 ou freerdp2-x11)'
+      : 'cliente RDP não encontrado nesta instalação; use Janela externa (botão direito na sessão)');
+  }
   const win = BrowserWindow.fromWebContents(owner);
   if (!win) throw new Error('janela não encontrada');
 
   const view = validView(rawView);
-  const w = win32();
-  const parent = win.getNativeWindowHandle().readBigUInt64LE(0);
-  // Popup "owned" pela janela do app (o parâmetro de pai vira o dono); criada escondida.
-  const container = w.CreateWindowExW(WS_EX_TOOLWINDOW, HOST_CLASS, '', WS_POPUP | WS_CLIPCHILDREN,
-    0, 0, Math.max(1, view.width), Math.max(1, view.height), parent, 0, 0, 0) as number | bigint;
+  let container: number | bigint;
+  if (LINUX) {
+    container = x11.createContainer(x11.xidFromHandle(win.getNativeWindowHandle()), view.width, view.height);
+  } else {
+    const w = win32();
+    const parent = win.getNativeWindowHandle().readBigUInt64LE(0);
+    // Popup "owned" pela janela do app (o parâmetro de pai vira o dono); criada escondida.
+    container = w.CreateWindowExW(WS_EX_TOOLWINDOW, HOST_CLASS, '', WS_POPUP | WS_CLIPCHILDREN,
+      0, 0, Math.max(1, view.width), Math.max(1, view.height), parent, 0, 0, 0) as number | bigint;
+  }
   if (!container) throw new Error('não foi possível criar a área da sessão RDP');
 
-  const args = embeddedRdpArgs(session, { parent: String(container), width: view.width, height: view.height });
+  const args = embeddedRdpArgs(session, { parent: String(container), width: view.width, height: view.height }, process.platform);
+  // O xfreerdp perguntaria no terminal se aceita o certificado (e a entrada padrão só tem a senha):
+  // aceita o da primeira conexão e recusa se ele mudar depois (como o known_hosts do ssh).
+  if (LINUX) args.push(freerdpMajor(exe) >= 3 ? '/cert:tofu' : '/cert-tofu');
   const proc = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: false });
   proc.stdin?.on('error', () => {});
   proc.stdin?.end(rdpStdin(credentials.password));
@@ -276,7 +340,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
 
   // Mostra a área só quando a janela do RDP existe (antes, ficaria um retângulo preto vazio).
   s.poll = setInterval(() => {
-    const child = w.GetWindow(container, GW_CHILD) as number | bigint;
+    const child = LINUX ? x11.firstChild(BigInt(container)) : win32().GetWindow(container, GW_CHILD) as number | bigint;
     if (!child) return;
     s.child = child;
     clearInterval(s.poll);
@@ -296,7 +360,7 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
     if (!owner.isDestroyed()) owner.send('rdp:exit', s.id, code, { ...end, log });
   };
   proc.on('error', (err) => finish(null, err.message));
-  proc.on('exit', (code) => finish(code));
+  proc.on('exit', (code) => finish(LINUX ? xfreerdpExitCode(code) : code));
 }
 
 /**
@@ -306,6 +370,10 @@ function open(owner: WebContents, id: unknown, rawSession: unknown, rawView: unk
  */
 function sendCtrlAltDel(s: RdpSession) {
   if (!s.child) return;
+  if (LINUX) {
+    if (!x11.sendCtrlAltDel(BigInt(s.child))) throw new Error('Ctrl+Alt+Del indisponível: falta a biblioteca XTest (libxtst6)');
+    return;
+  }
   const w = win32();
   w.SetFocus(s.container);
   const KEYUP = 0x0002;
@@ -330,7 +398,11 @@ export function registerRdpIpc(): void {
     const s = Number.isInteger(id) ? sessions.get(keyOf(e.sender, id as number)) : undefined;
     if (s) sendCtrlAltDel(s);
   });
-  ipcMain.handle('rdp:available', () => process.platform === 'win32' && existsSync(freerdpPath()));
+  ipcMain.handle('rdp:available', () => {
+    if (process.platform !== 'win32' && !x11Available()) return false;
+    const exe = freerdpPath();
+    return !!exe && existsSync(exe);
+  });
   app.on('before-quit', () => {
     for (const key of [...sessions.keys()]) close(key);
   });
