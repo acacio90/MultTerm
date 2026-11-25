@@ -19,7 +19,10 @@ import {
   type SshAlgorithms,
 } from '../sessions/launch.ts';
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
-import { closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals.ts';
+import {
+  attachTerminal, breakTerminal, checkFree, closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal, writeTerminal,
+} from './terminals.ts';
+import { listSerialPorts, openSerial } from './serial.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
 import { exportVpnSites, importVpnSites, registerVpnIpc } from './vpn.ts';
 import { exportServerConfigs, importServerConfigs, registerServersIpc } from './servers.ts';
@@ -300,6 +303,11 @@ function registerIpc(): void {
 
   ipcMain.handle('term:open', async (e, id: unknown, raw: unknown, cols: unknown, rows: unknown) => {
     const session = await sessionToConnect(raw);
+    if (session.type === 'serial') {
+      checkFree(e.sender, id);
+      attachTerminal(e.sender, id, await openSerial(session));
+      return { warnings: [] };
+    }
     const { file, args, warnings } = embeddedSshCommand(session, {
       platform: process.platform,
       home: homedir(),
@@ -315,6 +323,8 @@ function registerIpc(): void {
   ipcMain.on('term:input', (e, id: unknown, data: unknown) => writeTerminal(e.sender, id, data));
   ipcMain.on('term:resize', (e, id: unknown, cols: unknown, rows: unknown) => resizeTerminal(e.sender, id, cols, rows));
   ipcMain.on('term:close', (e, id: unknown) => closeTerminal(e.sender, id));
+  ipcMain.handle('term:break', (e, id: unknown) => breakTerminal(e.sender, id));
+  ipcMain.handle('serial:ports', () => listSerialPorts());
 
   ipcMain.handle('clipboard:read', () => clipboard.readText());
   ipcMain.on('clipboard:write', (_e, text: unknown) => {

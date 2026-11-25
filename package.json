@@ -4,7 +4,7 @@
   "desktopName": "multterm.desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Gerenciador de sessões SSH/RDP com terminal em abas",
+  "description": "Gerenciador de sessões SSH/RDP/serial com terminal em abas",
   "author": "acacio90",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -44,6 +44,7 @@
     "asarUnpack": [
       "node_modules/node-pty/**",
       "node_modules/koffi/**",
+      "node_modules/@serialport/bindings-cpp/**",
       "dist/agent/**"
     ],
     "npmRebuild": false,
@@ -135,6 +136,8 @@
     ]
   },
   "dependencies": {
+    "@serialport/bindings-cpp": "^13.0.1",
+    "@serialport/stream": "^13.0.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.8.11",
@@ -146,6 +149,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
+    "@serialport/binding-mock": "^10.2.2",
     "@types/net-snmp": "^3.23.0",
     "@types/node": "^26.6.6",
     "@types/ssh2": "^1.15.6",

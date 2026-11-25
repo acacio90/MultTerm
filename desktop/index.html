@@ -69,23 +69,50 @@
               <select name="type">
                 <option value="ssh">SSH</option>
                 <option value="rdp">RDP</option>
+                <option value="serial">Serial</option>
               </select>
             </label>
-            <label>Host <input name="host" required></label>
-            <label>Porta <input name="port" type="number" min="1" max="65535"></label>
-            <label>Usuário <input name="user"></label>
+            <label><span id="host-label">Host</span> <input name="host" required autocomplete="off" spellcheck="false"></label>
+            <label class="net-only">Porta <input name="port" type="number" min="1" max="65535"></label>
+            <label class="net-only">Usuário <input name="user"></label>
+            <label class="serial-only">Velocidade (baud) <input name="baudRate" type="number" min="50" max="4000000" list="baud-rates" placeholder="9600"></label>
+            <label class="serial-only">Bits de dados
+              <select name="dataBits"><option>8</option><option>7</option><option>6</option><option>5</option></select>
+            </label>
+            <label class="serial-only">Paridade
+              <select name="parity">
+                <option value="none">Nenhuma</option>
+                <option value="odd">Ímpar</option>
+                <option value="even">Par</option>
+                <option value="mark">Mark</option>
+                <option value="space">Space</option>
+              </select>
+            </label>
+            <label class="serial-only">Bits de parada
+              <select name="stopBits"><option>1</option><option>1.5</option><option>2</option></select>
+            </label>
+            <label class="serial-only">Controle de fluxo
+              <select name="flowControl">
+                <option value="none">Nenhum</option>
+                <option value="xonxoff">XON/XOFF</option>
+                <option value="rtscts">RTS/CTS</option>
+              </select>
+            </label>
+            <p id="serial-ports" class="serial-only wide hint"></p>
             <label class="ssh-only wide">Chave privada
               <span class="dir-pick"><input name="identityFile" placeholder="~/.ssh/id_ed25519 (vazio = agente SSH)"><button type="button" id="pick-key">Procurar…</button></span>
             </label>
             <label class="ssh-only check wide"><input type="checkbox" name="legacySsh"> Aceitar algoritmos antigos (SHA-1, ssh-rsa, CBC) — só para switches e servidores antigos</label>
             <label class="rdp-only check wide"><input type="checkbox" name="multimon"> Abrir sempre em todos os monitores (tela cheia, no cliente do Windows)</label>
             <label class="rdp-only check wide"><input type="checkbox" name="legacyTls"> Aceitar TLS antigo (1.0) — só para servidores Windows antigos que não falam TLS 1.2</label>
-            <label>MAC (Wake-on-LAN) <input name="mac" placeholder="opcional, ex.: aa:bb:cc:dd:ee:ff" autocomplete="off"></label>
-            <label>VPN <input name="vpn" list="vpn-sites" placeholder="opcional: site da VPN" autocomplete="off"></label>
+            <label class="net-only">MAC (Wake-on-LAN) <input name="mac" placeholder="opcional, ex.: aa:bb:cc:dd:ee:ff" autocomplete="off"></label>
+            <label class="net-only">VPN <input name="vpn" list="vpn-sites" placeholder="opcional: site da VPN" autocomplete="off"></label>
             <label class="wide">Tags <input name="tags" placeholder="separadas por vírgula"></label>
           </div>
           <datalist id="folders"></datalist>
           <datalist id="vpn-sites"></datalist>
+          <datalist id="serial-lines"></datalist>
+          <datalist id="baud-rates"><option value="1200"><option value="2400"><option value="4800"><option value="9600"><option value="19200"><option value="38400"><option value="57600"><option value="115200"><option value="230400"><option value="460800"><option value="921600"></datalist>
           <div class="actions">
             <button type="submit" class="primary">Salvar</button>
             <button id="btn-connect" type="button">Conectar</button>
@@ -216,7 +243,7 @@
       <section>
         <h3>Uso</h3>
         <ul>
-          <li><strong>Duplo clique</strong> numa sessão abre uma aba: terminal (SSH) ou área de trabalho remota (RDP).</li>
+          <li><strong>Duplo clique</strong> numa sessão abre uma aba: terminal (SSH ou porta serial) ou área de trabalho remota (RDP).</li>
           <li><strong>Ctrl/Shift+clique</strong> seleciona várias sessões; botão direito → <strong>Conectar as selecionadas</strong> (ou <strong>Conectar todas</strong> numa pasta).</li>
           <li>Botão direito numa aba de terminal: <strong>Abrir em janela separada</strong>.</li>
           <li>Selecionar texto copia; <strong>botão direito</strong> cola (ou Ctrl+Shift+C / Ctrl+Shift+V).</li>

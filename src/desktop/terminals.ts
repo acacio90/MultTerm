@@ -8,8 +8,22 @@ import { OutputBuffer } from '../agent/text.ts';
  * nenhuma saída (nem o fim de um ssh que termina na hora) chegue antes da aba saber dele.
  * Uma aba pode mudar de janela (destacar/devolver): dono e id são trocados sem reiniciar o processo.
  */
+/**
+ * O que roda atrás da aba: um pseudo-terminal (ssh, shell local) ou outra fonte de texto, como a
+ * porta serial. O pty do node-pty já tem esse formato.
+ */
+export interface TerminalProcess {
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(): void;
+  onData(cb: (data: string) => void): unknown;
+  onExit(cb: (e: { exitCode: number }) => void): unknown;
+  /** Sinal de break da linha serial (só a porta serial tem). */
+  sendBreak?(): Promise<void>;
+}
+
 interface Terminal {
-  proc: pty.IPty;
+  proc: TerminalProcess;
   owner: WebContents;
   id: number;
 }
@@ -59,9 +73,7 @@ export function openTerminal(
   size: { cols: number; rows: number; cwd: string },
   filter?: OutputFilter,
 ): void {
-  if (!validId(id)) throw new Error('id de terminal inválido');
-  const key = keyOf(owner, id);
-  if (terminals.has(key)) throw new Error(`terminal ${id} já está aberto`);
+  checkFree(owner, id);
   const proc = pty.spawn(file, args, {
     name: 'xterm-256color',
     cols: size.cols,
@@ -69,6 +81,19 @@ export function openTerminal(
     cwd: size.cwd,
     env: ptyEnv(),
   });
+  attachTerminal(owner, id, proc, filter);
+}
+
+/** Recusa um id inválido ou de uma aba que já tem processo. */
+export function checkFree(owner: WebContents, id: unknown): asserts id is number {
+  if (!validId(id)) throw new Error('id de terminal inválido');
+  if (terminals.has(keyOf(owner, id))) throw new Error(`terminal ${id} já está aberto`);
+}
+
+/** Liga um processo já aberto à aba `id` da janela `owner`. */
+export function attachTerminal(owner: WebContents, id: unknown, proc: TerminalProcess, filter?: OutputFilter): void {
+  checkFree(owner, id);
+  const key = keyOf(owner, id);
   const entry: Terminal = { proc, owner, id };
   terminals.set(key, entry);
   if (!outputs.has(key)) outputs.set(key, new OutputBuffer());
@@ -107,6 +132,14 @@ export function writeTerminal(owner: WebContents, id: unknown, data: unknown): v
 export function resizeTerminal(owner: WebContents, id: unknown, cols: unknown, rows: unknown): void {
   const t = get(owner, id);
   if (t && validId(cols) && validId(rows)) t.proc.resize(cols, rows);
+}
+
+/** Envia o sinal de break pela linha serial da aba; falha se a aba não for serial. */
+export async function breakTerminal(owner: WebContents, id: unknown): Promise<void> {
+  const t = get(owner, id);
+  if (!t) throw new Error('a sessão desta aba não está aberta');
+  if (!t.proc.sendBreak) throw new Error('só a sessão serial envia break');
+  await t.proc.sendBreak();
 }
 
 export function closeTerminal(owner: WebContents, id: unknown): void {

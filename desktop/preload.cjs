@@ -61,6 +61,9 @@ contextBridge.exposeInMainWorld('multterm', {
   termInput: (id, data) => ipcRenderer.send('term:input', id, data),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
   termClose: (id) => ipcRenderer.send('term:close', id),
+  // Porta serial: portas do sistema e sinal de break.
+  serialPorts: () => ipcRenderer.invoke('serial:ports'),
+  termBreak: (id) => ipcRenderer.invoke('term:break', id),
   onTermData: (cb) => ipcRenderer.on('term:data', (_e, id, data) => cb(id, data)),
   onTermExit: (cb) => ipcRenderer.on('term:exit', (_e, id, code) => cb(id, code)),
 

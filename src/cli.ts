@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { effectivePort, SessionError, type Session } from './sessions/model.ts';
+import { describeSerial, effectivePort, SessionError, type Session } from './sessions/model.ts';
 import { readImportFile } from './sessions/import.ts';
 import { groupByFolder, loadSessionFile, mergeSessions, saveSessionFile, serializeSessions } from './sessions/store.ts';
 
@@ -18,7 +18,7 @@ opções:
 `;
 
 function describe(s: Session): string {
-  const target = `${s.user ? `${s.user}@` : ''}${s.host}:${effectivePort(s)}`;
+  const target = s.type === 'serial' ? `${s.host} ${describeSerial(s)}` : `${s.user ? `${s.user}@` : ''}${s.host}:${effectivePort(s)}`;
   return `${s.name}  [${s.type}] ${target}`;
 }
 

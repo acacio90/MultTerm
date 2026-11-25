@@ -192,6 +192,7 @@ export function linuxRdpClient(env: Pick<LaunchEnv, 'which'>): string {
 }
 
 export function planLaunch(s: Session, env: LaunchEnv, opts: RdpFileOptions = {}): LaunchPlan {
+  if (s.type === 'serial') throw new SessionError(`${s.name}: a sessão serial abre só numa aba do MultTerm`);
   if (s.type === 'rdp') {
     const multimon = opts.multimon ?? s.multimon === true;
     if (env.platform === 'win32') {
