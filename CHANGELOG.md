@@ -6,12 +6,22 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [1.1.0] - 2026-11-25
+
 ### Adicionado
 
 - **Porta serial numa aba**: sessões do tipo `serial` (COM no Windows, `/dev/tty*` no Linux),
   como a conexão serial do PuTTY, com velocidade, bits de dados, paridade, bits de parada e
   controle de fluxo (padrão 9600 8N1), lista das portas encontradas no formulário, **Enviar
   Break** no menu da aba e mensagens para porta inexistente, em uso ou sem permissão. (#129)
+
+### Corrigido
+
+- O formulário de sessão mostrava as opções só de SSH (chave privada, algoritmos antigos) nas
+  sessões RDP, e as só de RDP nas sessões SSH. (#129)
+- Ao sair, o app encerra os terminais e espera os processos terminarem. No Windows, o processo
+  auxiliar que o node-pty abre ao encerrar um terminal não fica mais órfão segurando a saída do
+  app (o que travava o fechamento nos testes). (#117)
 
 ## [1.0.0] - 2026-11-25
 
@@ -314,7 +324,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v1.0.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v1.1.0...develop
+[1.1.0]: https://github.com/acacio90/MultTerm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/acacio90/MultTerm/compare/v0.10.0...v1.0.0
 [0.10.0]: https://github.com/acacio90/MultTerm/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/acacio90/MultTerm/compare/v0.8.1...v0.9.0
