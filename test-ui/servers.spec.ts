@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchApp, type LaunchedApp } from './fixture.ts';
 
+const CURL = process.platform === 'win32' ? 'C:/Windows/System32/curl.exe' : '/usr/bin/curl';
 let ctx: LaunchedApp | undefined;
 let root: string;
 
@@ -81,7 +82,7 @@ test('porta em uso mostra erro claro', async () => {
 });
 
 test('TFTP: recebe um arquivo pelo curl e para sozinho no tempo limite', async () => {
-  test.skip(!existsSync('C:/Windows/System32/curl.exe'), 'sem curl');
+  test.skip(!existsSync(CURL), 'sem curl');
   const port = await freePort();
   const panel = await openServers();
   const detail = panel.locator('.server-detail');
@@ -95,7 +96,7 @@ test('TFTP: recebe um arquivo pelo curl e para sozinho no tempo limite', async (
 
   const local = join(root, 'local-config.txt');
   await writeFile(local, 'hostname switch-01\n');
-  await new Promise<void>((resolve, reject) => execFile('C:/Windows/System32/curl.exe', ['-s', '-S', '-T', local, `tftp://127.0.0.1:${port}/backup.cfg`], (e) => (e ? reject(e) : resolve())));
+  await new Promise<void>((resolve, reject) => execFile(CURL, ['-s', '-S', '-T', local, `tftp://127.0.0.1:${port}/backup.cfg`], (e) => (e ? reject(e) : resolve())));
   expect(await readFile(join(root, 'backup.cfg'), 'utf8')).toBe('hostname switch-01\n');
   await expect(detail.locator('.server-log')).toContainText('enviou "backup.cfg"');
 
@@ -104,7 +105,7 @@ test('TFTP: recebe um arquivo pelo curl e para sozinho no tempo limite', async (
 });
 
 test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async () => {
-  test.skip(!existsSync('C:/Windows/System32/curl.exe'), 'sem curl');
+  test.skip(!existsSync(CURL), 'sem curl');
   await writeFile(join(root, 'config.txt'), 'interface eth0');
   const port = await freePort();
   const panel = await openServers();
@@ -118,7 +119,7 @@ test('FTP: senha guardada cifrada, login pelo curl e anônimo recusado', async (
   await panel.locator('.server-row[data-kind=ftp] button', { hasText: 'Iniciar' }).click();
   await expect(panel.locator('.server-row[data-kind=ftp] .server-state')).toContainText(`rodando na porta ${port}`);
 
-  const get = (args: string[]) => new Promise<{ code: number; out: string }>((resolve) => execFile('C:/Windows/System32/curl.exe', ['-s', ...args], (e, out) => resolve({ code: e ? 1 : 0, out })));
+  const get = (args: string[]) => new Promise<{ code: number; out: string }>((resolve) => execFile(CURL, ['-s', ...args], (e, out) => resolve({ code: e ? 1 : 0, out })));
   expect((await get(['-u', 'tecnico:senha-forte', `ftp://127.0.0.1:${port}/config.txt`])).out).toBe('interface eth0');
   expect((await get([`ftp://127.0.0.1:${port}/config.txt`])).code).not.toBe(0); // anônimo desligado
   await expect(detail.locator('.server-log')).toContainText('login de tecnico');
@@ -169,7 +170,7 @@ test('todos os servidores abrem as configurações (inclusive os com caixa de se
     await expect(panel.locator('.server-detail h3')).toHaveText(`Servidor ${title}`);
   }
   await panel.locator('.server-row[data-kind=telnet] .server-name').click();
-  await expect(panel.locator('.server-detail [name=shell]')).toHaveValue('powershell');
+  await expect(panel.locator('.server-detail [name=shell]')).toHaveValue(process.platform === 'win32' ? 'powershell' : 'sh');
   await expect(panel.locator('.server-detail')).toContainText('não é cifrado');
 });
 

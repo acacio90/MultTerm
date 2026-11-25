@@ -12,8 +12,21 @@ export interface CaptureTools {
   wireshark?: string;
 }
 
-/** Procura o dumpcap e o Wireshark nas pastas de instalação padrão. */
-export function findCaptureTools(env: { programFiles?: string[]; fileExists: (p: string) => boolean }): CaptureTools {
+/**
+ * Procura o dumpcap e o Wireshark: no Windows, nas pastas de instalação padrão; nos outros
+ * sistemas, no PATH (`which`).
+ */
+export function findCaptureTools(env: {
+  platform?: NodeJS.Platform;
+  programFiles?: string[];
+  fileExists: (p: string) => boolean;
+  which?: (name: string) => string | undefined;
+}): CaptureTools {
+  if ((env.platform ?? process.platform) !== 'win32') {
+    const dumpcap = env.which?.('dumpcap');
+    const wireshark = env.which?.('wireshark');
+    return { ...(dumpcap ? { dumpcap } : {}), ...(wireshark ? { wireshark } : {}) };
+  }
   const dirs = (env.programFiles ?? []).filter(Boolean).map((d) => join(d, 'Wireshark'));
   const pick = (exe: string) => dirs.map((d) => join(d, exe)).find((p) => env.fileExists(p));
   return { dumpcap: pick('dumpcap.exe'), wireshark: pick('Wireshark.exe') };
