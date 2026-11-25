@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { Resolver } from 'node:dns/promises';
 import { createServer, type Server } from 'node:net';
 import { startAgent, V3_USER } from '../test/snmp-agent.ts';
 import { launchApp, type LaunchedApp } from './fixture.ts';
@@ -194,14 +195,17 @@ test.describe('consulta SNMP contra um agente local', () => {
 });
 
 test('scanner de rede busca o nome por SNMP quando não há DNS reverso', async () => {
-  // 127.0.0.3 também é loopback e não tem DNS reverso (o 127.0.0.2 não serve: no Linux com o
-  // nss-myhostname, como no Ubuntu do CI, ele volta como o nome da máquina); o agente responde só nele.
-  const agent = await startAgent('127.0.0.3');
+  // 127.0.0.2 também é loopback e normalmente não tem DNS reverso; o agente responde só nele. No
+  // Ubuntu do CI, o systemd-resolved responde "localhost" para todo o 127.0.0.0/8: aí o caminho do
+  // SNMP não é alcançável pela interface (o test/snmp.test.ts cobre com o DNS reverso substituído).
+  const reverse = await new Resolver({ timeout: 1500, tries: 1 }).reverse('127.0.0.2').then((n) => n.length > 0, () => false);
+  test.skip(reverse, '127.0.0.2 tem DNS reverso nesta máquina');
+  const agent = await startAgent('127.0.0.2');
   try {
     await openTool('netscan');
     const panel = activePanel();
     await expect(panel.locator('[name=snmpPort]')).toBeHidden();
-    await panel.locator('[name=range]').fill('127.0.0.3');
+    await panel.locator('[name=range]').fill('127.0.0.2');
     await panel.locator('[name=version]').selectOption('2c');
     await panel.locator('[name=snmpPort]').fill(String(agent.port));
     await panel.locator('button[type=submit]').click();
