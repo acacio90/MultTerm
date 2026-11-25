@@ -416,6 +416,8 @@ dialog#name-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 /* Caixa de seleção no formulário de sessão (ex.: TLS antigo nas sessões RDP). */
 #form label.check { flex-direction: row; align-items: center; gap: 6px; }
 #form label.check input { width: auto; }
+/* Campos de outro tipo de sessão (só SSH, só RDP): o display do .grid label venceria o [hidden]. */
+#form [hidden] { display: none; }
 
 /* ---------- importar do Zabbix ---------- */
 
