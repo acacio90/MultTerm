@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { launchApp, LOCAL, type LaunchedApp } from './fixture.ts';
 
 let ctx: LaunchedApp;
 
@@ -77,52 +77,52 @@ test('fechar a janela destacada devolve a aba à principal; fechar a aba encerra
   const tabIn = (p: typeof main, title: string) => p.locator('#tabs .tab', { hasText: title });
   const rows = (p: typeof main) => p.locator('.term-panel:not([hidden]) .xterm-rows');
   await main.click('#btn-tools');
-  await main.click('#tools-menu [data-tool="local-powershell"]');
-  await expect(rows(main)).toContainText('PS ', { timeout: 20_000 });
+  await main.click(`#tools-menu [data-tool="${LOCAL.tool}"]`);
+  await expect(rows(main)).toContainText(LOCAL.prompt, { timeout: 20_000 });
   await main.locator('.term-panel:not([hidden]) .xterm-helper-textarea').focus();
-  await main.keyboard.type('$marca = 6*7\r');
+  await main.keyboard.type(LOCAL.setMark);
 
   // Destaca e fecha a janela destacada pelo X (evento "close" da janela).
   let opened = ctx.app.waitForEvent('window');
-  await tabIn(main, 'PowerShell').click({ button: 'right' });
+  await tabIn(main, LOCAL.title).click({ button: 'right' });
   await main.locator('.tab-menu button', { hasText: 'Abrir em janela separada' }).click();
   let detached = await opened;
-  await expect(tabIn(detached, 'PowerShell')).toBeVisible();
+  await expect(tabIn(detached, LOCAL.title)).toBeVisible();
   const closed = detached.waitForEvent('close');
-  await ctx.app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().find((w) => w.getTitle().startsWith('PowerShell'))?.close();
-  });
+  await ctx.app.evaluate(({ BrowserWindow }, title) => {
+    BrowserWindow.getAllWindows().find((w) => w.getTitle().startsWith(title))?.close();
+  }, LOCAL.title);
   await closed;
 
   // A aba voltou para a principal com a mesma sessão (a variável continua lá).
-  await expect(tabIn(main, 'PowerShell')).toBeVisible();
+  await expect(tabIn(main, LOCAL.title)).toBeVisible();
   await main.locator('.term-panel:not([hidden]) .xterm-helper-textarea').focus();
-  await main.keyboard.type('Write-Output $marca\r');
-  await expect(rows(main)).toContainText(/Write-Output \$marca\s*42/, { timeout: 20_000 });
+  await main.keyboard.type(LOCAL.showMark);
+  await expect(rows(main)).toContainText(LOCAL.markOut, { timeout: 20_000 });
   expect(ctx.app.windows()).toHaveLength(1);
 
   // Fechar a aba na janela destacada encerra a sessão e fecha a janela vazia.
   opened = ctx.app.waitForEvent('window');
-  await tabIn(main, 'PowerShell').click({ button: 'right' });
+  await tabIn(main, LOCAL.title).click({ button: 'right' });
   await main.locator('.tab-menu button', { hasText: 'Abrir em janela separada' }).click();
   detached = await opened;
   const closed2 = detached.waitForEvent('close');
-  await tabIn(detached, 'PowerShell').locator('.close').click();
+  await tabIn(detached, LOCAL.title).locator('.close').click();
   await closed2;
-  await expect(tabIn(main, 'PowerShell')).toHaveCount(0);
+  await expect(tabIn(main, LOCAL.title)).toHaveCount(0);
   expect(ctx.app.windows()).toHaveLength(1);
 });
 
 test('fechar a janela principal encerra o app, inclusive as janelas destacadas', async () => {
   const main = ctx.page;
   await main.click('#btn-tools');
-  await main.click('#tools-menu [data-tool="local-powershell"]');
-  await expect(main.locator('.term-panel:not([hidden]) .xterm-rows')).toContainText('PS ', { timeout: 20_000 });
+  await main.click(`#tools-menu [data-tool="${LOCAL.tool}"]`);
+  await expect(main.locator('.term-panel:not([hidden]) .xterm-rows')).toContainText(LOCAL.prompt, { timeout: 20_000 });
   const opened = ctx.app.waitForEvent('window');
-  await main.locator('#tabs .tab', { hasText: 'PowerShell' }).click({ button: 'right' });
+  await main.locator('#tabs .tab', { hasText: LOCAL.title }).click({ button: 'right' });
   await main.locator('.tab-menu button', { hasText: 'Abrir em janela separada' }).click();
   const detached = await opened;
-  await expect(detached.locator('#tabs .tab', { hasText: 'PowerShell' })).toBeVisible();
+  await expect(detached.locator('#tabs .tab', { hasText: LOCAL.title })).toBeVisible();
   expect(ctx.app.windows()).toHaveLength(2);
   const exited = ctx.app.waitForEvent('close');
   // A principal pela URL, não pelo título: enquanto carrega, a destacada também se chama "MultTerm".

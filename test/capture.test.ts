@@ -13,9 +13,15 @@ import {
 test('findCaptureTools procura o Wireshark nas pastas de programas', () => {
   const base = join('C:', 'PF');
   const present = new Set([join(base, 'Wireshark', 'dumpcap.exe')]);
-  const tools = findCaptureTools({ programFiles: ['', base], fileExists: (p) => present.has(p) });
+  const tools = findCaptureTools({ platform: 'win32', programFiles: ['', base], fileExists: (p) => present.has(p) });
   assert.deepEqual(tools, { dumpcap: join(base, 'Wireshark', 'dumpcap.exe'), wireshark: undefined });
-  assert.deepEqual(findCaptureTools({ programFiles: [base], fileExists: () => false }), { dumpcap: undefined, wireshark: undefined });
+  assert.deepEqual(findCaptureTools({ platform: 'win32', programFiles: [base], fileExists: () => false }), { dumpcap: undefined, wireshark: undefined });
+});
+
+test('findCaptureTools no Linux procura no PATH', () => {
+  const which = (n: string) => (n === 'dumpcap' ? '/usr/bin/dumpcap' : undefined);
+  assert.deepEqual(findCaptureTools({ platform: 'linux', fileExists: () => true, which }), { dumpcap: '/usr/bin/dumpcap' });
+  assert.deepEqual(findCaptureTools({ platform: 'linux', fileExists: () => true }), {});
 });
 
 test('parseInterfaces lê a saída de "dumpcap -D"', () => {

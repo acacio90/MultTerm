@@ -7,9 +7,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkHost, listenOptions, resolveInRoot } from '../src/servers/common.ts';
+import { serverShell } from '../src/servers/shell.ts';
 import { fromNetascii, parseRequest, startTftp, toNetascii, validateTftp } from '../src/servers/tftp.ts';
 
-const CURL = 'C:/Windows/System32/curl.exe';
+const CURL = process.platform === 'win32' ? 'C:/Windows/System32/curl.exe' : '/usr/bin/curl';
 const hasCurl = existsSync(CURL);
 const curl = (args: string[]) => new Promise<{ code: number; out: string; err: string }>((resolve) => {
   execFile(CURL, ['-s', '-S', ...args], { encoding: 'latin1', maxBuffer: 1 << 26, timeout: 60_000 }, (e, out, err) => {
@@ -242,8 +243,9 @@ test('FTPS implícito com certificado autoassinado', { skip: !hasCurl && 'sem cu
   }
 });
 
-const IPERF3 = process.env.MULTTERM_IPERF3
-  ?? join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Packages', 'ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe', 'iperf3.exe');
+const IPERF3 = process.env.MULTTERM_IPERF3 ?? (process.platform === 'win32'
+  ? join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Packages', 'ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe', 'iperf3.exe')
+  : '/usr/bin/iperf3');
 
 test('Iperf com o cliente iperf3: envio, reverso, vários fluxos e UDP recusado', { skip: !existsSync(IPERF3) && 'iperf3 não instalado', timeout: 120_000 }, async () => {
   const { startIperf, validateIperf } = await import('../src/servers/iperf.ts');
@@ -286,11 +288,14 @@ test('Telnet: comandos IAC, NAWS e fim de linha', async () => {
   assert.equal(validateTelnet({ password: 'abcd' }).port, 23);
 });
 
-test('Telnet: senha, shell pelo ConPTY e saída', { timeout: 60_000 }, async () => {
+test('Telnet: senha, shell pelo pseudo-terminal e saída', { timeout: 60_000 }, async () => {
   const { startTelnet } = await import('../src/servers/telnet.ts');
   const { connect } = await import('node:net');
   const logs: string[] = [];
-  const srv = await startTelnet({ port: 0, host: '127.0.0.1', password: 'segredo', shell: 'cmd', cwd: tmpdir() }, (l) => logs.push(l));
+  // Fora do Windows, sh puro: o prompt é previsível (o do usuário pode ser zsh com tema).
+  const userShell = process.env.SHELL;
+  process.env.SHELL = '/bin/sh';
+  const srv = await startTelnet({ port: 0, host: '127.0.0.1', password: 'segredo', shell: serverShell('cmd'), cwd: tmpdir() }, (l) => logs.push(l));
   try {
     const sock = connect(srv.port, '127.0.0.1');
     let text = '';
@@ -305,8 +310,13 @@ test('Telnet: senha, shell pelo ConPTY e saída', { timeout: 60_000 }, async () 
     await until(/Senha incorreta\.\r\nSenha: $/);
     text = '';
     sock.write('segredo\r\n');
-    await until(/>/); // prompt do cmd
-    sock.write('set /a 40+2\r\n');
+    if (process.platform === 'win32') {
+      await until(/>/); // prompt do cmd
+      sock.write('set /a 40+2\r\n');
+    } else {
+      await until(/[$#] $/); // prompt do sh
+      sock.write('echo $((40+2))\r\n'); // o eco da linha não tem o 42
+    }
     await until(/\b42\b/);
     const closed = new Promise((r) => sock.on('close', r));
     sock.write('exit\r\n');
@@ -315,6 +325,8 @@ test('Telnet: senha, shell pelo ConPTY e saída', { timeout: 60_000 }, async () 
     assert.ok(logs.some((l) => /login feito/.test(l)));
   } finally {
     await srv.stop();
+    if (userShell === undefined) delete process.env.SHELL;
+    else process.env.SHELL = userShell;
   }
 });
 

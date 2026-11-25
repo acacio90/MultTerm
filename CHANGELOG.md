@@ -6,6 +6,21 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Linux (X11)**: o MultTerm roda no Linux, com pacotes AppImage e .deb. Terminal local com o
+  shell do usuário; SSH embutido e em janela externa (no `$TERMINAL` ou no emulador instalado); RDP
+  numa aba com o `xfreerdp3`/`xfreerdp` do sistema encaixado na janela (pelo XWayland numa sessão
+  Wayland) e em janela externa; ferramentas de rede (portas locais pelo `ss`, captura pelo
+  `dumpcap`, `traceroute` ou `tracepath`); servidores SSH, Telnet e agendador com o shell do Linux;
+  certificado do FTPS pelo `openssl`; detecção do agente no PATH. A VPN IPsec continua só no
+  Windows. (#123)
+
+### Corrigido
+
+- O item **Sair** do menu não registra mais o atalho Ctrl+Q no Linux, que chegaria antes do
+  terminal (nano, emacs, XON). (#123)
+
 ## [0.10.0] - 2026-10-27
 
 ### Adicionado

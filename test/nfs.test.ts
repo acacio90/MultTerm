@@ -110,8 +110,8 @@ test('NFS: validação e clientes permitidos', () => {
   assert.equal(clientAllowed('10.0.1.7', ['10.0.0.0/24', '192.168.1.5']), false);
   assert.equal(clientAllowed('192.168.1.5', ['10.0.0.0/24', '192.168.1.5']), true);
   assert.equal(clientAllowed('1.2.3.4', []), true);
-  assert.throws(() => validateNfs({ root: 'C:\\x', allow: '10.0.0.0/24, xpto' }), /cliente permitido inválido: xpto/);
-  assert.deepEqual(validateNfs({ root: 'C:\\x', allow: '10.0.0.0/24; 10.1.1.1' }).allow, ['10.0.0.0/24', '10.1.1.1']);
+  assert.throws(() => validateNfs({ root: tmpdir(), allow: '10.0.0.0/24, xpto' }), /cliente permitido inválido: xpto/);
+  assert.deepEqual(validateNfs({ root: tmpdir(), allow: '10.0.0.0/24; 10.1.1.1' }).allow, ['10.0.0.0/24', '10.1.1.1']);
 });
 
 test('NFS: portmapper, montagem, leitura e listagem (UDP e TCP), somente leitura', async () => {

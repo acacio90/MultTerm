@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 /*
  * Detecção dos agentes instalados: cada agente do catálogo diz o executável e onde os instaladores
- * costumam colocá-lo; o MultTerm procura no PATH (where.exe) e nesses caminhos, e só oferece na
+ * costumam colocá-lo; o MultTerm procura no PATH (where.exe no Windows, which nos outros) e nesses caminhos, e só oferece na
  * lista os que encontrou.
  */
 
@@ -21,14 +21,17 @@ export function parseWhere(stdout: string): string[] {
  * Entre os candidatos, o que dá para executar no Windows: .exe primeiro, depois .cmd/.bat (os do
  * npm). O arquivo sem extensão que o npm também cria é um script de shell Unix e fica de fora.
  */
-export function pickExecutable(candidates: string[]): string | undefined {
+export function pickExecutable(candidates: string[], platform: NodeJS.Platform = process.platform): string | undefined {
+  if (platform !== 'win32') return candidates[0];
   const by = (re: RegExp) => candidates.find((c) => re.test(c));
   return by(/\.exe$/i) ?? by(/\.(cmd|bat)$/i);
 }
 
 /** Caminhos onde os instaladores costumam deixar o executável de um agente. */
-export function knownAgentPaths(exe: string, env: { userProfile?: string; appData?: string }): string[] {
+export function knownAgentPaths(exe: string, env: { userProfile?: string; appData?: string; home?: string }): string[] {
   const paths: string[] = [];
+  // Linux: o instalador nativo usa ~/.local/bin; o npm global do usuário, ~/.npm-global/bin.
+  if (env.home) return [join(env.home, '.local', 'bin', exe), join(env.home, '.npm-global', 'bin', exe)];
   if (env.userProfile) paths.push(join(env.userProfile, '.local', 'bin', `${exe}.exe`));
   if (env.appData) paths.push(join(env.appData, 'npm', `${exe}.cmd`));
   return paths;
