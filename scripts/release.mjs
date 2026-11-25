@@ -1,5 +1,7 @@
 // Publica a versão do package.json numa release (rascunho) do GitHub.
 // Uso: npm run release   (requer a tag vX.Y.Z já enviada e o gh autenticado, ou GH_TOKEN)
+// Gera os pacotes do sistema em que roda: rode no Windows e no Linux antes de publicar (o workflow
+// release.yml faz isso nos runners do GitHub a cada tag). --draft-only só cria o rascunho.
 //
 // O rascunho é criado antes do build: se a release ainda não existe, o electron-builder envia os
 // arquivos em paralelo e cria dois rascunhos para a mesma tag (aconteceu nas versões 0.1.0 e 0.2.0).
@@ -12,6 +14,7 @@ const { owner, repo } = pkg.build.publish[0];
 const R = `${owner}/${repo}`;
 const tag = `v${pkg.version}`;
 const dryRun = process.argv.includes('--dry-run');
+const draftOnly = process.argv.includes('--draft-only');
 
 const gh = (...args) => execFileSync('gh', [...args, '-R', R], { encoding: 'utf8' }).trim();
 const fail = (msg) => {
@@ -42,20 +45,56 @@ if (dryRun) {
   console.log('release: --dry-run, nada foi gerado nem enviado');
   process.exit(0);
 }
+// O workflow cria o rascunho num job antes dos builds, que rodam em paralelo e só o reaproveitam.
+if (draftOnly) process.exit(0);
 
-// 3. Build e envio dos arquivos para o rascunho.
+// 3. Build e envio dos arquivos da plataforma atual para o rascunho. Cada sistema gera os pacotes
+// dele (o NSIS precisa do Windows; o AppImage e o .deb, do Linux): rode o release nos dois antes
+// de publicar. O electron-builder substitui um arquivo que já estiver no rascunho.
+const { productName: name, version } = pkg;
+const PLATFORMS = {
+  win32: {
+    label: 'Windows',
+    args: ['--win', 'nsis', '--x64'],
+    assets: [`${name}-setup-${version}.exe`, `${name}-setup-${version}.exe.blockmap`, 'latest.yml'],
+  },
+  linux: {
+    label: 'Linux',
+    args: ['--linux', 'AppImage', 'deb', '--x64'],
+    assets: [`${name}-${version}-x86_64.AppImage`, `${name}-${version}-amd64.deb`, 'latest-linux.yml'],
+  },
+};
+const here = PLATFORMS[process.platform];
+if (!here) fail(`a plataforma ${process.platform} não gera pacotes (só Windows e Linux)`);
+
+// O cliente RDP embutido (wfreerdp.exe) só vai no instalador do Windows.
+if (process.platform === 'win32') execFileSync(process.execPath, ['scripts/fetch-freerdp.mjs'], { stdio: 'inherit' });
+
 const token = process.env.GH_TOKEN || execFileSync('gh', ['auth', 'token'], { encoding: 'utf8' }).trim();
 const cli = createRequire(import.meta.url).resolve('electron-builder/cli.js');
-const build = spawnSync(process.execPath, [cli, '--win', 'nsis', '--x64', '--publish', 'always'], {
+console.log(`release: gerando os pacotes do ${here.label}`);
+const build = spawnSync(process.execPath, [cli, ...here.args, '--publish', 'always'], {
   stdio: 'inherit',
   env: { ...process.env, GH_TOKEN: token },
 });
 if (build.status !== 0) fail('o electron-builder falhou');
 
-// 4. Conferência final: um único rascunho, com instalador, blockmap e latest.yml.
+// 4. Conferência final: um único rascunho, com os arquivos das duas plataformas e nada além deles.
 const drafts = JSON.parse(execFileSync('gh', ['api', `repos/${R}/releases`, '--paginate'], { encoding: 'utf8' }))
   .filter((r) => r.tag_name === tag);
 const assets = drafts.flatMap((r) => r.assets.map((a) => a.name)).sort();
 console.log(`release: ${drafts.length} rascunho(s) para ${tag}: ${assets.join(', ')}`);
-if (drafts.length !== 1 || assets.length !== 3) fail('confira os rascunhos no GitHub antes de publicar');
-console.log(`release: pronto — revise as notas e publique em https://github.com/${R}/releases`);
+if (drafts.length !== 1) fail('há mais de um rascunho; confira no GitHub antes de publicar');
+
+const expected = Object.values(PLATFORMS).flatMap((p) => p.assets);
+const extra = assets.filter((a) => !expected.includes(a));
+if (extra.length) fail(`arquivos inesperados no rascunho: ${extra.join(', ')}`);
+const missingHere = here.assets.filter((a) => !assets.includes(a));
+if (missingHere.length) fail(`faltam arquivos do ${here.label}: ${missingHere.join(', ')}`);
+
+const pending = Object.values(PLATFORMS).filter((p) => p !== here && p.assets.some((a) => !assets.includes(a)));
+if (pending.length) {
+  for (const p of pending) console.log(`release: falta o ${p.label}: rode o npm run release num ${p.label} antes de publicar`);
+  process.exit(0);
+}
+console.log(`release: pronto (Windows e Linux) — revise as notas e publique em https://github.com/${R}/releases`);

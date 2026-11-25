@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { launchApp, type LaunchedApp } from './fixture.ts';
+import { launchApp, LOCAL, type LaunchedApp } from './fixture.ts';
 
 let ctx: LaunchedApp;
 let page: Page;
@@ -56,19 +56,19 @@ test('mudar a ordem das abas: arrastar, menu de contexto e teclado', async () =>
 test('Ctrl+Shift+PageUp/PageDown move a aba do terminal sem chegar ao shell', async () => {
   await openTool('dns');
   await page.click('#btn-tools');
-  await page.click('#tools-menu [data-tool="local-powershell"]');
+  await page.click(`#tools-menu [data-tool="${LOCAL.tool}"]`);
   const rows = page.locator('.term-panel:not([hidden]) .xterm-rows');
-  await expect(rows).toContainText('PS ', { timeout: 20_000 });
-  await expect(titles()).toHaveText(['Consulta DNS', 'PowerShell']);
+  await expect(rows).toContainText(LOCAL.prompt, { timeout: 20_000 });
+  await expect(titles()).toHaveText(['Consulta DNS', LOCAL.title]);
 
   await page.locator('.term-panel:not([hidden]) .xterm-helper-textarea').focus();
   await page.keyboard.press('Control+Shift+PageUp');
-  await expect(titles()).toHaveText(['PowerShell', 'Consulta DNS']);
+  await expect(titles()).toHaveText([LOCAL.title, 'Consulta DNS']);
   await page.keyboard.press('Control+Shift+PageDown');
-  await expect(titles()).toHaveText(['Consulta DNS', 'PowerShell']);
+  await expect(titles()).toHaveText(['Consulta DNS', LOCAL.title]);
 
   // O terminal segue funcionando e não recebeu as teclas (nenhum "~" ou sequência estranha).
-  await page.keyboard.type('Write-Output (6*7)\r');
-  await expect(rows).toContainText(/\(6\*7\)\s*42/, { timeout: 20_000 });
+  await page.keyboard.type(LOCAL.calc);
+  await expect(rows).toContainText(LOCAL.calcOut, { timeout: 20_000 });
   await expect(rows).not.toContainText('~');
 });

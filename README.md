@@ -9,7 +9,7 @@
 [![ci](https://img.shields.io/github/actions/workflow/status/acacio90/MultTerm/ci.yml?branch=develop&label=ci&logo=github)](https://github.com/acacio90/MultTerm/actions/workflows/ci.yml)
 [![node](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen)](package.json)
 [![licença](https://img.shields.io/github/license/acacio90/MultTerm?label=licen%C3%A7a)](LICENSE)
-[![plataforma](https://img.shields.io/badge/plataforma-Windows-0078d4)](https://github.com/acacio90/MultTerm/releases)
+[![plataforma](https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux-0078d4)](https://github.com/acacio90/MultTerm/releases)
 [![downloads](https://img.shields.io/github/downloads/acacio90/MultTerm/total?label=downloads)](https://github.com/acacio90/MultTerm/releases)
 
 [Releases](https://github.com/acacio90/MultTerm/releases) ·
@@ -51,6 +51,36 @@ usuário (não pede administrador). O instalador não é assinado: o SmartScreen
 primeira execução (*Mais informações → Executar assim mesmo*).
 
 O próprio app verifica novas versões ao abrir e em **Ajuda → Buscar atualizações**.
+
+### Linux
+
+Baixe o `MultTerm-<versão>-x86_64.AppImage` (qualquer distribuição; precisa da `libfuse2`) ou o
+`MultTerm-<versão>-amd64.deb` (Debian, Ubuntu, Kali: `sudo apt install ./MultTerm-*.deb`). Os
+dois se atualizam por **Ajuda → Buscar atualizações**, como no Windows (o .deb pede a senha de
+administrador para instalar a versão nova). O app usa os programas do sistema:
+
+| Para | Pacote (Debian/Ubuntu) |
+|---|---|
+| SSH | `openssh-client` |
+| RDP numa aba e em janela externa | `freerdp3-x11` (ou `freerdp2-x11`) |
+| Ping e traceroute | `iputils-ping`, `traceroute` (sem ele, usa o `tracepath`) |
+| Portas abertas locais | `iproute2` (`ss`) |
+| Captura de pacotes | `wireshark` ou `tshark`, com o seu usuário no grupo `wireshark` |
+| Certificado do FTPS | `openssl` |
+
+Diferenças em relação ao Windows:
+
+- **Terminal local** abre o seu shell (`$SHELL`); os servidores SSH e Telnet também, e o agendador
+  roda os comandos no `/bin/sh`.
+- **RDP numa aba** funciona no X11 (numa sessão Wayland, o MultTerm roda pelo XWayland). O teclado
+  vai para a sessão enquanto o ponteiro estiver sobre ela. O certificado do servidor é aceito na
+  primeira conexão e recusado se mudar depois (como o `known_hosts` do ssh).
+- **Janela externa** abre no `$TERMINAL` ou no primeiro emulador instalado (x-terminal-emulator,
+  gnome-terminal, konsole, xfce4-terminal, qterminal, kitty, alacritty, xterm). O RDP externo abre
+  o FreeRDP dentro do terminal, onde ele pede a senha.
+- Senhas e tokens guardados são cifrados pelo chaveiro da sessão (GNOME Keyring, KWallet ou
+  KeePassXC com o Secret Service); sem chaveiro, o MultTerm não guarda senhas.
+- A **VPN IPsec** ainda é só do Windows.
 
 ## Sessões
 

@@ -51,6 +51,54 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # O app no Linux: typecheck, testes de unidade e de interface (Electron numa tela virtual) e os
+  # pacotes AppImage e .deb.
+  test-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read # só o checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Programas usados pelos testes (Xvfb, FreeRDP, curl, iperf3, openssl, ssh)
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb freerdp3-x11 curl iperf3 openssl openssh-client iproute2
+
+      - run: npm ci
+
+      # O node-pty não traz binário pronto para Linux; o Electron baixa o próprio binário.
+      - name: Módulos nativos e Electron
+        run: |
+          npm rebuild node-pty
+          node node_modules/electron/install.js
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes de unidade
+        run: npm test
+
+      - name: Testes de interface (Electron + Playwright, Xvfb)
+        run: npm run build && xvfb-run -a npx playwright test
+
+      - name: Pacotes AppImage e .deb
+        run: npx electron-builder --linux AppImage deb --x64 --publish never
+
+      - name: Artefatos dos testes de interface
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-linux
+          path: test-results/
+          retention-days: 7
+
   # Servidor NFS do MultTerm contra o cliente NFS do kernel Linux (portmapper, MOUNT e NFSv3).
   nfs-linux:
     runs-on: ubuntu-latest
