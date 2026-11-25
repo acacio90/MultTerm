@@ -1,4 +1,5 @@
 import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -56,10 +57,33 @@ export async function launchApp(sessionsYaml: string, extraEnv: Record<string, s
     dir,
     sessionsFile,
     async close() {
-      await app.close();
+      await closeApp(app);
       await rm(dir, { recursive: true, force: true });
     },
   };
+}
+
+const CLOSE_MS = 30_000;
+
+/**
+ * Fecha o app; se ele não sair em 30 s, avisa no log e mata a árvore de processos, para um
+ * travamento no encerramento aparecer como aviso em vez de derrubar o job pelo tempo de
+ * encerramento do worker (#117).
+ */
+async function closeApp(app: ElectronApplication): Promise<void> {
+  const closing = app.close();
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<'late'>((r) => (timer = setTimeout(() => r('late'), CLOSE_MS)));
+  const result = await Promise.race([closing.then(() => 'ok' as const), late]);
+  clearTimeout(timer);
+  if (result === 'ok') return;
+  const pid = app.process().pid;
+  console.warn(`::warning::o MultTerm não fechou em ${CLOSE_MS / 1000} s (pid ${pid}); matando a árvore de processos`);
+  if (pid) {
+    if (WIN) spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    else app.process().kill('SIGKILL');
+  }
+  await Promise.race([closing.catch(() => {}), new Promise((r) => setTimeout(r, 10_000))]);
 }
 
 /** Clica num item do menu do topo pelo id (o mesmo caminho do clique do usuário). */
