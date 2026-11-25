@@ -102,3 +102,28 @@ test('o que o filtro guarda sai sozinho se nada mais vier', async (t) => {
   openTerminal(w.wc, 1, ...echoShell('guardado'), { cols: 80, rows: 24, cwd: process.cwd() }, filter);
   await until(() => dataOf(w.sent, 1).includes('guardado'));
 });
+
+test('shutdownTerminals encerra os terminais e espera os processos terminarem', async () => {
+  const { shutdownTerminals, terminalsBusy } = await import('../src/desktop/terminals.ts');
+  const a = fakeWindow(961);
+  const [file, args] = echoShell('vivo');
+  openTerminal(a.wc, 1, file, args, { cols: 80, rows: 24, cwd: process.cwd() });
+  openTerminal(a.wc, 2, file, args, { cols: 80, rows: 24, cwd: process.cwd() });
+  await until(() => dataOf(a.sent, 1).includes('vivo') && dataOf(a.sent, 2).includes('vivo'));
+  assert.equal(terminalsBusy(), true);
+  assert.equal(await shutdownTerminals(10_000), true);
+  assert.equal(terminalsBusy(), false);
+  assert.equal(a.sent.filter((m) => m.channel === 'term:exit').length, 2);
+});
+
+test('closeTerminalsOf deixa o terminal "encerrando" até o processo terminar', async () => {
+  const { shutdownTerminals, terminalsBusy } = await import('../src/desktop/terminals.ts');
+  const a = fakeWindow(962);
+  const [file, args] = echoShell('vivo');
+  openTerminal(a.wc, 1, file, args, { cols: 80, rows: 24, cwd: process.cwd() });
+  await until(() => dataOf(a.sent, 1).includes('vivo'));
+  closeTerminalsOf(a.wc);
+  assert.equal(terminalsBusy(), true, 'o processo ainda não terminou');
+  assert.equal(await shutdownTerminals(10_000), true);
+  assert.equal(terminalsBusy(), false);
+});

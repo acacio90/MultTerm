@@ -20,7 +20,8 @@ import {
 } from '../sessions/launch.ts';
 import { checkForUpdates, downloadUpdate, getUpdateStatus, initUpdates, installUpdate } from './updates.ts';
 import {
-  attachTerminal, breakTerminal, checkFree, closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal, writeTerminal,
+  attachTerminal, breakTerminal, checkFree, closeTerminal, closeTerminalsOf, moveTerminal, openTerminal, resizeTerminal,
+  shutdownTerminals, terminalsBusy, writeTerminal,
 } from './terminals.ts';
 import { listSerialPorts, openSerial } from './serial.ts';
 import { cancelJobsOf, registerToolsIpc } from './tools.ts';
@@ -47,6 +48,27 @@ if (process.env.MULTTERM_USER_DATA) app.setPath('userData', resolve(process.env.
 // Linux: X11 (pelo XWayland numa sessão Wayland). O RDP numa aba encaixa o xfreerdp numa janela X
 // filha da janela do app, o que não existe no Wayland. Sem DISPLAY (Wayland sem XWayland), segue o padrão.
 if (process.platform === 'linux' && process.env.DISPLAY) app.commandLine.appendSwitch('ozone-platform', 'x11');
+
+/*
+ * Antes de sair, encerra os terminais e espera os processos terminarem com o app ainda de pé
+ * (no Windows, o node-pty abre um auxiliar a cada terminal encerrado; órfão, ele segurava a saída
+ * padrão do app e quem a esperava ficava preso, #117). O limite cobre os 5 s do auxiliar.
+ * MULTTERM_QUIT_LOG=1 mostra quanto tempo levou.
+ */
+const SHUTDOWN_TERMINALS_MS = 6000;
+let terminalsShutDown = false;
+app.on('before-quit', (e) => {
+  if (terminalsShutDown || !terminalsBusy()) return;
+  e.preventDefault();
+  const started = Date.now();
+  void shutdownTerminals(SHUTDOWN_TERMINALS_MS).then((done) => {
+    if (process.env.MULTTERM_QUIT_LOG) {
+      console.error(`[multterm] terminais encerrados em ${Date.now() - started} ms${done ? '' : ' (limite atingido)'}`);
+    }
+    terminalsShutDown = true;
+    app.quit();
+  });
+});
 
 const appRoot = app.getAppPath();
 const configPath = () => join(app.getPath('userData'), 'config.json');

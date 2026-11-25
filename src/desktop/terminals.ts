@@ -1,6 +1,9 @@
 import type { WebContents } from 'electron';
 import pty from 'node-pty';
 import { OutputBuffer } from '../agent/text.ts';
+import { ptyHelpersDone, ptyHelpersRunning, trackPtyHelpers } from './pty-helpers.ts';
+
+trackPtyHelpers();
 
 /**
  * Terminais embutidos: um pseudo-terminal por aba, ligado à janela que o abriu.
@@ -26,6 +29,17 @@ interface Terminal {
   proc: TerminalProcess;
   owner: WebContents;
   id: number;
+  /** Resolve quando o processo termina (o encerramento do app espera por ele). */
+  exited: Promise<void>;
+}
+
+/** Terminais encerrados pela aba ou pela janela que ainda não terminaram. */
+const ending = new Set<Promise<void>>();
+
+function kill(t: Terminal): void {
+  ending.add(t.exited);
+  void t.exited.then(() => ending.delete(t.exited));
+  t.proc.kill();
 }
 
 /**
@@ -94,7 +108,8 @@ export function checkFree(owner: WebContents, id: unknown): asserts id is number
 export function attachTerminal(owner: WebContents, id: unknown, proc: TerminalProcess, filter?: OutputFilter): void {
   checkFree(owner, id);
   const key = keyOf(owner, id);
-  const entry: Terminal = { proc, owner, id };
+  let markExited!: () => void;
+  const entry: Terminal = { proc, owner, id, exited: new Promise<void>((r) => (markExited = r)) };
   terminals.set(key, entry);
   if (!outputs.has(key)) outputs.set(key, new OutputBuffer());
   // Dono e id lidos na hora: a aba pode ter mudado de janela.
@@ -118,6 +133,7 @@ export function attachTerminal(owner: WebContents, id: unknown, proc: TerminalPr
     const k = keyOf(entry.owner, entry.id);
     if (terminals.get(k) === entry) terminals.delete(k);
     if (!entry.owner.isDestroyed()) entry.owner.send('term:exit', entry.id, exitCode);
+    markExited();
   });
 }
 
@@ -147,7 +163,7 @@ export function closeTerminal(owner: WebContents, id: unknown): void {
   const t = get(owner, id);
   if (!t) return;
   terminals.delete(keyOf(owner, id as number));
-  t.proc.kill();
+  kill(t);
 }
 
 /**
@@ -216,7 +232,33 @@ export function closeTerminalsOf(owner: WebContents): void {
   for (const [key, t] of terminals) {
     if (t.owner === owner) {
       terminals.delete(key);
-      t.proc.kill();
+      kill(t);
     }
+  }
+}
+
+/** Há terminais abertos, encerrando ou auxiliares do node-pty em andamento. */
+export function terminalsBusy(): boolean {
+  return terminals.size > 0 || ending.size > 0 || ptyHelpersRunning() > 0;
+}
+
+/**
+ * Encerra todos os terminais e espera os processos (e os auxiliares do node-pty no Windows)
+ * terminarem, até `timeoutMs`. O app chama antes de sair: o fim acontece com o app ainda de pé.
+ */
+export async function shutdownTerminals(timeoutMs: number): Promise<boolean> {
+  for (const [key, t] of terminals) {
+    terminals.delete(key);
+    kill(t);
+  }
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<false>((r) => (timer = setTimeout(() => r(false), timeoutMs)));
+  // Os auxiliares nascem no kill (o do Windows espera o terminal ficar pronto): espera os
+  // terminais primeiro e só então os auxiliares que eles abriram.
+  const done = Promise.all([...ending]).then(() => ptyHelpersDone()).then(() => true as const);
+  try {
+    return await Promise.race([done, limit]);
+  } finally {
+    clearTimeout(timer);
   }
 }
