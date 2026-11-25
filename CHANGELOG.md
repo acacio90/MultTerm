@@ -6,6 +6,8 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+## [1.0.0] - 2026-11-25
+
 ### Adicionado
 
 - **Linux (X11)**: o MultTerm roda no Linux, com pacotes AppImage e .deb. Terminal local com o
@@ -16,10 +18,19 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
   certificado do FTPS pelo `openssl`; detecção do agente no PATH. A VPN IPsec continua só no
   Windows. (#123)
 
+### Alterado
+
+- Electron 45 (era o 44). (#119)
+
 ### Corrigido
 
 - O item **Sair** do menu não registra mais o atalho Ctrl+Q no Linux, que chegaria antes do
   terminal (nano, emacs, XON). (#123)
+
+### Segurança
+
+- O Electron 45 traz a mitigação para os certificados intermediários comprometidos da eMudhra
+  (GHSA-jr5w-w6x2-84p9). (#119)
 
 ## [0.10.0] - 2026-10-27
 
@@ -296,7 +307,8 @@ Primeira versão.
 - Instalador para Windows x64 (NSIS, instalação por usuário).
 - CLI `multterm` (`list`, `validate`, `import`).
 
-[Não lançado]: https://github.com/acacio90/MultTerm/compare/v0.10.0...develop
+[Não lançado]: https://github.com/acacio90/MultTerm/compare/v1.0.0...develop
+[1.0.0]: https://github.com/acacio90/MultTerm/compare/v0.10.0...v1.0.0
 [0.10.0]: https://github.com/acacio90/MultTerm/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/acacio90/MultTerm/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/acacio90/MultTerm/compare/v0.8.0...v0.8.1
