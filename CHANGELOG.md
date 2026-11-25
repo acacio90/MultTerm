@@ -6,6 +6,13 @@ Todas as mudanças relevantes do MultTerm. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Porta serial numa aba**: sessões do tipo `serial` (COM no Windows, `/dev/tty*` no Linux),
+  como a conexão serial do PuTTY, com velocidade, bits de dados, paridade, bits de parada e
+  controle de fluxo (padrão 9600 8N1), lista das portas encontradas no formulário, **Enviar
+  Break** no menu da aba e mensagens para porta inexistente, em uso ou sem permissão. (#129)
+
 ## [1.0.0] - 2026-11-25
 
 ### Adicionado

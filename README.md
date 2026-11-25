@@ -19,7 +19,7 @@
 
 </div>
 
-Gerenciador de sessões SSH/RDP com terminal em abas.
+Gerenciador de sessões SSH/RDP/serial com terminal em abas.
 As sessões ficam num arquivo YAML legível e versionável, **sem limite de quantidade**.
 
 ## Funcionalidades
@@ -27,6 +27,8 @@ As sessões ficam num arquivo YAML legível e versionável, **sem limite de quan
 - Árvore de sessões com pastas e busca; criar, editar e excluir sessões
 - **Terminal SSH embutido em abas** (xterm.js + node-pty), usando o OpenSSH do sistema
 - Login por chave via agente SSH (ssh-agent do Windows, KeePassXC)
+- **Porta serial numa aba** (console de switches, roteadores e placas), como a conexão serial do
+  PuTTY: velocidade, bits de dados, paridade, bits de parada, controle de fluxo e envio de Break
 - **RDP numa aba** (cliente FreeRDP embutido), ou no cliente do Windows (`mstsc`) pelo menu
 - Importação de sessões de outro arquivo YAML, de um **inventário** (INI/YAML) ou dos hosts e
   grupos do **Zabbix**
@@ -66,6 +68,7 @@ administrador para instalar a versão nova). O app usa os programas do sistema:
 | Ping e traceroute | `iputils-ping`, `traceroute` (sem ele, usa o `tracepath`) |
 | Portas abertas locais | `iproute2` (`ss`) |
 | Captura de pacotes | `wireshark` ou `tshark`, com o seu usuário no grupo `wireshark` |
+| Porta serial | o seu usuário no grupo `dialout` (`sudo usermod -aG dialout $USER`, e entrar de novo) |
 | Certificado do FTPS | `openssl` |
 
 Diferenças em relação ao Windows:
@@ -91,7 +94,7 @@ defaults:
 sessions:
   - name: web-01
     folder: Servidores/Produção
-    type: ssh            # ssh (padrão) ou rdp
+    type: ssh            # ssh (padrão), rdp ou serial
     host: web-01.example.org
     user: deploy
     identityFile: ~/.ssh/deploy      # opcional: vazio = chave padrão ou agente SSH
@@ -100,6 +103,11 @@ sessions:
     folder: Servidores/Infraestrutura
     type: rdp
     host: 10.0.0.9       # porta omitida = padrão (22 ssh / 3389 rdp)
+  - name: sw-core (console)
+    folder: Rede
+    type: serial
+    host: COM3           # a linha serial: COM3 no Windows, /dev/ttyUSB0 no Linux
+    baudRate: 9600       # opcionais: dataBits (8), stopBits (1), parity (none), flowControl (none)
 ```
 
 A gravação é determinística (ordenada por pasta e nome, campos em ordem fixa) para gerar
@@ -128,7 +136,7 @@ A barra superior tem só o que se usa toda hora: **+ Nova sessão** e **Ferramen
 O menu quase não tem atalhos de teclado de propósito: eles valeriam antes do terminal e
 roubariam teclas do bash, do tmux e de outros programas (Ctrl+N, Ctrl+O, Ctrl+B, F5...).
 
-- **Duplo clique** numa sessão abre uma aba: terminal (SSH) ou área de trabalho remota (RDP).
+- **Duplo clique** numa sessão abre uma aba: terminal (SSH ou porta serial) ou área de trabalho remota (RDP).
 - **Botão direito numa sessão**: Conectar, Janela externa, Ligar (Wake-on-LAN, se a sessão
   tem MAC), Ping, Traceroute, Scanner de portas, Consulta SNMP, Editar e **Excluir…** (com
   confirmação; com várias selecionadas, **Excluir as N selecionadas…**).
@@ -410,6 +418,24 @@ que vem com o instalador encaixado na área da aba:
   Windows local; pelo menu, vai para a sessão remota (bloquear, trocar a senha, gerenciador de
   tarefas).
 - Abas RDP não podem ir para uma janela separada.
+
+### Porta serial
+
+Sessões do tipo **Serial** abrem numa aba de terminal, como a conexão serial do PuTTY:
+
+- No formulário, a *Linha serial* sugere as portas encontradas no sistema (cabos USB-serial
+  aparecem com o fabricante). No Linux, prefira o caminho fixo em `/dev/serial/by-id/…`, que não
+  muda quando o cabo troca de porta USB.
+- Velocidade (padrão 9600), bits de dados (8), paridade (nenhuma), bits de parada (1) e controle
+  de fluxo (nenhum, XON/XOFF ou RTS/CTS). No arquivo: `baudRate`, `dataBits`, `parity`
+  (`none`, `odd`, `even`, `mark`, `space`), `stopBits` (`1`, `1.5`, `2`) e `flowControl`
+  (`none`, `xonxoff`, `rtscts`).
+- **Enviar Break** (botão direito na aba): o sinal de break, usado na recuperação de senha de
+  equipamentos Cisco, entre outros.
+- A aba funciona como a do SSH: copiar e colar, janela separada e compartilhamento com o agente.
+  Se o cabo for desconectado, a aba avisa; **R** abre a porta de novo.
+- A porta fica exclusiva do MultTerm enquanto a aba está aberta. Se outro programa estiver com
+  ela, a aba diz isso; no Linux, sem o grupo `dialout`, a aba explica como dar a permissão.
 
 O `wfreerdp.exe` é compilado pelo workflow `.github/workflows/freerdp.yml` a partir do
 código-fonte oficial (hash conferido) e publicado numa release auxiliar (`freerdp-<versão>`);

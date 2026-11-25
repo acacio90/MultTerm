@@ -7,6 +7,21 @@ const RDP_EXTERNAL = api.platform === 'win32' ? 'cliente do Windows' : 'FreeRDP 
 const $ = (id) => document.getElementById(id);
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
 const DEFAULT_PORTS = { ssh: 22, rdp: 3389 };
+// Linha serial: padrão dos consoles de equipamentos de rede (9600 8N1, sem controle de fluxo).
+const SERIAL_DEFAULTS = { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' };
+
+/** "9600 8N1", como o PuTTY resume a linha serial. */
+function describeSerial(s) {
+  const c = { ...SERIAL_DEFAULTS, ...s };
+  const flow = { none: '', xonxoff: ' XON/XOFF', rtscts: ' RTS/CTS' }[c.flowControl] ?? '';
+  return `${c.baudRate} ${c.dataBits}${c.parity[0].toUpperCase()}${c.stopBits}${flow}`;
+}
+
+/** Destino da sessão para dicas e listas: usuário@host:porta, ou a linha serial e a configuração. */
+function describeTarget(s) {
+  if (s.type === 'serial') return `${s.host} ${describeSerial(s)}`;
+  return `${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? DEFAULT_PORTS[s.type]}`;
+}
 
 const state = {
   path: '',
@@ -145,7 +160,7 @@ function renderTree() {
       const li = treeItem({ depth, label: s.name, cls: marked ? 'session selected' : 'session', badge: s.type });
       li.setAttribute('role', 'treeitem');
       li.setAttribute('aria-selected', String(marked));
-      li.title = `${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? DEFAULT_PORTS[s.type]}`;
+      li.title = describeTarget(s);
       li.addEventListener('click', (e) => clickSession(e, key));
       li.addEventListener('dblclick', () => connect(s));
       li.addEventListener('contextmenu', (e) => openSessionMenu(e, s));
@@ -189,6 +204,11 @@ function showForm(session) {
   form.legacyTls.checked = session?.legacyTls === true;
   form.legacySsh.checked = session?.legacySsh === true;
   form.multimon.checked = session?.multimon === true;
+  form.baudRate.value = session?.baudRate ?? '';
+  form.dataBits.value = String(session?.dataBits ?? SERIAL_DEFAULTS.dataBits);
+  form.stopBits.value = String(session?.stopBits ?? SERIAL_DEFAULTS.stopBits);
+  form.parity.value = session?.parity ?? SERIAL_DEFAULTS.parity;
+  form.flowControl.value = session?.flowControl ?? SERIAL_DEFAULTS.flowControl;
   form.tags.value = (session?.tags ?? []).join(', ');
   $('btn-connect').disabled = !session;
   $('btn-external').disabled = !session;
@@ -198,9 +218,34 @@ function showForm(session) {
 
 function updateTypeFields() {
   const type = form.type.value;
-  form.port.placeholder = String(DEFAULT_PORTS[type]);
+  const serial = type === 'serial';
+  form.port.placeholder = serial ? '' : String(DEFAULT_PORTS[type]);
   for (const el of form.querySelectorAll('.ssh-only')) el.hidden = type !== 'ssh';
   for (const el of form.querySelectorAll('.rdp-only')) el.hidden = type !== 'rdp';
+  for (const el of form.querySelectorAll('.net-only')) el.hidden = serial;
+  for (const el of form.querySelectorAll('.serial-only')) el.hidden = !serial;
+  $('host-label').textContent = serial ? 'Linha serial' : 'Host';
+  form.host.placeholder = serial ? (api.platform === 'win32' ? 'COM3' : '/dev/ttyUSB0') : '';
+  if (serial) {
+    form.host.setAttribute('list', 'serial-lines');
+    void refreshSerialPorts();
+  } else {
+    form.host.removeAttribute('list');
+  }
+}
+
+/** Sugere na linha serial as portas encontradas no sistema (cabo USB-serial, COM). */
+async function refreshSerialPorts() {
+  const hint = $('serial-ports');
+  try {
+    const ports = await api.serialPorts();
+    $('serial-lines').replaceChildren(...ports.map((p) => Object.assign(document.createElement('option'), { value: p.path, label: p.label })));
+    hint.textContent = ports.length
+      ? `Portas encontradas: ${ports.map((p) => (p.label ? `${p.path} (${p.label})` : p.path)).join(', ')}`
+      : 'Nenhuma porta serial encontrada. Conecte o cabo e escolha o tipo Serial de novo para atualizar a lista.';
+  } catch (err) {
+    hint.textContent = `Não foi possível listar as portas seriais: ${cleanError(err)}`;
+  }
 }
 
 function readForm() {
@@ -211,6 +256,16 @@ function readForm() {
     type: form.type.value,
     host: form.host.value.trim(),
   };
+  if (form.type.value === 'serial') {
+    // Só o que foge do padrão 8N1 vai para a sessão; a velocidade vazia fica 9600.
+    if (form.baudRate.value) session.baudRate = Number(form.baudRate.value);
+    for (const key of ['dataBits', 'stopBits']) {
+      if (Number(form[key].value) !== SERIAL_DEFAULTS[key]) session[key] = Number(form[key].value);
+    }
+    for (const key of ['parity', 'flowControl']) if (form[key].value !== SERIAL_DEFAULTS[key]) session[key] = form[key].value;
+    if (tags.length) session.tags = tags;
+    return session;
+  }
   if (form.port.value) session.port = Number(form.port.value);
   if (form.user.value.trim()) session.user = form.user.value.trim();
   if (form.type.value === 'ssh' && form.identityFile.value.trim()) session.identityFile = form.identityFile.value.trim();
@@ -339,7 +394,7 @@ function askConfirm({ title, text, items = [], note = '', confirmLabel = 'Exclui
 function tabsOfSession(session) {
   const key = keyOf(session);
   return [...tabsById.values()].filter((t) => {
-    const s = t.spec?.type === 'ssh' ? t.spec.session : t.kind === 'rdp' ? t.session : null;
+    const s = t.spec?.type === 'ssh' || t.spec?.type === 'serial' ? t.spec.session : t.kind === 'rdp' ? t.session : null;
     return s && keyOf(s) === key;
   });
 }
@@ -391,7 +446,7 @@ async function connect(session, { external = false, multimon = session.type === 
     });
     return;
   }
-  if (session.type === 'ssh' && !external) {
+  if (session.type === 'serial' || (session.type === 'ssh' && !external)) {
     await openSessionTab(session);
     return;
   }
@@ -797,6 +852,15 @@ function pasteInto(tab) {
   if (tab.running) api.clipboardRead().then((text) => tab.term.paste(text));
 }
 
+async function sendBreak(tab) {
+  try {
+    await api.termBreak(tab.id);
+    tab.term.focus();
+  } catch (err) {
+    tab.term.writeln(`\r\n\x1b[31m${cleanError(err)}\x1b[0m`);
+  }
+}
+
 function markEnded(tab, code) {
   tab.running = false;
   tab.button.classList.add('ended');
@@ -919,7 +983,7 @@ async function openTerminalTab({ title, tooltip, open, spec, adopt, endedText = 
 
 /** Recria a função que abre o processo de uma aba (para reconectar em outra janela). */
 function openFor(spec) {
-  if (spec?.type === 'ssh') return (id, cols, rows) => api.termOpen(id, spec.session, cols, rows);
+  if (spec?.type === 'ssh' || spec?.type === 'serial') return (id, cols, rows) => api.termOpen(id, spec.session, cols, rows);
   if (spec?.type === 'local') return (id, cols, rows) => api.termOpenLocal(id, spec.kind, cols, rows);
   if (spec?.type === 'diag') return (id, cols, rows) => api.termOpenTool(id, spec.req, cols, rows);
   return async () => { throw new Error('esta aba não pode ser reaberta aqui'); };
@@ -999,6 +1063,13 @@ function openTabMenu(e, tab) {
       ? menuItem('Devolver à janela principal', () => api.termReattach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`)))
       : menuItem('Abrir em janela separada', () => api.termDetach(tab.id, tabMeta(tab)).catch((err) => tab.term.writeln(`\x1b[31m${cleanError(err)}\x1b[0m`))));
   }
+  if (tab.spec?.type === 'serial') {
+    nodes.push(
+      // Como o "Break" dos comandos especiais do PuTTY (ex.: recuperação de senha do Cisco).
+      Object.assign(menuItem('Enviar Break', () => sendBreak(tab)), { disabled: !tab.running }),
+      document.createElement('hr'),
+    );
+  }
   if (tab.kind === 'rdp') {
     nodes.push(
       // Pelo teclado, Ctrl+Alt+Del fica no Windows local.
@@ -1056,6 +1127,15 @@ function openLocalTab(kind) {
 }
 
 function openSessionTab(session) {
+  if (session.type === 'serial') {
+    return openTerminalTab({
+      spec: { type: 'serial', session },
+      title: session.name,
+      tooltip: describeTarget(session),
+      endedText: 'porta serial fechada',
+      restartText: 'abrir de novo',
+    });
+  }
   return openTerminalTab({
     spec: { type: 'ssh', session },
     title: session.name,
@@ -1927,13 +2007,16 @@ function openSessionMenu(e, session) {
   clearMulti();
   const items = [
     ['connect', 'Conectar', () => connect(session)],
-    ['external', session.type === 'rdp' ? `Janela externa (${RDP_EXTERNAL})` : 'Janela externa', () => connect(session, { external: true, multimon: false })],
+    ...(session.type === 'serial' ? [] : [['external', session.type === 'rdp' ? `Janela externa (${RDP_EXTERNAL})` : 'Janela externa', () => connect(session, { external: true, multimon: false })]]),
     ...(session.type === 'rdp' ? [['multimon', 'Abrir em todos os monitores', () => connect(session, { multimon: true })]] : []),
     ...(session.mac ? [['wol', 'Ligar (Wake-on-LAN)', () => wakeSession(session)]] : []),
-    ['ping', 'Ping…', () => openDiagDialog('ping', session.host)],
-    ['traceroute', 'Traceroute…', () => openDiagDialog('traceroute', session.host)],
-    ['portscan', 'Scanner de portas', () => openToolTab('portscan', session)],
-    ['snmp', 'Consulta SNMP', () => openToolTab('snmp', session)],
+    // Ferramentas de rede não valem para a linha serial.
+    ...(session.type === 'serial' ? [] : [
+      ['ping', 'Ping…', () => openDiagDialog('ping', session.host)],
+      ['traceroute', 'Traceroute…', () => openDiagDialog('traceroute', session.host)],
+      ['portscan', 'Scanner de portas', () => openToolTab('portscan', session)],
+      ['snmp', 'Consulta SNMP', () => openToolTab('snmp', session)],
+    ]),
     ['edit', 'Editar', () => select(keyOf(session))],
     '-',
     ['delete', 'Excluir…', () => deleteSessions([session])],

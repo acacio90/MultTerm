@@ -1,16 +1,41 @@
 import { isSafeSiteName } from '../vpn/sites.ts';
 
-export type SessionType = 'ssh' | 'rdp';
+export type SessionType = 'ssh' | 'rdp' | 'serial';
 
-export const SESSION_TYPES: readonly SessionType[] = ['ssh', 'rdp'];
+export const SESSION_TYPES: readonly SessionType[] = ['ssh', 'rdp', 'serial'];
 
-export const DEFAULT_PORTS: Record<SessionType, number> = { ssh: 22, rdp: 3389 };
+/** Tipos que conectam pela rede (host e porta). A sessão serial usa uma porta serial local. */
+export type NetworkSessionType = Exclude<SessionType, 'serial'>;
+
+export const DEFAULT_PORTS: Record<NetworkSessionType, number> = { ssh: 22, rdp: 3389 };
+
+export type SerialParity = 'none' | 'odd' | 'even' | 'mark' | 'space';
+export type SerialFlowControl = 'none' | 'xonxoff' | 'rtscts';
+export type SerialStopBits = 1 | 1.5 | 2;
+export type SerialDataBits = 5 | 6 | 7 | 8;
+
+export const SERIAL_PARITIES: readonly SerialParity[] = ['none', 'odd', 'even', 'mark', 'space'];
+export const SERIAL_FLOW_CONTROLS: readonly SerialFlowControl[] = ['none', 'xonxoff', 'rtscts'];
+export const SERIAL_STOP_BITS: readonly SerialStopBits[] = [1, 1.5, 2];
+export const SERIAL_DATA_BITS: readonly SerialDataBits[] = [5, 6, 7, 8];
+
+/** Configuração da linha serial; os padrões são os do console de equipamentos de rede (9600 8N1). */
+export interface SerialSettings {
+  baudRate: number;
+  dataBits: SerialDataBits;
+  stopBits: SerialStopBits;
+  parity: SerialParity;
+  flowControl: SerialFlowControl;
+}
+
+export const SERIAL_DEFAULTS: SerialSettings = { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' };
 
 export interface Session {
   name: string;
   /** Caminho da pasta na árvore, separado por "/". Vazio = raiz. */
   folder: string;
   type: SessionType;
+  /** Endereço do host; na sessão serial, a linha serial (COM3, /dev/ttyUSB0). */
   host: string;
   port?: number;
   user?: string;
@@ -25,6 +50,16 @@ export interface Session {
   multimon?: boolean;
   /** SSH: aceita algoritmos antigos (troca de chaves SHA-1, ssh-rsa, CBC). Escolha explícita por sessão. */
   legacySsh?: boolean;
+  /** Serial: velocidade em baud (padrão 9600). */
+  baudRate?: number;
+  /** Serial: bits de dados (padrão 8). */
+  dataBits?: SerialDataBits;
+  /** Serial: bits de parada (padrão 1). */
+  stopBits?: SerialStopBits;
+  /** Serial: paridade (padrão nenhuma). */
+  parity?: SerialParity;
+  /** Serial: controle de fluxo (padrão nenhum). */
+  flowControl?: SerialFlowControl;
   tags?: string[];
   /** hostid do host no Zabbix de onde a sessão foi importada. */
   zabbixHostId?: string;
@@ -47,8 +82,39 @@ export function sessionKey(s: Pick<Session, 'folder' | 'name'>): string {
 }
 
 export function effectivePort(s: Session): number {
+  if (s.type === 'serial') throw new SessionError(`${s.name}: a sessão serial não tem porta de rede`);
   return s.port ?? DEFAULT_PORTS[s.type];
 }
+
+/** Configuração completa da linha serial, com os padrões no que a sessão não define. */
+export function serialSettings(s: Session): SerialSettings {
+  return {
+    baudRate: s.baudRate ?? SERIAL_DEFAULTS.baudRate,
+    dataBits: s.dataBits ?? SERIAL_DEFAULTS.dataBits,
+    stopBits: s.stopBits ?? SERIAL_DEFAULTS.stopBits,
+    parity: s.parity ?? SERIAL_DEFAULTS.parity,
+    flowControl: s.flowControl ?? SERIAL_DEFAULTS.flowControl,
+  };
+}
+
+/** Resumo no formato do PuTTY: "9600 8N1", com o controle de fluxo quando houver. */
+export function describeSerial(s: Session): string {
+  const c = serialSettings(s);
+  const flow = { none: '', xonxoff: ' XON/XOFF', rtscts: ' RTS/CTS' }[c.flowControl];
+  return `${c.baudRate} ${c.dataBits}${c.parity[0].toUpperCase()}${c.stopBits}${flow}`;
+}
+
+/**
+ * Linha serial aceita: COM1–COM999 no Windows ou um dispositivo em /dev no Linux
+ * (ex.: /dev/ttyUSB0, /dev/serial/by-id/usb-FTDI_…-if00-port0). Sem "..", espaços ou controle.
+ */
+export function isSerialLine(line: string): boolean {
+  if (/^COM[1-9]\d{0,2}$/i.test(line)) return true;
+  return /^\/dev\/[\w.+@:-]+(?:\/[\w.+@:-]+)*$/.test(line) && !line.split('/').includes('..');
+}
+
+/** Velocidades comuns oferecidas no formulário (qualquer outra entre 50 e 4 000 000 também vale). */
+export const SERIAL_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
 /** Aceita "\" ou "/" como separador e remove segmentos vazios. */
 export function normalizeFolder(folder: string): string {
@@ -93,13 +159,18 @@ export function validateSession(raw: unknown, where: string): Session {
   if (name.includes('/')) throw new SessionError(`${where}: "name" não pode conter "/" (${name})`);
   where = `${where} (${name})`;
 
-  const host = optionalString(obj, 'host', where)?.trim();
-  if (!host) throw new SessionError(`${where}: "host" é obrigatório`);
-  if (!isSafeHost(host)) throw new SessionError(`${where}: "host" inválido (${host})`);
-
   const type = obj.type ?? 'ssh';
   if (!SESSION_TYPES.includes(type as SessionType)) {
-    throw new SessionError(`${where}: "type" deve ser ${SESSION_TYPES.join(' ou ')}`);
+    throw new SessionError(`${where}: "type" deve ser ${SESSION_TYPES.slice(0, -1).join(', ')} ou ${SESSION_TYPES.at(-1)}`);
+  }
+
+  const host = optionalString(obj, 'host', where)?.trim();
+  if (type === 'serial') {
+    if (!host) throw new SessionError(`${where}: "host" é obrigatório (a linha serial, ex.: COM3 ou /dev/ttyUSB0)`);
+    if (!isSerialLine(host)) throw new SessionError(`${where}: linha serial inválida (${host}); use COM3 ou /dev/ttyUSB0`);
+  } else {
+    if (!host) throw new SessionError(`${where}: "host" é obrigatório`);
+    if (!isSafeHost(host)) throw new SessionError(`${where}: "host" inválido (${host})`);
   }
 
   let port: number | undefined;
@@ -122,8 +193,14 @@ export function validateSession(raw: unknown, where: string): Session {
     name,
     folder: normalizeFolder(optionalString(obj, 'folder', where) ?? ''),
     type: type as SessionType,
-    host,
+    host: type === 'serial' && /^com/i.test(host) ? host.toUpperCase() : host,
   };
+  if (type === 'serial') {
+    Object.assign(session, validateSerial(obj, where));
+    // Porta, usuário, chave, MAC, VPN e opções de SSH/RDP não valem para a linha serial: ficam fora.
+    if (tags !== undefined) session.tags = tags;
+    return session;
+  }
   const user = checkUser(optionalString(obj, 'user', where), where);
   const identityFile = optionalString(obj, 'identityFile', where);
   const macText = optionalString(obj, 'mac', where);
@@ -152,4 +229,40 @@ export function validateSession(raw: unknown, where: string): Session {
   if (tags !== undefined) session.tags = tags;
   if (zabbixHostId !== undefined) session.zabbixHostId = zabbixHostId;
   return session;
+}
+
+/** Campos da linha serial: só os informados entram na sessão (o resto usa SERIAL_DEFAULTS). */
+function validateSerial(obj: Record<string, unknown>, where: string): Partial<SerialSettings> {
+  const out: Partial<SerialSettings> = {};
+  const present = (key: string) => obj[key] !== undefined && obj[key] !== null && obj[key] !== '';
+  if (present('baudRate')) {
+    const baud = Number(obj.baudRate);
+    if (!Number.isInteger(baud) || baud < 50 || baud > 4_000_000) {
+      throw new SessionError(`${where}: "baudRate" inválida (${String(obj.baudRate)}); use de 50 a 4000000`);
+    }
+    out.baudRate = baud;
+  }
+  if (present('dataBits')) {
+    const bits = Number(obj.dataBits);
+    if (!SERIAL_DATA_BITS.includes(bits as SerialDataBits)) throw new SessionError(`${where}: "dataBits" deve ser 5, 6, 7 ou 8`);
+    out.dataBits = bits as SerialDataBits;
+  }
+  if (present('stopBits')) {
+    const bits = Number(obj.stopBits);
+    if (!SERIAL_STOP_BITS.includes(bits as SerialStopBits)) throw new SessionError(`${where}: "stopBits" deve ser 1, 1.5 ou 2`);
+    out.stopBits = bits as SerialStopBits;
+  }
+  if (present('parity')) {
+    if (!SERIAL_PARITIES.includes(obj.parity as SerialParity)) {
+      throw new SessionError(`${where}: "parity" deve ser ${SERIAL_PARITIES.join(', ')}`);
+    }
+    out.parity = obj.parity as SerialParity;
+  }
+  if (present('flowControl')) {
+    if (!SERIAL_FLOW_CONTROLS.includes(obj.flowControl as SerialFlowControl)) {
+      throw new SessionError(`${where}: "flowControl" deve ser ${SERIAL_FLOW_CONTROLS.join(', ')}`);
+    }
+    out.flowControl = obj.flowControl as SerialFlowControl;
+  }
+  return out;
 }

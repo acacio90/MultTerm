@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parse, stringify } from 'yaml';
-import { DEFAULT_PORTS, normalizeFolder, SessionError, sessionKey, validateSession, type Session } from './model.ts';
+import { DEFAULT_PORTS, normalizeFolder, SERIAL_DEFAULTS, SessionError, sessionKey, validateSession, type Session } from './model.ts';
 
 export const FILE_VERSION = 1;
 
@@ -82,7 +82,15 @@ export function serializeSessions(sessions: Session[], defaults: SessionDefaults
     if (s.folder) out.folder = s.folder;
     out.type = s.type;
     out.host = s.host;
-    if (s.port !== undefined && s.port !== DEFAULT_PORTS[s.type]) out.port = s.port;
+    if (s.port !== undefined && s.type !== 'serial' && s.port !== DEFAULT_PORTS[s.type]) out.port = s.port;
+    if (s.type === 'serial') {
+      // A velocidade vai sempre (é o que se confere primeiro); o resto, só fora do padrão 8N1.
+      out.baudRate = s.baudRate ?? SERIAL_DEFAULTS.baudRate;
+      if (s.dataBits !== undefined && s.dataBits !== SERIAL_DEFAULTS.dataBits) out.dataBits = s.dataBits;
+      if (s.stopBits !== undefined && s.stopBits !== SERIAL_DEFAULTS.stopBits) out.stopBits = s.stopBits;
+      if (s.parity !== undefined && s.parity !== SERIAL_DEFAULTS.parity) out.parity = s.parity;
+      if (s.flowControl !== undefined && s.flowControl !== SERIAL_DEFAULTS.flowControl) out.flowControl = s.flowControl;
+    }
     if (s.user) out.user = s.user;
     if (s.identityFile) out.identityFile = s.identityFile;
     if (s.mac) out.mac = s.mac;
