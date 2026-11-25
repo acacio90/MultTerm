@@ -194,13 +194,14 @@ test.describe('consulta SNMP contra um agente local', () => {
 });
 
 test('scanner de rede busca o nome por SNMP quando não há DNS reverso', async () => {
-  // 127.0.0.2 também é loopback e não tem DNS reverso; o agente responde só nele.
-  const agent = await startAgent('127.0.0.2');
+  // 127.0.0.3 também é loopback e não tem DNS reverso (o 127.0.0.2 não serve: no Linux com o
+  // nss-myhostname, como no Ubuntu do CI, ele volta como o nome da máquina); o agente responde só nele.
+  const agent = await startAgent('127.0.0.3');
   try {
     await openTool('netscan');
     const panel = activePanel();
     await expect(panel.locator('[name=snmpPort]')).toBeHidden();
-    await panel.locator('[name=range]').fill('127.0.0.2');
+    await panel.locator('[name=range]').fill('127.0.0.3');
     await panel.locator('[name=version]').selectOption('2c');
     await panel.locator('[name=snmpPort]').fill(String(agent.port));
     await panel.locator('button[type=submit]').click();
