@@ -51,8 +51,59 @@ export function parseWindowsConnections(json: string): Connection[] {
     .sort((a, b) => a.proto.localeCompare(b.proto) || a.localPort - b.localPort || a.pid - b.pid);
 }
 
+/** Estados do "ss" (Linux) com os nomes do Windows, que a interface já traduz. */
+const SS_STATES: Record<string, string> = {
+  LISTEN: 'Listen', ESTAB: 'Established', 'TIME-WAIT': 'TimeWait', 'CLOSE-WAIT': 'CloseWait', 'SYN-SENT': 'SynSent',
+  'SYN-RECV': 'SynReceived', 'FIN-WAIT-1': 'FinWait1', 'FIN-WAIT-2': 'FinWait2', 'LAST-ACK': 'LastAck', CLOSING: 'Closing',
+  CLOSED: 'Closed',
+};
+
+/** "127.0.0.53%lo:53", "[::1]:631", "*:22" → endereço (sem a placa) e porta. */
+function splitSsEndpoint(text: string): { address: string; port: number | null } {
+  const i = text.lastIndexOf(':');
+  const rawPort = text.slice(i + 1);
+  let address = text.slice(0, i).replace(/^\[(.*)\]$/, '$1').replace(/%[^%]*$/, '');
+  if (address === '*') address = text.startsWith('[') ? '::' : '0.0.0.0';
+  return { address, port: rawPort === '*' ? null : Number(rawPort) };
+}
+
+/**
+ * Interpreta "ss -Htunap": netid, estado, filas, local, remoto e o processo (só aparece para os
+ * sockets do próprio usuário, ou de todos com root). UDP vira "Bound", como no Windows.
+ */
+export function parseSsConnections(stdout: string): Connection[] {
+  const rows: Connection[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.length < 6 || (cols[0] !== 'tcp' && cols[0] !== 'udp')) continue;
+    const proto = cols[0] === 'tcp' ? 'TCP' : 'UDP';
+    const local = splitSsEndpoint(cols[4]);
+    const remote = splitSsEndpoint(cols[5]);
+    if (local.port === null || !Number.isInteger(local.port)) continue;
+    const user = /users:\(\("((?:[^"\\]|\\.)*)",pid=(\d+)/.exec(cols.slice(6).join(' '));
+    rows.push({
+      proto,
+      localAddress: local.address,
+      localPort: local.port,
+      remoteAddress: proto === 'UDP' ? '' : remote.address,
+      remotePort: proto === 'UDP' ? null : remote.port ?? 0,
+      state: proto === 'UDP' ? 'Bound' : SS_STATES[cols[1]] ?? cols[1],
+      pid: user ? Number(user[2]) : 0,
+      process: user ? user[1] : '',
+    });
+  }
+  return rows.sort((a, b) => a.proto.localeCompare(b.proto) || a.localPort - b.localPort || a.pid - b.pid);
+}
+
 export function listConnections(platform: NodeJS.Platform = process.platform): Promise<Connection[]> {
-  if (platform !== 'win32') return Promise.reject(new Error('por enquanto disponível só no Windows'));
+  if (platform !== 'win32') {
+    return new Promise((resolve, reject) => {
+      execFile('ss', ['-Htunap'], { timeout: 30_000, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => {
+        if (err) return reject(new Error(`não foi possível listar as conexões (ss, do iproute2): ${err.message}`));
+        resolve(parseSsConnections(stdout));
+      });
+    });
+  }
   return new Promise((resolve, reject) => {
     execFile(
       'powershell.exe',

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, safeStorage, screen, shell, webContents } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -28,7 +28,8 @@ import { closeRdpOf, registerRdpIpc } from './rdp.ts';
 import { registerZabbixIpc } from './zabbix.ts';
 import { buildAppMenu } from './menu.ts';
 import { BACKUP_EXTENSION, backupFileName, parseBackup, serializeBackup } from './backup.ts';
-import { localShellCommand, type LocalShell } from './local-terminal.ts';
+import { localShellCommand, localShells, type LocalShell } from './local-terminal.ts';
+import { which } from '../which.ts';
 import { wintunDllPath } from './native-vpn.ts';
 import { HELPER_FLAG, runVpnHelper } from '../vpn/helper.ts';
 import { readImportFile } from '../sessions/import.ts';
@@ -39,6 +40,10 @@ import {
 
 // Pasta de dados alternativa (testes isolados, perfis separados). Precisa vir antes do "ready".
 if (process.env.MULTTERM_USER_DATA) app.setPath('userData', resolve(process.env.MULTTERM_USER_DATA));
+
+// Linux: X11 (pelo XWayland numa sessão Wayland). O RDP numa aba encaixa o xfreerdp numa janela X
+// filha da janela do app, o que não existe no Wayland. Sem DISPLAY (Wayland sem XWayland), segue o padrão.
+if (process.platform === 'linux' && process.env.DISPLAY) app.commandLine.appendSwitch('ozone-platform', 'x11');
 
 const appRoot = app.getAppPath();
 const configPath = () => join(app.getPath('userData'), 'config.json');
@@ -259,6 +264,8 @@ function registerIpc(): void {
       sshAlgorithms: session.legacySsh ? await sshAlgorithms() : undefined,
       // Gancho de teste: troca o executável; não vale no app instalado.
       mstsc: (!app.isPackaged && process.env.MULTTERM_MSTSC) || undefined,
+      which: (name: string) => which(name),
+      terminal: process.env.TERMINAL || undefined,
     };
     let plan = planLaunch(session, env, opts);
     if (plan.file) {
@@ -280,10 +287,10 @@ function registerIpc(): void {
   });
 
   // Terminal embutido (abas).
-  // Terminal local (PowerShell, cmd, WSL) ou o agente numa aba local.
+  // Terminal local (PowerShell, cmd, WSL; no Linux, o shell do usuário) ou o agente numa aba local.
   ipcMain.handle('term:open-local', async (e, id: unknown, kind: unknown, cols: unknown, rows: unknown) => {
     const size = (n: unknown, fallback: number) => (Number.isInteger(n) && (n as number) > 0 ? (n as number) : fallback);
-    const shells: LocalShell[] = ['powershell', 'cmd', 'wsl'];
+    const shells = localShells();
     const cmd = kind === 'agent' ? await agentLaunch()
       : shells.includes(kind as LocalShell) ? localShellCommand(kind as LocalShell) : undefined;
     if (!cmd) throw new Error('tipo de terminal local inválido');
@@ -494,6 +501,11 @@ const vpnHelper = process.argv.includes(HELPER_FLAG);
 if (vpnHelper) void runVpnHelper(process.argv, wintunDllPath(), (code) => app.exit(code));
 
 if (!vpnHelper) app.whenReady().then(async () => {
+  // Testes no Linux sem chaveiro (Xvfb, CI, com --password-store=basic): aceita a cifra com a chave
+  // fixa do Chromium. Só fora do app instalado; no uso normal, sem chaveiro o app recusa guardar senhas.
+  if (process.platform === 'linux' && !app.isPackaged && process.env.MULTTERM_TEST_PLAINTEXT_SECRETS === '1') {
+    safeStorage.setUsePlainTextEncryption(true);
+  }
   sessionsPath = await resolveSessionsPath();
   registerIpc();
   registerToolsIpc();
