@@ -2,7 +2,7 @@
   "name": "multterm",
   "productName": "MultTerm",
   "desktopName": "multterm.desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Gerenciador de sessões SSH/RDP/serial com terminal em abas",
   "author": "acacio90",
