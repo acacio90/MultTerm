@@ -125,11 +125,12 @@ versão do meio (0.x.0), só correções sobem o patch (0.x.y) e mudança incomp
    `CHANGELOG.md` para a nova versão (commit `chore(release): X.Y.Z`).
 2. Leve para a `main` e crie a tag:
    `git checkout main && git merge --ff-only develop && git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`
-3. Rode `npm run release` **no Windows e no Linux** (a ordem não importa). Ele cria o rascunho
-   da release da tag (ou usa o que já existe) e envia os pacotes do sistema em que roda: no
-   Windows, o `.exe`, o `.blockmap` e o `latest.yml`; no Linux, o `.AppImage`, o `.deb` e o
-   `latest-linux.yml`. Usa o login do `gh` (ou `GH_TOKEN`) e recusa versões já publicadas; ao
-   final, avisa se ainda falta a outra plataforma. `node scripts/release.mjs --dry-run` só confere.
+3. O push da tag dispara o workflow **Release** (`.github/workflows/release.yml`): ele confere se a
+   tag é a versão do `package.json`, cria o rascunho da release e roda `npm run release` no
+   `windows-latest` (`.exe`, `.blockmap` e `latest.yml`) e no `ubuntu-latest` (`.AppImage`, `.deb`
+   e `latest-linux.yml`), enviando tudo para o mesmo rascunho. Para gerar à mão, rode
+   `npm run release` no Windows e no Linux (usa o login do `gh` ou `GH_TOKEN`, recusa versões já
+   publicadas e avisa se falta a outra plataforma); `node scripts/release.mjs --dry-run` só confere.
 4. Confira os arquivos do rascunho, escreva as notas e publique. Os apps instalados encontram a
    versão nova em **Ajuda → Buscar atualizações**.
 5. Feche o milestone da versão e volte para `develop`.

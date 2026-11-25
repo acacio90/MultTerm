@@ -1,0 +1,98 @@
+name: Release
+
+# Gera e envia os pacotes de uma versão para o rascunho da release da tag: o instalador do Windows
+# (.exe, .blockmap e latest.yml) no windows-latest e o AppImage e o .deb (com o latest-linux.yml) no
+# ubuntu-latest, pelo mesmo scripts/release.mjs do uso local. O rascunho é criado antes, num job só:
+# com os dois builds criando ao mesmo tempo, sairiam dois rascunhos para a mesma tag. Publicar
+# continua manual, depois de revisar as notas.
+#
+# Dispara com o push de uma tag vX.Y.Z (veja "Gerar e publicar uma versão" no CONTRIBUTING).
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions: {}
+
+# Uma rodada por tag; não cancela no meio de um envio.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # criar o rascunho da release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A tag precisa ser a versão do package.json (o release.mjs publica a versão do arquivo).
+      - name: Tag e versão do package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$version" ]; then
+            echo "::error::a tag $TAG não é a versão do package.json ($version)"
+            exit 1
+          fi
+
+      - name: Rascunho da release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs --draft-only
+
+  windows:
+    needs: draft
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # enviar os arquivos para o rascunho
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Sem cache do npm: o que vai no instalador sai só do package-lock.json.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - name: Instalador do Windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run release
+
+  linux:
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # enviar os arquivos para o rascunho
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      # O node-pty não traz binário pronto para Linux; o Electron baixa o próprio binário.
+      - name: Módulos nativos e Electron
+        run: |
+          npm rebuild node-pty
+          node node_modules/electron/install.js
+
+      - name: AppImage e .deb
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run release

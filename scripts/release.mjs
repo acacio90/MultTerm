@@ -1,6 +1,7 @@
 // Publica a versão do package.json numa release (rascunho) do GitHub.
 // Uso: npm run release   (requer a tag vX.Y.Z já enviada e o gh autenticado, ou GH_TOKEN)
-// Gera os pacotes do sistema em que roda: rode no Windows e no Linux antes de publicar.
+// Gera os pacotes do sistema em que roda: rode no Windows e no Linux antes de publicar (o workflow
+// release.yml faz isso nos runners do GitHub a cada tag). --draft-only só cria o rascunho.
 //
 // O rascunho é criado antes do build: se a release ainda não existe, o electron-builder envia os
 // arquivos em paralelo e cria dois rascunhos para a mesma tag (aconteceu nas versões 0.1.0 e 0.2.0).
@@ -13,6 +14,7 @@ const { owner, repo } = pkg.build.publish[0];
 const R = `${owner}/${repo}`;
 const tag = `v${pkg.version}`;
 const dryRun = process.argv.includes('--dry-run');
+const draftOnly = process.argv.includes('--draft-only');
 
 const gh = (...args) => execFileSync('gh', [...args, '-R', R], { encoding: 'utf8' }).trim();
 const fail = (msg) => {
@@ -43,6 +45,8 @@ if (dryRun) {
   console.log('release: --dry-run, nada foi gerado nem enviado');
   process.exit(0);
 }
+// O workflow cria o rascunho num job antes dos builds, que rodam em paralelo e só o reaproveitam.
+if (draftOnly) process.exit(0);
 
 // 3. Build e envio dos arquivos da plataforma atual para o rascunho. Cada sistema gera os pacotes
 // dele (o NSIS precisa do Windows; o AppImage e o .deb, do Linux): rode o release nos dois antes
